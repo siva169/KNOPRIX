@@ -61,3 +61,19 @@
   four candidate font pairings.
 - Restored the API client's explicit Bearer authorization syntax in the copied
   baseline and verified the production build.
+
+## 2026-09-09 — Completed responsive dashboard QA
+
+- Installed Playwright locally in `frontend` and downloaded Chromium for
+  browser verification.
+- Started the rebuilt frontend on `5175` and backend on `8011` without
+  touching the existing Knoprix server on `5173`/`8000`.
+- Verified demo login, dashboard rendering, and the empty-project document
+  state with no browser console errors.
+- Verified viewport widths `390`, `425`, `768`, and `1024`: no horizontal
+  overflow, correct dashboard heading, and stable page layout.
+- Verified the mobile folder sidebar opens and closes through the `Toggle
+  folders` control.
+- Captured evidence in `../qa-artifacts/knoprix-dashboard/`.
+- The isolated QA backend required `CORS_ORIGINS=http://127.0.0.1:5175`;
+  this was a test-port runtime setting, not an application-code change.
