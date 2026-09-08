@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knoprix — UI/UX Reference Links</title>
+<style>
+:root{--accent:#3daee9;--link:#0b57d0;--line:#e2e6ea;--bg:#f7f9fb;--card:#fff;--text:#1c1f24;--muted:#5d6673}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",sans-serif;color:var(--text);background:var(--bg);line-height:1.55}
+header.top{background:linear-gradient(135deg,#17212b,#232c36);color:#fff;padding:22px 20px}
+header.top h1{margin:0;font-size:1.3rem}
+header.top p{margin:6px 0 0;color:#b9c4cf;font-size:.9rem}
+.layout{display:block;padding:14px}
+nav.toc{display:none}
+details.mtoc{margin:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+details.mtoc summary{cursor:pointer;padding:12px 16px;font-weight:600}
+details.mtoc .inner{padding:0 16px 12px}
+.toc-sec{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 0 4px}
+nav a,.mtoc a{display:block;color:var(--link);text-decoration:none;padding:3px 0;font-size:.9rem}
+nav a:hover,.mtoc a:hover{text-decoration:underline}
+main{max-width:860px;margin:0 auto;padding:0 4px}
+h2{margin:26px 0 8px;font-size:1.12rem;border-bottom:2px solid var(--accent);display:inline-block;padding-bottom:2px}
+section.comp{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:14px 16px;margin:12px 0}
+section.comp h3{margin:0 0 8px;font-size:1rem}
+section.comp:target{outline:3px solid var(--accent);outline-offset:2px}
+ul{margin:6px 0;padding-left:1.2rem}
+li{margin:4px 0}
+a{color:var(--link)}
+code{background:#eef2f6;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:.85em}
+pre{background:#1f2630;color:#e6edf3;padding:14px;border-radius:10px;overflow:auto}
+pre code{background:none;border:none;color:inherit}
+p{margin:8px 0}
+@media (min-width:900px){
+  .layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:22px;max-width:1180px;margin:0 auto;padding:18px}
+  aside{position:sticky;top:0;align-self:start;max-height:100vh;overflow:auto;padding:6px 4px}
+  details.mtoc{display:none}
+  nav.toc{display:block}
+}
+@media print{header.top{background:#fff;color:#000}aside,details.mtoc{display:none}section.comp{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header class="top">
+<h1>Knoprix Final Project — UI/UX Component Inventory (Updated with Reference URLs)</h1>
+<p>Click any link to open the reference in a new tab · 50 components · sources verified 2026-09-09</p>
+</header>
+<details class="mtoc"><summary>Jump to a component (50)</summary><div class="inner">
+<div class="toc-sec">A. Global application foundation</div>
+<a href="#a1-appshell-the-permanent-frame-around-every-screen">A1 AppShell</a>
+<a href="#a2-responsivesidebar-collapsible-navigation-on-larger-screens">A2 ResponsiveSidebar</a>
+<a href="#a3-mobilenavigationdrawer-navigation-panel-opened-on-small-screens">A3 MobileNavigationDrawer</a>
+<a href="#a4-stickytopbar-header-that-stays-visible-while-content-scrolls">A4 StickyTopbar</a>
+<a href="#a5-commandpalette-keyboard-friendly-action-search-launcher">A5 CommandPalette</a>
+<a href="#a6-toastregion-temporary-success-error-message-area">A6 ToastRegion</a>
+<a href="#a7-modaldialog-focused-overlay-requiring-a-decision-or-input">A7 ModalDialog</a>
+<a href="#a8-globalloadingboundary-consistent-loading-treatment">A8 GlobalLoadingBoundary</a>
+<div class="toc-sec">B. Authentication</div>
+<a href="#b1-loginform-form-for-existing-users-to-sign-in">B1 LoginForm</a>
+<a href="#b2-registerform-form-for-new-account-creation">B2 RegisterForm</a>
+<a href="#b3-passwordrecoveryflow-account-recovery-screens">B3 PasswordRecoveryFlow</a>
+<a href="#b4-authguard-route-protection-behavior">B4 AuthGuard</a>
+<div class="toc-sec">C. Project and document management</div>
+<a href="#c1-dashboardoverview-starting-summary-of-the-user-s-work">C1 DashboardOverview</a>
+<a href="#c2-projectswitcher-control-for-changing-the-active-project">C2 ProjectSwitcher</a>
+<a href="#c3-projectlist-collection-of-the-user-s-projects">C3 ProjectList</a>
+<a href="#c4-projectcreatedialog-form-for-creating-a-project">C4 ProjectCreateDialog</a>
+<a href="#c5-documentlibrary-documents-inside-the-active-project">C5 DocumentLibrary</a>
+<a href="#c6-documentuploaddropzone-drag-and-drop-or-file-picker-upload-control">C6 DocumentUploadDropzone</a>
+<a href="#c7-documentprocessingstatus-visible-ingestion-state">C7 DocumentProcessingStatus</a>
+<a href="#c8-documentmetadatapanel-title-type-pages-dates-and-actions">C8 DocumentMetadataPanel</a>
+<div class="toc-sec">D. Reading workspace</div>
+<a href="#d1-readerworkspace-main-document-reading-layout">D1 ReaderWorkspace</a>
+<a href="#d2-documentviewer-rendered-pdf-or-slide-content">D2 DocumentViewer</a>
+<a href="#d3-readertoolbar-document-actions-and-view-controls">D3 ReaderToolbar</a>
+<a href="#d4-pagenavigator-page-number-and-previous-next-controls">D4 PageNavigator</a>
+<a href="#d5-thumbnailrail-miniature-page-or-slide-navigation">D5 ThumbnailRail</a>
+<a href="#d6-highlightlayer-visual-marking-of-selected-document-text">D6 HighlightLayer</a>
+<a href="#d7-highlightlist-saved-highlights-in-reading-order">D7 HighlightList</a>
+<a href="#d8-bookmarkcollectiondrawer-newest-first-saved-page-list">D8 BookmarkCollectionDrawer</a>
+<a href="#d9-readernotespanel-user-notes-attached-to-a-document-page">D9 ReaderNotesPanel</a>
+<div class="toc-sec">E. Search and DSA explanation</div>
+<a href="#e1-globalsearchinput-search-entry-across-indexed-documents">E1 GlobalSearchInput</a>
+<a href="#e2-searchsuggestionlist-prefix-suggestions-while-typing">E2 SearchSuggestionList</a>
+<a href="#e3-searchresultslist-matching-passages-documents">E3 SearchResultsList</a>
+<a href="#e4-dsastatsmodal-transparent-explanation-of-active-data-structures">E4 DSAStatsModal</a>
+<div class="toc-sec">F. Settings and BYOK AI</div>
+<a href="#f1-settingslayout-grouped-user-application-settings">F1 SettingsLayout</a>
+<a href="#f2-providerconnectionform-user-adds-a-cloud-ai-provider-key">F2 ProviderConnectionForm</a>
+<a href="#f3-connectedprovidercard-saved-provider-connection-summary">F3 ConnectedProviderCard</a>
+<a href="#f4-modelselector-chooses-an-approved-model">F4 ModelSelector</a>
+<a href="#f5-providerprivacynotice-explains-external-document-processing">F5 ProviderPrivacyNotice</a>
+<a href="#f6-documentscopepicker-selects-exactly-which-documents-ai-may-use">F6 DocumentScopePicker</a>
+<a href="#f7-documentchatworkspace-conversation-about-selected-documents">F7 DocumentChatWorkspace</a>
+<a href="#f8-chatmessage-one-user-or-assistant-message">F8 ChatMessage</a>
+<a href="#f9-citationpanel-supporting-pages-and-excerpts-for-an-ai-answer">F9 CitationPanel</a>
+<a href="#f10-airesponsestate-loading-success-partial-and-failure-states">F10 AIResponseState</a>
+<a href="#f11-studytoollauncher-entry-point-for-future-ai-tools">F11 StudyToolLauncher</a>
+<a href="#f12-webresearchconsent-opt-in-confirmation-for-internet-research">F12 WebResearchConsent</a>
+<div class="toc-sec">G. Shared states and quality surfaces</div>
+<a href="#g1-emptystate-helpful-screen-when-no-records-exist">G1 EmptyState</a>
+<a href="#g2-errorstate-visible-failure-with-recovery-action">G2 ErrorState</a>
+<a href="#g3-confirmationdialog-explicit-protection-for-destructive-actions">G3 ConfirmationDialog</a>
+<a href="#g4-notfoundpage-safe-route-fallback">G4 NotFoundPage</a>
+<a href="#g5-accessibilitylayer-keyboard-and-assistive-technology-behavior">G5 AccessibilityLayer</a>
+</div></details>
+<div class="layout">
+<aside><nav class="toc">
+<div class="toc-sec">A. Global application foundation</div>
+<a href="#a1-appshell-the-permanent-frame-around-every-screen">A1 AppShell</a>
+<a href="#a2-responsivesidebar-collapsible-navigation-on-larger-screens">A2 ResponsiveSidebar</a>
+<a href="#a3-mobilenavigationdrawer-navigation-panel-opened-on-small-screens">A3 MobileNavigationDrawer</a>
+<a href="#a4-stickytopbar-header-that-stays-visible-while-content-scrolls">A4 StickyTopbar</a>
+<a href="#a5-commandpalette-keyboard-friendly-action-search-launcher">A5 CommandPalette</a>
+<a href="#a6-toastregion-temporary-success-error-message-area">A6 ToastRegion</a>
+<a href="#a7-modaldialog-focused-overlay-requiring-a-decision-or-input">A7 ModalDialog</a>
+<a href="#a8-globalloadingboundary-consistent-loading-treatment">A8 GlobalLoadingBoundary</a>
+<div class="toc-sec">B. Authentication</div>
+<a href="#b1-loginform-form-for-existing-users-to-sign-in">B1 LoginForm</a>
+<a href="#b2-registerform-form-for-new-account-creation">B2 RegisterForm</a>
+<a href="#b3-passwordrecoveryflow-account-recovery-screens">B3 PasswordRecoveryFlow</a>
+<a href="#b4-authguard-route-protection-behavior">B4 AuthGuard</a>
+<div class="toc-sec">C. Project and document management</div>
+<a href="#c1-dashboardoverview-starting-summary-of-the-user-s-work">C1 DashboardOverview</a>
+<a href="#c2-projectswitcher-control-for-changing-the-active-project">C2 ProjectSwitcher</a>
+<a href="#c3-projectlist-collection-of-the-user-s-projects">C3 ProjectList</a>
+<a href="#c4-projectcreatedialog-form-for-creating-a-project">C4 ProjectCreateDialog</a>
+<a href="#c5-documentlibrary-documents-inside-the-active-project">C5 DocumentLibrary</a>
+<a href="#c6-documentuploaddropzone-drag-and-drop-or-file-picker-upload-control">C6 DocumentUploadDropzone</a>
+<a href="#c7-documentprocessingstatus-visible-ingestion-state">C7 DocumentProcessingStatus</a>
+<a href="#c8-documentmetadatapanel-title-type-pages-dates-and-actions">C8 DocumentMetadataPanel</a>
+<div class="toc-sec">D. Reading workspace</div>
+<a href="#d1-readerworkspace-main-document-reading-layout">D1 ReaderWorkspace</a>
+<a href="#d2-documentviewer-rendered-pdf-or-slide-content">D2 DocumentViewer</a>
+<a href="#d3-readertoolbar-document-actions-and-view-controls">D3 ReaderToolbar</a>
+<a href="#d4-pagenavigator-page-number-and-previous-next-controls">D4 PageNavigator</a>
+<a href="#d5-thumbnailrail-miniature-page-or-slide-navigation">D5 ThumbnailRail</a>
+<a href="#d6-highlightlayer-visual-marking-of-selected-document-text">D6 HighlightLayer</a>
+<a href="#d7-highlightlist-saved-highlights-in-reading-order">D7 HighlightList</a>
+<a href="#d8-bookmarkcollectiondrawer-newest-first-saved-page-list">D8 BookmarkCollectionDrawer</a>
+<a href="#d9-readernotespanel-user-notes-attached-to-a-document-page">D9 ReaderNotesPanel</a>
+<div class="toc-sec">E. Search and DSA explanation</div>
+<a href="#e1-globalsearchinput-search-entry-across-indexed-documents">E1 GlobalSearchInput</a>
+<a href="#e2-searchsuggestionlist-prefix-suggestions-while-typing">E2 SearchSuggestionList</a>
+<a href="#e3-searchresultslist-matching-passages-documents">E3 SearchResultsList</a>
+<a href="#e4-dsastatsmodal-transparent-explanation-of-active-data-structures">E4 DSAStatsModal</a>
+<div class="toc-sec">F. Settings and BYOK AI</div>
+<a href="#f1-settingslayout-grouped-user-application-settings">F1 SettingsLayout</a>
+<a href="#f2-providerconnectionform-user-adds-a-cloud-ai-provider-key">F2 ProviderConnectionForm</a>
+<a href="#f3-connectedprovidercard-saved-provider-connection-summary">F3 ConnectedProviderCard</a>
+<a href="#f4-modelselector-chooses-an-approved-model">F4 ModelSelector</a>
+<a href="#f5-providerprivacynotice-explains-external-document-processing">F5 ProviderPrivacyNotice</a>
+<a href="#f6-documentscopepicker-selects-exactly-which-documents-ai-may-use">F6 DocumentScopePicker</a>
+<a href="#f7-documentchatworkspace-conversation-about-selected-documents">F7 DocumentChatWorkspace</a>
+<a href="#f8-chatmessage-one-user-or-assistant-message">F8 ChatMessage</a>
+<a href="#f9-citationpanel-supporting-pages-and-excerpts-for-an-ai-answer">F9 CitationPanel</a>
+<a href="#f10-airesponsestate-loading-success-partial-and-failure-states">F10 AIResponseState</a>
+<a href="#f11-studytoollauncher-entry-point-for-future-ai-tools">F11 StudyToolLauncher</a>
+<a href="#f12-webresearchconsent-opt-in-confirmation-for-internet-research">F12 WebResearchConsent</a>
+<div class="toc-sec">G. Shared states and quality surfaces</div>
+<a href="#g1-emptystate-helpful-screen-when-no-records-exist">G1 EmptyState</a>
+<a href="#g2-errorstate-visible-failure-with-recovery-action">G2 ErrorState</a>
+<a href="#g3-confirmationdialog-explicit-protection-for-destructive-actions">G3 ConfirmationDialog</a>
+<a href="#g4-notfoundpage-safe-route-fallback">G4 NotFoundPage</a>
+<a href="#g5-accessibilitylayer-keyboard-and-assistive-technology-behavior">G5 AccessibilityLayer</a>
+</nav></aside>
+<main>
+<p>This is the UI/UX decision contract. Each technical name includes a simple</p>
+<p>meaning and where it is used. This version fills every <code>Reference URLs</code> field</p>
+<p>with verified, canonical sources (checked live on 2026-09-09). Sources were</p>
+<p>chosen as the <strong>strongest available reference</strong> per component: official design</p>
+<p>systems (Carbon, Material, Atlassian, Polaris, USWDS, Gov.uk, Apple HIG),</p>
+<p>accessibility authorities (W3C ARIA APG, WCAG), UX research (Nielsen Norman</p>
+<p>Group), and trusted pattern galleries (Component Gallery, Page Flows,</p>
+<p>emptystat.es). Each link says exactly what to study from it.</p>
+<h2>How to use this file</h2>
+<p>For every surface, boss chooses or approves:</p>
+<ul>
+<li>Layout and information hierarchy</li>
+<li>Navigation pattern</li>
+<li>Colors, typography, spacing, borders, and density</li>
+<li>Controls and interaction behavior</li>
+<li>Loading, empty, success, and error states</li>
+<li>Motion and animation level</li>
+<li>Mobile behavior at 390px and 425px</li>
+<li>Tablet behavior at 768px</li>
+<li>Desktop behavior at 1024px+</li>
+<li>Reference URLs or screenshots</li>
+</ul>
+<p>No visual choice is treated as approved until it is selected here.</p>
+<h2>Cross-cutting databases (browse many design systems at once)</h2>
+<ul>
+<li><strong>Adele (UXPin)</strong> — repository of 100+ public design systems: <a href="https://adele.uxpin.com/" target="_blank" rel="noopener">adele.uxpin.com</a></li>
+<li><strong>Design Systems Repo</strong> — curated design systems, style guides, pattern libraries: <a href="https://designsystemsrepo.com/design-systems/" target="_blank" rel="noopener">designsystemsrepo.com › design systems</a></li>
+<li><strong>The Component Gallery</strong> — maps one component name across dozens of real systems: <a href="https://component.gallery/" target="_blank" rel="noopener">component.gallery</a></li>
+<li><strong>Page Flows</strong> — recorded real-product user flows (auth, uploads, search, chat): <a href="https://pageflows.com/" target="_blank" rel="noopener">pageflows.com</a></li>
+<li><strong>emptystat.es</strong> — curated gallery of empty states from real apps: <a href="https://emptystat.es/" target="_blank" rel="noopener">emptystat.es</a></li>
+</ul>
+<h2>A. Global application foundation</h2>
+<section class="comp" id="a1-appshell-the-permanent-frame-around-every-screen"><h3>A1. <code>AppShell</code> — the permanent frame around every screen</h3>
+<ul>
+<li>Used for: page background, navigation regions, content region, and global</li>
+</ul>
+<p>overlays.</p>
+<ul>
+<li>Decisions: single-pane or split-pane, density, background texture, maximum</li>
+</ul>
+<p>content width, desktop sidebar behavior.</p>
+<ul>
+<li>States: boot loading, signed-out shell, signed-in shell, fatal error.</li>
+<li>Reference URLs:</li>
+<li><a href="https://carbondesignsystem.com/components/UI-shell-header/usage/" target="_blank" rel="noopener">carbondesignsystem.com › UI shell header</a> — Carbon "UI Shell": the most complete public app-shell documentation (header + side nav + panels + content)</li>
+<li><a href="https://carbondesignsystem.com/components/UI-shell-left-panel/usage/" target="_blank" rel="noopener">carbondesignsystem.com › UI shell left panel</a> — Carbon: shell left panel / side rail behavior</li>
+<li><a href="https://horizon.servicenow.com/workspace/app-shells/workspace-app-shell" target="_blank" rel="noopener">horizon.servicenow.com › app shells › workspace app shell</a> — ServiceNow Horizon "Workspace App Shell": a full production app-shell spec (global search, rails, content areas)</li>
+<li><a href="https://atlassian.design/components/page-layout" target="_blank" rel="noopener">atlassian.design › page layout</a> — Atlassian PageLayout: splitting the viewport into TopNavigation / SideNav / Main slots (your single-pane vs split-pane decision)</li>
+</ul>
+</section>
+<section class="comp" id="a2-responsivesidebar-collapsible-navigation-on-larger-screens"><h3>A2. <code>ResponsiveSidebar</code> — collapsible navigation on larger screens</h3>
+<ul>
+<li>Used for: projects, documents, search, bookmarks, highlights, settings.</li>
+<li>Decisions: fixed sidebar or rail, expanded/collapsed labels, active indicator,</li>
+</ul>
+<p>mobile drawer behavior.</p>
+<ul>
+<li>Reference URLs:</li>
+<li><a href="https://atlassian.design/components/navigation-system/layout" target="_blank" rel="noopener">atlassian.design › navigation system › layout</a> — Atlassian side-nav layout slots (header, search, footer inside the sidebar)</li>
+<li><a href="https://m3.material.io/components/navigation-drawer/overview" target="_blank" rel="noopener">m3.material.io › navigation drawer</a> — Material 3 navigation drawer: expanded / rail / modal anatomy and breakpoints</li>
+<li><a href="https://react.carbondesignsystem.com/?path=/docs/components-ui-shell-sidenav--overview" target="_blank" rel="noopener">react.carbondesignsystem.com</a> — Carbon SideNav: fixed-width vs flexible rail configurations</li>
+</ul>
+</section>
+<section class="comp" id="a3-mobilenavigationdrawer-navigation-panel-opened-on-small-screens"><h3>A3. <code>MobileNavigationDrawer</code> — navigation panel opened on small screens</h3>
+<ul>
+<li>Used for: screens below the desktop breakpoint.</li>
+<li>Decisions: full-screen or partial drawer, backdrop, close gesture, focus</li>
+</ul>
+<p>handling, menu grouping.</p>
+<ul>
+<li>Reference URLs:</li>
+<li><a href="https://m3.material.io/components/navigation-drawer/overview" target="_blank" rel="noopener">m3.material.io › navigation drawer</a> — Material 3: modal drawer anatomy, backdrop, gestures, breakpoints</li>
+<li><a href="https://www.w3.org/WAI/WCAG22/Understanding/focus-order.html" target="_blank" rel="noopener">w3.org › Understanding › focus order</a> — W3C: focus order rules when the drawer opens/closes (focus handling decision)</li>
+<li><a href="https://atlassian.design/components/side-navigation/usage" target="_blank" rel="noopener">atlassian.design › side navigation</a> — Atlassian side navigation: responsive collapse-to-drawer behavior</li>
+</ul>
+</section>
+<section class="comp" id="a4-stickytopbar-header-that-stays-visible-while-content-scrolls"><h3>A4. <code>StickyTopbar</code> — header that stays visible while content scrolls</h3>
+<ul>
+<li>Used for: product identity, breadcrumbs, search entry, account menu, theme.</li>
+<li>Decisions: height, blur, border, shadow-on-scroll, mobile controls.</li>
+<li>Reference URLs:</li>
+<li><a href="https://carbondesignsystem.com/components/UI-shell-header/usage/" target="_blank" rel="noopener">carbondesignsystem.com › UI shell header</a> — Carbon UI Shell header: fixed header patterns, actions, alignment</li>
+<li><a href="https://m3.material.io/components/top-app-bar/overview" target="_blank" rel="noopener">m3.material.io › top app bar</a> — Material 3 top app bar: scroll behavior (elevation/shadow-on-scroll), height, actions</li>
+<li><a href="https://atlassian.design/components/page-header" target="_blank" rel="noopener">atlassian.design › page header</a> — Atlassian page header: title + actions + breadcrumbs composition</li>
+</ul>
+</section>
+<section class="comp" id="a5-commandpalette-keyboard-friendly-action-search-launcher"><h3>A5. <code>CommandPalette</code> — keyboard-friendly action/search launcher</h3>
+<ul>
+<li>Used for: global navigation, document search, quick actions.</li>
+<li>Decisions: shortcut, command groups, recent items, result density.</li>
+<li>Reference URLs:</li>
+<li><a href="https://github.com/dip/cmdk" target="_blank" rel="noopener">github.com › dip › cmdk</a> — cmdk (the library behind Vercel's ⌘K menu): groups, filtering, keyboard behavior, accessible combobox API</li>
+<li><a href="https://ui.shadcn.com/docs/components/command" target="_blank" rel="noopener">ui.shadcn.com › command</a> — shadcn/ui Command: production styling and composition of a command palette on top of cmdk</li>
+<li><a href="https://component.gallery/components/command-menu/" target="_blank" rel="noopener">component.gallery › command menu</a> — The Component Gallery: how many systems name and document the same "command menu" pattern</li>
+</ul>
+</section>
+<section class="comp" id="a6-toastregion-temporary-success-error-message-area"><h3>A6. <code>ToastRegion</code> — temporary success/error message area</h3>
+<ul>
+<li>Used for: save, delete, copy, upload, provider connection, AI errors.</li>
+<li>Decisions: position, duration, stacking, severity colors, undo action.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.nngroup.com/articles/toast/" target="_blank" rel="noopener">nngroup.com › toast</a> — Nielsen Norman Group: toast research, placement, duration, stacking, when NOT to use</li>
+<li><a href="https://sonner.emilkowal.ski/" target="_blank" rel="noopener">sonner.emilkowal.ski</a> — Sonner: the most popular production toast implementation (positioning, stacking, rich colors, undo actions)</li>
+<li><a href="https://www.radix-ui.com/primitives/docs/components/toast" target="_blank" rel="noopener">radix-ui.com › toast</a> — Radix Toast: accessible semantics (aria-live), swipe-to-dismiss, timers</li>
+</ul>
+</section>
+<section class="comp" id="a7-modaldialog-focused-overlay-requiring-a-decision-or-input"><h3>A7. <code>ModalDialog</code> — focused overlay requiring a decision or input</h3>
+<ul>
+<li>Used for: confirmations, provider key setup, DSA stats, settings.</li>
+<li>Decisions: size, backdrop, escape behavior, mobile full-screen behavior.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/" target="_blank" rel="noopener">w3.org › dialog modal</a> — W3C ARIA Authoring Practices: canonical dialog behavior (focus trap, Escape, backdrop)</li>
+<li><a href="https://m3.material.io/components/dialogs/overview" target="_blank" rel="noopener">m3.material.io › dialogs</a> — Material 3 dialogs: sizes, actions, when modal vs non-modal</li>
+<li><a href="https://www.radix-ui.com/primitives/docs/components/dialog" target="_blank" rel="noopener">radix-ui.com › dialog</a> — Radix Dialog: production implementation of focus management + scroll locking + mobile behavior</li>
+</ul>
+</section>
+<section class="comp" id="a8-globalloadingboundary-consistent-loading-treatment"><h3>A8. <code>GlobalLoadingBoundary</code> — consistent loading treatment</h3>
+<ul>
+<li>Used for: route changes, initial app load, protected data fetches.</li>
+<li>Decisions: skeleton versus progress indicator, message, timeout behavior.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.nngroup.com/articles/progress-indicators/" target="_blank" rel="noopener">nngroup.com › progress indicators</a> — NN/g: which progress-indicator type to use by wait length</li>
+<li><a href="https://www.nngroup.com/articles/skeleton-screens/" target="_blank" rel="noopener">nngroup.com › skeleton screens</a> — NN/g: skeleton screens — when they reduce perceived wait and when they backfire</li>
+<li><a href="https://react.dev/reference/react/Suspense" target="_blank" rel="noopener">react.dev › react › Suspense</a> — React Suspense: the mechanism a loading boundary hangs on</li>
+</ul>
+</section>
+<h2>B. Authentication</h2>
+<section class="comp" id="b1-loginform-form-for-existing-users-to-sign-in"><h3>B1. <code>LoginForm</code> — form for existing users to sign in</h3>
+<ul>
+<li>Used for: authentication entry.</li>
+<li>Decisions: split layout or focused form, password visibility, validation,</li>
+</ul>
+<p>remembered session, error placement.</p>
+<ul>
+<li>Reference URLs:</li>
+<li><a href="https://web.dev/articles/sign-in-form-best-practices" target="_blank" rel="noopener">web.dev › sign in form best practices</a> — Google's canonical sign-in form guide: password visibility toggle, mobile keyboards, error placement</li>
+<li><a href="https://www.nngroup.com/articles/login-forms/" target="_blank" rel="noopener">nngroup.com › login forms</a> — NN/g: login form UX research (field count, labels, error handling)</li>
+</ul>
+</section>
+<section class="comp" id="b2-registerform-form-for-new-account-creation"><h3>B2. <code>RegisterForm</code> — form for new account creation</h3>
+<ul>
+<li>Used for: account creation.</li>
+<li>Decisions: field order, password rules, consent copy, inline validation.</li>
+<li>Reference URLs:</li>
+<li><a href="https://web.dev/articles/sign-up-form-best-practices" target="_blank" rel="noopener">web.dev › sign up form best practices</a> — Google's canonical sign-up form guide: field order, inline validation, consent/session copy</li>
+<li><a href="https://www.nngroup.com/articles/errors-forms-design-guidance/" target="_blank" rel="noopener">nngroup.com › errors forms design guidance</a> — NN/g: form error message design (inline placement, wording)</li>
+</ul>
+</section>
+<section class="comp" id="b3-passwordrecoveryflow-account-recovery-screens"><h3>B3. <code>PasswordRecoveryFlow</code> — account recovery screens</h3>
+<ul>
+<li>Used for: forgot-password request and reset.</li>
+<li>Decisions: stepper or single flow, success state, invalid-token state.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.nngroup.com/articles/forgot-password/" target="_blank" rel="noopener">nngroup.com › forgot password</a> — NN/g: designing effective forgot-password flows (success copy, token-expiry messaging)</li>
+<li><a href="https://pageflows.com/web/flows/password-reset-flow/" target="_blank" rel="noopener">pageflows.com › flows › password reset flow</a> — Page Flows: real recorded password-reset flows from major products to benchmark against</li>
+</ul>
+</section>
+<section class="comp" id="b4-authguard-route-protection-behavior"><h3>B4. <code>AuthGuard</code> — route protection behavior</h3>
+<ul>
+<li>Used for: preventing signed-out access to private screens.</li>
+<li>Decisions: redirect target, loading state, expired-session treatment.</li>
+<li>Reference URLs:</li>
+<li><a href="https://nextjs.org/docs/app/building-your-application/authentication" target="_blank" rel="noopener">nextjs.org › building your application › authentication</a> — Next.js official auth pattern: middleware guards, redirects, session checks</li>
+<li><a href="https://nextjs.org/docs/app/api-reference/functions/redirect" target="_blank" rel="noopener">nextjs.org › functions › redirect</a> — Next.js <code>redirect()</code>: how the redirect target decision is implemented</li>
+</ul>
+</section>
+<h2>C. Project and document management</h2>
+<section class="comp" id="c1-dashboardoverview-starting-summary-of-the-user-s-work"><h3>C1. <code>DashboardOverview</code> — starting summary of the user's work</h3>
+<ul>
+<li>Used for: project count, recent documents, recent reading activity, actions.</li>
+<li>Decisions: list versus instrument panel, metric density, first-run guidance.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.nngroup.com/articles/dashboards/" target="_blank" rel="noopener">nngroup.com › dashboards</a> — NN/g: dashboard design principles (metric density, hierarchy)</li>
+<li><a href="https://polaris.shopify.com/patterns/dashboard-layout" target="_blank" rel="noopener">polaris.shopify.com › dashboard layout</a> — Shopify Polaris dashboard layout pattern: list vs cards, first-run guidance</li>
+<li><a href="https://m3.material.io/foundations/adaptive-design/canonical-layouts/overview" target="_blank" rel="noopener">m3.material.io › canonical layouts</a> — Material 3 canonical layouts: how summary dashboards adapt 390px → 1024px+</li>
+</ul>
+</section>
+<section class="comp" id="c2-projectswitcher-control-for-changing-the-active-project"><h3>C2. <code>ProjectSwitcher</code> — control for changing the active project</h3>
+<ul>
+<li>Used for: topbar and document workspace.</li>
+<li>Decisions: dropdown, command palette, searchable list, create-project action.</li>
+<li>Reference URLs:</li>
+<li><a href="https://ui.shadcn.com/docs/components/combobox" target="_blank" rel="noopener">ui.shadcn.com › combobox</a> — shadcn Combobox: searchable dropdown pattern (searchable list decision)</li>
+<li><a href="https://www.radix-ui.com/primitives/docs/components/dropdown-menu" target="_blank" rel="noopener">radix-ui.com › dropdown menu</a> — Radix Dropdown Menu: keyboard behavior and semantics for the switcher</li>
+<li><a href="https://ui.shadcn.com/docs/components/command" target="_blank" rel="noopener">ui.shadcn.com › command</a> — shadcn Command: the command-palette alternative for switching projects</li>
+</ul>
+</section>
+<section class="comp" id="c3-projectlist-collection-of-the-user-s-projects"><h3>C3. <code>ProjectList</code> — collection of the user's projects</h3>
+<ul>
+<li>Used for: project navigation and management.</li>
+<li>Decisions: rows/cards, sorting, metadata, empty state, delete confirmation.</li>
+<li>Reference URLs:</li>
+<li><a href="https://polaris.shopify.com/components/index-table" target="_blank" rel="noopener">polaris.shopify.com › index table</a> — Polaris IndexTable: rows, bulk actions, sorting, empty states</li>
+<li><a href="https://m2.material.io/components/lists" target="_blank" rel="noopener">m2.material.io › lists</a> — Material lists: rows vs cards, metadata density</li>
+<li><a href="https://carbondesignsystem.com/patterns/empty-states-pattern/" target="_blank" rel="noopener">carbondesignsystem.com › empty states pattern</a> — Carbon: empty-state structure (what to show when there are no projects)</li>
+</ul>
+</section>
+<section class="comp" id="c4-projectcreatedialog-form-for-creating-a-project"><h3>C4. <code>ProjectCreateDialog</code> — form for creating a project</h3>
+<ul>
+<li>Used for: new project action.</li>
+<li>Decisions: required fields, templates, validation, success routing.</li>
+<li>Reference URLs:</li>
+<li><a href="https://m3.material.io/components/dialogs/overview" target="_blank" rel="noopener">m3.material.io › dialogs</a> — Material 3: dialog sizing, action buttons, when a dialog is appropriate</li>
+<li><a href="https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/" target="_blank" rel="noopener">w3.org › dialog modal</a> — W3C: focus behavior for form dialogs</li>
+</ul>
+</section>
+<section class="comp" id="c5-documentlibrary-documents-inside-the-active-project"><h3>C5. <code>DocumentLibrary</code> — documents inside the active project</h3>
+<ul>
+<li>Used for: upload, open, rename, delete, filter, and status tracking.</li>
+<li>Decisions: table/list/grid, metadata shown, selection model, bulk actions.</li>
+<li>Reference URLs:</li>
+<li><a href="https://polaris.shopify.com/components/index-table" target="_blank" rel="noopener">polaris.shopify.com › index table</a> — Polaris IndexTable: selection model, bulk actions, filters, status badges</li>
+<li><a href="https://m2.material.io/components/data-tables" target="_blank" rel="noopener">m2.material.io › data tables</a> — Material data tables: table vs list vs grid, column choices</li>
+<li><a href="https://designsystem.digital.gov/components/table/" target="_blank" rel="noopener">designsystem.digital.gov › table</a> — USWDS table: accessible markup for tabular data</li>
+</ul>
+</section>
+<section class="comp" id="c6-documentuploaddropzone-drag-and-drop-or-file-picker-upload-control"><h3>C6. <code>DocumentUploadDropzone</code> — drag-and-drop or file-picker upload control</h3>
+<ul>
+<li>Used for: PDF/PPT/DOCX ingestion.</li>
+<li>Decisions: accepted formats, progress display, duplicate handling, mobile</li>
+</ul>
+<p>picker behavior, validation errors.</p>
+<ul>
+<li>Reference URLs:</li>
+<li><a href="https://react-dropzone.js.org/" target="_blank" rel="noopener">react-dropzone.js.org</a> — react-dropzone: accepted formats, validation errors, drag vs picker behavior</li>
+<li><a href="https://www.nngroup.com/articles/drag-and-drop/" target="_blank" rel="noopener">nngroup.com › drag and drop</a> — NN/g: drag-and-drop usability research (discoverability of the dropzone)</li>
+</ul>
+</section>
+<section class="comp" id="c7-documentprocessingstatus-visible-ingestion-state"><h3>C7. <code>DocumentProcessingStatus</code> — visible ingestion state</h3>
+<ul>
+<li>Used for: parsing/indexing progress and failure recovery.</li>
+<li>Decisions: progress detail, retry action, partial-success behavior.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.nngroup.com/articles/progress-indicators/" target="_blank" rel="noopener">nngroup.com › progress indicators</a> — NN/g: deterministic (percent) vs indeterminate progress, status messaging</li>
+<li><a href="https://polaris.shopify.com/components/badge" target="_blank" rel="noopener">polaris.shopify.com › badge</a> — Polaris Badge: status pill treatment (processing / failed / ready)</li>
+</ul>
+</section>
+<section class="comp" id="c8-documentmetadatapanel-title-type-pages-dates-and-actions"><h3>C8. <code>DocumentMetadataPanel</code> — title, type, pages, dates, and actions</h3>
+<ul>
+<li>Used for: document details and management.</li>
+<li>Decisions: compact panel or drawer, editable fields, danger actions.</li>
+<li>Reference URLs:</li>
+<li><a href="https://m3.material.io/components/side-sheets/overview" target="_blank" rel="noopener">m3.material.io › side sheets</a> — Material 3 side sheets: the "compact panel" anatomy and dismiss behavior</li>
+<li><a href="https://atlassian.design/components/page-layout" target="_blank" rel="noopener">atlassian.design › page layout</a> — Atlassian: slotting a metadata panel beside main content</li>
+</ul>
+</section>
+<h2>D. Reading workspace</h2>
+<section class="comp" id="d1-readerworkspace-main-document-reading-layout"><h3>D1. <code>ReaderWorkspace</code> — main document-reading layout</h3>
+<ul>
+<li>Used for: PDF/PPT viewing with surrounding tools.</li>
+<li>Decisions: centered page, two-pane layout, distraction-free mode, zoom</li>
+</ul>
+<p>controls, responsive collapse.</p>
+<ul>
+<li>Reference URLs:</li>
+<li><a href="https://m3.material.io/foundations/adaptive-design/canonical-layouts/overview" target="_blank" rel="noopener">m3.material.io › canonical layouts</a> — Material 3 canonical layouts: two-pane vs single-pane across 390px → 1024px+</li>
+<li><a href="https://atlassian.design/components/page-layout" target="_blank" rel="noopener">atlassian.design › page layout</a> — Atlassian PageLayout: tool rail + main content composition</li>
+</ul>
+</section>
+<section class="comp" id="d2-documentviewer-rendered-pdf-or-slide-content"><h3>D2. <code>DocumentViewer</code> — rendered PDF or slide content</h3>
+<ul>
+<li>Used for: reading the selected document.</li>
+<li>Decisions: page background, fit mode, zoom, page transition, text selection.</li>
+<li>Reference URLs:</li>
+<li><a href="https://mozilla.github.io/pdf.js/" target="_blank" rel="noopener">mozilla.github.io › pdf</a> — PDF.js (Firefox's PDF viewer): fit modes, zoom, page transitions, text-layer selection</li>
+<li><a href="https://github.com/wojtekmaj/react-pdf" target="_blank" rel="noopener">github.com › wojtekmaj › react pdf</a> — react-pdf: React wrapper for embedding PDF.js with page/zoom controls</li>
+</ul>
+</section>
+<section class="comp" id="d3-readertoolbar-document-actions-and-view-controls"><h3>D3. <code>ReaderToolbar</code> — document actions and view controls</h3>
+<ul>
+<li>Used for: page navigation, zoom, fullscreen, download, search.</li>
+<li>Decisions: icon-only versus labeled controls, grouping, overflow menu.</li>
+<li>Reference URLs:</li>
+<li><a href="https://m3.material.io/components/top-app-bar/overview" target="_blank" rel="noopener">m3.material.io › top app bar</a> — Material 3 app bar: icon actions, overflow menu, grouping</li>
+<li><a href="https://ui.shadcn.com/docs/components/toggle-group" target="_blank" rel="noopener">ui.shadcn.com › toggle group</a> — shadcn ToggleGroup: connected view controls (fit mode / zoom toggles)</li>
+</ul>
+</section>
+<section class="comp" id="d4-pagenavigator-page-number-and-previous-next-controls"><h3>D4. <code>PageNavigator</code> — page number and previous/next controls</h3>
+<ul>
+<li>Used for: direct movement through a document.</li>
+<li>Decisions: input format, page count, keyboard shortcuts, invalid-page error.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.w3.org/WAI/ARIA/apg/patterns/pagination/" target="_blank" rel="noopener">w3.org › pagination</a> — W3C ARIA APG pagination: previous/next + direct-entry patterns and semantics</li>
+<li><a href="https://ui.shadcn.com/docs/components/pagination" target="_blank" rel="noopener">ui.shadcn.com › pagination</a> — shadcn Pagination: production previous/next + page entry</li>
+</ul>
+</section>
+<section class="comp" id="d5-thumbnailrail-miniature-page-or-slide-navigation"><h3>D5. <code>ThumbnailRail</code> — miniature page or slide navigation</h3>
+<ul>
+<li>Used for: fast visual movement through long documents.</li>
+<li>Decisions: left rail or bottom strip, selected state, lazy loading, mobile</li>
+</ul>
+<p>replacement.</p>
+<ul>
+<li>Reference URLs:</li>
+<li><a href="https://mozilla.github.io/pdf.js/examples/" target="_blank" rel="noopener">mozilla.github.io › pdf</a> — PDF.js examples: rendering page thumbnails lazily</li>
+<li><a href="https://github.com/wojtekmaj/react-pdf" target="_blank" rel="noopener">github.com › wojtekmaj › react pdf</a> — react-pdf: thumbnail strips with selected-state control</li>
+</ul>
+</section>
+<section class="comp" id="d6-highlightlayer-visual-marking-of-selected-document-text"><h3>D6. <code>HighlightLayer</code> — visual marking of selected document text</h3>
+<ul>
+<li>Used for: highlights and evidence capture.</li>
+<li>Decisions: highlight colors, selection toolbar, edit/delete behavior.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.nngroup.com/articles/text-selection/" target="_blank" rel="noopener">nngroup.com › text selection</a> — NN/g: text selection behavior and selection-toolbar research</li>
+<li><a href="https://www.w3.org/TR/annotation-model/" target="_blank" rel="noopener">w3.org › TR › annotation model</a> — W3C Web Annotation Data Model: the standard shape for "highlight anchored to document range"</li>
+</ul>
+</section>
+<section class="comp" id="d7-highlightlist-saved-highlights-in-reading-order"><h3>D7. <code>HighlightList</code> — saved highlights in reading order</h3>
+<ul>
+<li>Used for: reviewing evidence and jumping back to a page.</li>
+<li>Decisions: excerpt length, page label, sorting, empty state.</li>
+<li>Reference URLs:</li>
+<li><a href="https://m3.material.io/components/lists/overview" target="_blank" rel="noopener">m3.material.io › lists</a> — Material 3 lists: row density, two-line rows, page-label placement</li>
+<li><a href="https://emptystat.es/" target="_blank" rel="noopener">emptystat.es</a> — empty-state examples for "no highlights yet"</li>
+</ul>
+</section>
+<section class="comp" id="d8-bookmarkcollectiondrawer-newest-first-saved-page-list"><h3>D8. <code>BookmarkCollectionDrawer</code> — newest-first saved page list</h3>
+<ul>
+<li>Used for: bookmark creation, newest removal, arbitrary bookmark deletion.</li>
+<li>Decisions: drawer location, newest marker, row actions, confirmation,</li>
+</ul>
+<p>empty state, mobile bottom sheet.</p>
+<ul>
+<li>Reference URLs:</li>
+<li><a href="https://m3.material.io/components/side-sheets/overview" target="_blank" rel="noopener">m3.material.io › side sheets</a> — Material 3 side sheets: desktop drawer anatomy, dismiss behavior</li>
+<li><a href="https://m3.material.io/components/bottom-sheets/overview" target="_blank" rel="noopener">m3.material.io › bottom sheets</a> — Material 3 bottom sheets: the mobile replacement pattern</li>
+<li><a href="https://component.gallery/components/empty-state/" target="_blank" rel="noopener">component.gallery › empty state</a> — Component Gallery: empty-state naming and patterns across systems</li>
+</ul>
+</section>
+<section class="comp" id="d9-readernotespanel-user-notes-attached-to-a-document-page"><h3>D9. <code>ReaderNotesPanel</code> — user notes attached to a document/page</h3>
+<ul>
+<li>Used for: personal study notes.</li>
+<li>Decisions: autosave versus explicit save, markdown support, page association.</li>
+<li>Reference URLs:</li>
+<li><a href="https://m3.material.io/components/side-sheets/overview" target="_blank" rel="noopener">m3.material.io › side sheets</a> — Material 3 side sheets: notes panel placement</li>
+<li><a href="https://ui.shadcn.com/docs/components/textarea" target="_blank" rel="noopener">ui.shadcn.com › textarea</a> — shadcn Textarea: the editing surface inside the panel</li>
+</ul>
+</section>
+<h2>E. Search and DSA explanation</h2>
+<section class="comp" id="e1-globalsearchinput-search-entry-across-indexed-documents"><h3>E1. <code>GlobalSearchInput</code> — search entry across indexed documents</h3>
+<ul>
+<li>Used for: Trie autocomplete and inverted-index result retrieval.</li>
+<li>Decisions: instant results versus submit, filters, keyboard navigation.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.w3.org/WAI/ARIA/apg/patterns/combobox/" target="_blank" rel="noopener">w3.org › combobox</a> — W3C ARIA APG combobox: THE canonical keyboard behavior for search inputs with suggestions</li>
+<li><a href="https://www.nngroup.com/articles/query-suggestions/" target="_blank" rel="noopener">nngroup.com › query suggestions</a> — NN/g: query suggestion research (instant results vs submit)</li>
+</ul>
+</section>
+<section class="comp" id="e2-searchsuggestionlist-prefix-suggestions-while-typing"><h3>E2. <code>SearchSuggestionList</code> — prefix suggestions while typing</h3>
+<ul>
+<li>Used for: Trie-powered autocomplete.</li>
+<li>Decisions: result limit, highlighted prefix, no-match state.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.nngroup.com/articles/query-suggestions/" target="_blank" rel="noopener">nngroup.com › query suggestions</a> — NN/g: how many suggestions to show, highlighting, no-match handling</li>
+<li><a href="https://ui.shadcn.com/docs/components/command" target="_blank" rel="noopener">ui.shadcn.com › command</a> — shadcn Command: rendering filtered suggestion groups</li>
+</ul>
+</section>
+<section class="comp" id="e3-searchresultslist-matching-passages-documents"><h3>E3. <code>SearchResultsList</code> — matching passages/documents</h3>
+<ul>
+<li>Used for: inverted-index search results.</li>
+<li>Decisions: result grouping, snippets, page links, relevance indicator.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.nngroup.com/articles/search-results/" target="_blank" rel="noopener">nngroup.com › search results</a> — NN/g: search results page research (snippets, grouping, relevance)</li>
+<li><a href="https://design-system.service.gov.uk/patterns/search/" target="_blank" rel="noopener">design-system.service.gov.uk › search</a> — GOV.UK search pattern: result list structure and page links</li>
+</ul>
+</section>
+<section class="comp" id="e4-dsastatsmodal-transparent-explanation-of-active-data-structures"><h3>E4. <code>DSAStatsModal</code> — transparent explanation of active data structures</h3>
+<ul>
+<li>Used for: demonstrating Trie, inverted index, and bookmark collection</li>
+</ul>
+<p>statistics during the mid-review.</p>
+<ul>
+<li>Decisions: educational detail level, diagrams, complexity labels, raw counts.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/" target="_blank" rel="noopener">w3.org › dialog modal</a> — W3C: dialog semantics for the stats modal</li>
+<li><a href="https://www.nngroup.com/articles/dashboards/" target="_blank" rel="noopener">nngroup.com › dashboards</a> — NN/g: presenting counts/metrics without overwhelming (educational detail level)</li>
+</ul>
+</section>
+<h2>F. Settings and BYOK AI</h2>
+<section class="comp" id="f1-settingslayout-grouped-user-application-settings"><h3>F1. <code>SettingsLayout</code> — grouped user/application settings</h3>
+<ul>
+<li>Used for: account, appearance, providers, privacy, keyboard shortcuts.</li>
+<li>Decisions: sidebar tabs, mobile tabs, save behavior, unsaved-change warning.</li>
+<li>Reference URLs:</li>
+<li><a href="https://developer.apple.com/design/human-interface-guidelines/settings" target="_blank" rel="noopener">developer.apple.com › human interface guidelines › settings</a> — Apple HIG Settings: grouping order, save behavior, toggles vs rows</li>
+<li><a href="https://atlassian.design/components/page-layout" target="_blank" rel="noopener">atlassian.design › page layout</a> — Atlassian: settings sidebar + content layout</li>
+</ul>
+</section>
+<section class="comp" id="f2-providerconnectionform-user-adds-a-cloud-ai-provider-key"><h3>F2. <code>ProviderConnectionForm</code> — user adds a cloud AI provider key</h3>
+<ul>
+<li>Used for: Z.AI GLM and OpenAI-compatible provider setup.</li>
+<li>Decisions: provider selector, masked key field, test-connection action,</li>
+</ul>
+<p>privacy notice, model allowlist preview.</p>
+<ul>
+<li>Reference URLs:</li>
+<li><a href="https://helios.hashicorp.design/components/form/masked-input" target="_blank" rel="noopener">helios.hashicorp.design › form › masked input</a> — HashiCorp Helios Masked Input: a design system that documents secret/masked fields directly</li>
+<li><a href="https://ux.stackexchange.com/questions/124938/should-we-mask-api-keys" target="_blank" rel="noopener">ux.stackexchange.com › 124938 › should we mask api keys</a> — UX StackExchange: the mask-vs-show API key debate (your exact decision)</li>
+<li><a href="https://zuplo.com/blog/api-key-best-practices" target="_blank" rel="noopener">zuplo.com › blog › api key best practices</a> — API key UX best practices (fingerprint display, prefixes, validation)</li>
+</ul>
+</section>
+<section class="comp" id="f3-connectedprovidercard-saved-provider-connection-summary"><h3>F3. <code>ConnectedProviderCard</code> — saved provider connection summary</h3>
+<ul>
+<li>Used for: provider status, selected model, last test, remove action.</li>
+<li>Decisions: key fingerprint display, status badge, default-provider action.</li>
+<li>Reference URLs:</li>
+<li><a href="https://m3.material.io/components/cards/overview" target="_blank" rel="noopener">m3.material.io › cards</a> — Material 3 cards: card anatomy and actions</li>
+<li><a href="https://polaris.shopify.com/components/badge" target="_blank" rel="noopener">polaris.shopify.com › badge</a> — Polaris Badge: status treatment (connected / invalid / testing)</li>
+</ul>
+</section>
+<section class="comp" id="f4-modelselector-chooses-an-approved-model"><h3>F4. <code>ModelSelector</code> — chooses an approved model</h3>
+<ul>
+<li>Used for: AI conversation setup and provider settings.</li>
+<li>Decisions: allowlist presentation, capability labels, speed/cost indicators.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.w3.org/WAI/ARIA/apg/patterns/listbox/" target="_blank" rel="noopener">w3.org › listbox</a> — W3C ARIA APG listbox: canonical selectable-list semantics</li>
+<li><a href="https://ui.shadcn.com/docs/components/select" target="_blank" rel="noopener">ui.shadcn.com › select</a> — shadcn Select: production selector with labels and descriptions</li>
+</ul>
+</section>
+<section class="comp" id="f5-providerprivacynotice-explains-external-document-processing"><h3>F5. <code>ProviderPrivacyNotice</code> — explains external document processing</h3>
+<ul>
+<li>Used for: before the first document is sent to a cloud provider.</li>
+<li>Decisions: blocking confirmation or inline notice, provider/model details,</li>
+</ul>
+<p>link to privacy policy.</p>
+<ul>
+<li>Reference URLs:</li>
+<li><a href="https://gdpr.eu/" target="_blank" rel="noopener">gdpr.eu</a> — GDPR reference: consent and external-processing disclosure requirements</li>
+<li><a href="https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/" target="_blank" rel="noopener">ico.org.uk › for organisations › uk gdpr guidance and resources</a> — UK ICO guidance: plain-language privacy notice wording</li>
+</ul>
+</section>
+<section class="comp" id="f6-documentscopepicker-selects-exactly-which-documents-ai-may-use"><h3>F6. <code>DocumentScopePicker</code> — selects exactly which documents AI may use</h3>
+<ul>
+<li>Used for: every AI conversation or explicit session scope.</li>
+<li>Decisions: one document versus multiple, project-wide option, remembered</li>
+</ul>
+<p>scope, clear selection.</p>
+<ul>
+<li>Reference URLs:</li>
+<li><a href="https://www.w3.org/WAI/ARIA/apg/patterns/checkbox/" target="_blank" rel="noopener">w3.org › checkbox</a> — W3C ARIA APG checkbox: multi-select semantics (scope selection)</li>
+<li><a href="https://polaris.shopify.com/components/checkbox" target="_blank" rel="noopener">polaris.shopify.com › checkbox</a> — Polaris Checkbox: labels, select-all pattern, indeterminate state</li>
+</ul>
+</section>
+<section class="comp" id="f7-documentchatworkspace-conversation-about-selected-documents"><h3>F7. <code>DocumentChatWorkspace</code> — conversation about selected documents</h3>
+<ul>
+<li>Used for: first AI vertical slice.</li>
+<li>Decisions: chat layout, source panel, streaming treatment, regenerate,</li>
+</ul>
+<p>copy, feedback, conversation history.</p>
+<ul>
+<li>Reference URLs:</li>
+<li><a href="https://www.nngroup.com/articles/chatbots/" target="_blank" rel="noopener">nngroup.com › chatbots</a> — NN/g: chatbot UX guidelines (layout, transparency, handoff)</li>
+<li><a href="https://www.nngroup.com/articles/ai-chatbots-design-guidelines/" target="_blank" rel="noopener">nngroup.com › ai chatbots design guidelines</a> — NN/g (2026): 10 practical AI-chatbot design guidelines</li>
+<li><a href="https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot" target="_blank" rel="noopener">sdk.vercel.ai › ai sdk ui › chatbot</a> — Vercel AI SDK chatbot guide: streaming treatment, regenerate, the canonical production chat surface</li>
+</ul>
+</section>
+<section class="comp" id="f8-chatmessage-one-user-or-assistant-message"><h3>F8. <code>ChatMessage</code> — one user or assistant message</h3>
+<ul>
+<li>Used for: conversation transcript.</li>
+<li>Decisions: markdown, code blocks, citation chips, timestamps, actions.</li>
+<li>Reference URLs:</li>
+<li><a href="https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot" target="_blank" rel="noopener">sdk.vercel.ai › ai sdk ui › chatbot</a> — Vercel AI SDK: message rendering, actions (copy/regenerate), streaming states</li>
+<li><a href="https://github.com/remarkjs/react-markdown" target="_blank" rel="noopener">github.com › remarkjs › react markdown</a> — react-markdown: safe markdown/code-block rendering inside messages</li>
+</ul>
+</section>
+<section class="comp" id="f9-citationpanel-supporting-pages-and-excerpts-for-an-ai-answer"><h3>F9. <code>CitationPanel</code> — supporting pages and excerpts for an AI answer</h3>
+<ul>
+<li>Used for: grounded answer verification.</li>
+<li>Decisions: inline citation markers versus side panel, click-to-page, excerpt</li>
+</ul>
+<p>length, unavailable-source state.</p>
+<ul>
+<li>Reference URLs:</li>
+<li><a href="https://www.nngroup.com/articles/chatbots/" target="_blank" rel="noopener">nngroup.com › chatbots</a> — NN/g: transparency and source-grounding in AI answers</li>
+<li><a href="https://www.w3.org/TR/annotation-model/" target="_blank" rel="noopener">w3.org › TR › annotation model</a> — W3C Web Annotation: the standard way to anchor an excerpt to a document page</li>
+<li><a href="https://blog.google/products/search/ai-mode-search/" target="_blank" rel="noopener">blog.google › search › ai mode search</a> — Google Search AI Mode: how the industry shows citations/chips inline vs panel</li>
+</ul>
+</section>
+<section class="comp" id="f10-airesponsestate-loading-success-partial-and-failure-states"><h3>F10. <code>AIResponseState</code> — loading, success, partial, and failure states</h3>
+<ul>
+<li>Used for: provider calls and streaming responses.</li>
+<li>Decisions: token streaming, cancel action, retry, invalid-key message,</li>
+</ul>
+<p>rate-limit message, provider-unavailable state.</p>
+<ul>
+<li>Reference URLs:</li>
+<li><a href="https://www.nngroup.com/articles/ai-chatbots-design-guidelines/" target="_blank" rel="noopener">nngroup.com › ai chatbots design guidelines</a> — NN/g: streaming feedback, failure recovery in AI chat</li>
+<li><a href="https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot" target="_blank" rel="noopener">sdk.vercel.ai › ai sdk ui › chatbot</a> — Vercel AI SDK: status/loading/error state machinery for streaming responses</li>
+</ul>
+</section>
+<section class="comp" id="f11-studytoollauncher-entry-point-for-future-ai-tools"><h3>F11. <code>StudyToolLauncher</code> — entry point for future AI tools</h3>
+<ul>
+<li>Used for: summary, flashcards, quiz, and later research actions.</li>
+<li>Decisions: tabs, command menu, tool cards, document scope reminder.</li>
+<li>Reference URLs:</li>
+<li><a href="https://m3.material.io/components/tabs/overview" target="_blank" rel="noopener">m3.material.io › tabs</a> — Material 3 tabs: primary/secondary tab patterns for tool switching</li>
+<li><a href="https://ui.shadcn.com/docs/components/command" target="_blank" rel="noopener">ui.shadcn.com › command</a> — shadcn Command: command-menu alternative for tool launching</li>
+</ul>
+</section>
+<section class="comp" id="f12-webresearchconsent-opt-in-confirmation-for-internet-research"><h3>F12. <code>WebResearchConsent</code> — opt-in confirmation for internet research</h3>
+<ul>
+<li>Used for: later article/PDF research feature.</li>
+<li>Decisions: consent wording, query preview, source display, citation format.</li>
+<li>Reference URLs:</li>
+<li><a href="https://gdpr.eu/" target="_blank" rel="noopener">gdpr.eu</a> — GDPR: opt-in consent requirements and wording</li>
+<li><a href="https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/" target="_blank" rel="noopener">ico.org.uk › for organisations › uk gdpr guidance and resources</a> — UK ICO: informed consent guidance for plain copy</li>
+</ul>
+</section>
+<h2>G. Shared states and quality surfaces</h2>
+<section class="comp" id="g1-emptystate-helpful-screen-when-no-records-exist"><h3>G1. <code>EmptyState</code> — helpful screen when no records exist</h3>
+<ul>
+<li>Used for: no projects, no documents, no bookmarks, no highlights, no search</li>
+</ul>
+<p>results, no provider, no conversation.</p>
+<ul>
+<li>Decisions: illustration style, primary action, educational copy.</li>
+<li>Reference URLs:</li>
+<li><a href="https://emptystat.es/" target="_blank" rel="noopener">emptystat.es</a> — curated gallery of empty states from real apps (illustration style + copy inspiration)</li>
+<li><a href="https://carbondesignsystem.com/patterns/empty-states-pattern/" target="_blank" rel="noopener">carbondesignsystem.com › empty states pattern</a> — Carbon: empty-state anatomy, types, and in-depth guidance</li>
+<li><a href="https://component.gallery/components/empty-state/" target="_blank" rel="noopener">component.gallery › empty state</a> — Component Gallery: how many systems document the same pattern</li>
+</ul>
+</section>
+<section class="comp" id="g2-errorstate-visible-failure-with-recovery-action"><h3>G2. <code>ErrorState</code> — visible failure with recovery action</h3>
+<ul>
+<li>Used for: API, upload, parsing, provider, network, and permission errors.</li>
+<li>Decisions: technical detail level, retry action, support information.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.nngroup.com/articles/error-message-guidelines/" target="_blank" rel="noopener">nngroup.com › error message guidelines</a> — NN/g: error message guidelines (plain language, recovery action)</li>
+<li><a href="https://design-system.service.gov.uk/components/error-message/" target="_blank" rel="noopener">design-system.service.gov.uk › error message</a> — GOV.UK error message component: accessible, recovery-focused errors</li>
+</ul>
+</section>
+<section class="comp" id="g3-confirmationdialog-explicit-protection-for-destructive-actions"><h3>G3. <code>ConfirmationDialog</code> — explicit protection for destructive actions</h3>
+<ul>
+<li>Used for: document/project/provider/key deletion.</li>
+<li>Decisions: wording, typed confirmation, danger button treatment.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.nngroup.com/articles/confirmation-dialog/" target="_blank" rel="noopener">nngroup.com › confirmation dialog</a> — NN/g: confirmation dialog research (wording, when to use, destructive styling)</li>
+<li><a href="https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/" target="_blank" rel="noopener">w3.org › dialog modal</a> — W3C: confirm/cancel dialog pattern</li>
+</ul>
+</section>
+<section class="comp" id="g4-notfoundpage-safe-route-fallback"><h3>G4. <code>NotFoundPage</code> — safe route fallback</h3>
+<ul>
+<li>Used for: unknown project, document, or URL.</li>
+<li>Decisions: return action, search action, illustration.</li>
+<li>Reference URLs:</li>
+<li><a href="https://www.nngroup.com/articles/404-error-pages/" target="_blank" rel="noopener">nngroup.com › 404 error pages</a> — NN/g: 404 page design (return/search actions, helpful copy)</li>
+<li><a href="https://nextjs.org/docs/app/api-reference/file-conventions/not-found" target="_blank" rel="noopener">nextjs.org › file conventions › not found</a> — Next.js <code>not-found</code> convention: the route fallback mechanism</li>
+</ul>
+</section>
+<section class="comp" id="g5-accessibilitylayer-keyboard-and-assistive-technology-behavior"><h3>G5. <code>AccessibilityLayer</code> — keyboard and assistive-technology behavior</h3>
+<ul>
+<li>Used for: every screen.</li>
+<li>Decisions: skip link, focus ring, dialog focus trap, screen-reader labels,</li>
+</ul>
+<p>reduced-motion mode, contrast target.</p>
+<ul>
+<li>Reference URLs:</li>
+<li><a href="https://www.w3.org/WAI/ARIA/apg/" target="_blank" rel="noopener">w3.org › ARIA › apg</a> — W3C ARIA Authoring Practices Guide: THE keyboard/focus/SR-label reference for every pattern above</li>
+<li><a href="https://www.w3.org/WAI/WCAG22/quickref/" target="_blank" rel="noopener">w3.org › WCAG22 › quickref</a> — WCAG 2.2 Quick Reference: contrast target, focus visibility, reduced-motion criteria</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion" target="_blank" rel="noopener">developer.mozilla.org › @media › prefers reduced motion</a> — MDN: implementing the reduced-motion mode</li>
+</ul>
+</section>
+<h2>Screenshot/reference submission format</h2>
+<p>Paste references under the relevant component using:</p>
+<pre><code>Reference URLs:
+- [URL] — what to copy or study
+- [URL] — what to avoid
+Boss choice: [selected option / changes requested]</code></pre>
+<h2>Approval status</h2>
+<ul>
+<li>First surface: <code>DashboardOverview</code> — selected for the first UI/UX review</li>
+<li>Reference URLs: pending boss input</li>
+<li>Global foundation: Not selected</li>
+<li>Authentication: Not selected</li>
+<li>Projects/documents: Not selected</li>
+<li>Reading workspace: Not selected</li>
+<li>Search/DSA: Not selected</li>
+<li>Settings/BYOK AI: Not selected</li>
+<li>Shared states/accessibility: Not selected</li>
+</ul>
+</main>
+</div>
+</body>
+</html>

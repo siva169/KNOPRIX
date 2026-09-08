@@ -1,5 +1,20 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-09 — Made all reference links clickable (md + HTML version)
+
+- Converted the 124 bare URLs in `UI-UX-updated.md` into titled markdown
+  links (`[site › section](url)`), so they are clickable in any markdown
+  preview. Zero bare URLs remain; original `UI-UX.md` untouched.
+- Generated `UI-UX-updated.html`: a standalone, no-dependency page that opens
+  directly in the browser with a jump-list of all 50 components (mobile
+  collapsible list below 900px, sticky sidebar at 900px+), each reference one
+  click away in a new tab.
+- Verification: Chrome headless DOM dump shows 100 TOC anchors (2 navs x 50
+  components); screenshots captured at 390x844 and 1280x900 show rendered
+  content (Rule 018 evidence kept in `../AI-Rules-temp/uiux_links/`).
+- Regeneration script kept at `../AI-Rules-temp/uiux_links/build_uiux.py` —
+  re-run it after editing the markdown to rebuild the HTML.
+
 ## 2026-09-09 — Created isolated rebuild baseline
 
 - Created `knoprix-final-project/` inside AI-Rules.
