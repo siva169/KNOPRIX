@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useAuth } from './context/AuthContext.jsx';
 import { useApp } from './context/AppContext.jsx';
@@ -10,6 +10,7 @@ import BookmarksDrawer from './components/BookmarksDrawer.jsx';
 import DSAStatsModal from './components/DSAStatsModal.jsx';
 import UploadModal from './components/UploadModal.jsx';
 import Toast from './components/Toast.jsx';
+import DashboardOverview from './components/DashboardOverview.jsx';
 
 const BrowserPDFViewer = lazy(() => import('./components/BrowserPDFViewer.jsx'));
 
@@ -18,19 +19,22 @@ export default function App() {
   const {
     toast, notify,
     fetchProjects, selectProject, resetWorkspace,
-    projects, activeProject, documents, openDocument,
+    projects, activeProject, activeDocument,
   } = useApp();
   const [authMode, setAuthMode] = useState('login');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
   const [mobileSidebar, setMobileSidebar] = useState(false);
-  const autoOpenedRef = useRef(false);
+  const [projectsLoading, setProjectsLoading] = useState(true);
 
   // On login: load the user's saved projects immediately
   useEffect(() => {
     if (!user) return;
-    fetchProjects().catch(() => notify('Could not load your projects', 'error'));
+    setProjectsLoading(true);
+    fetchProjects()
+      .catch(() => notify('Could not load your projects', 'error'))
+      .finally(() => setProjectsLoading(false));
   }, [user, fetchProjects, notify]);
 
   // Auto-select the project with the most documents so saved files show on login
@@ -40,17 +44,9 @@ export default function App() {
     selectProject(best.id).catch(() => notify('Could not load documents', 'error'));
   }, [user, projects, activeProject, selectProject, notify]);
 
-  // Auto-open the first document of the selected project (once per login)
-  useEffect(() => {
-    if (!user || !activeProject || !documents.length || autoOpenedRef.current) return;
-    autoOpenedRef.current = true;
-    openDocument(documents[0]);
-  }, [user, activeProject, documents, openDocument]);
-
   // Clear the workspace on logout so the next login starts fresh
   useEffect(() => {
     if (user) return;
-    autoOpenedRef.current = false;
     resetWorkspace();
   }, [user, resetWorkspace]);
 
@@ -98,7 +94,7 @@ export default function App() {
               </div>
             }
           >
-            <BrowserPDFViewer />
+            {activeDocument ? <BrowserPDFViewer /> : <DashboardOverview loading={projectsLoading} onUpload={() => setIsUploadOpen(true)} />}
           </Suspense>
         </main>
       </div>

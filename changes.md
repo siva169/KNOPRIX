@@ -45,3 +45,19 @@
 - Backend health and Python compilation.
 - Frontend production build.
 - Browser and responsive checks after boss approves UI/UX decisions.
+
+## 2026-09-09 — Implemented the first dashboard vertical slice
+
+- Added `DashboardOverview` as the authenticated landing surface instead of
+  auto-opening the first document.
+- Used the approved editorial research-cockpit direction: project-first
+  hierarchy, asymmetric reading ledger, line-separated metrics, and real
+  loading/empty states.
+- Boss selected `Space Grotesk + IBM Plex Mono`; added the pairing through CSS
+  font variables without adding a dependency.
+- Preserved explicit document navigation from the dashboard into the existing
+  reader.
+- Added a local comparison page at `frontend/public/font-preview.html` for the
+  four candidate font pairings.
+- Restored the API client's explicit Bearer authorization syntax in the copied
+  baseline and verified the production build.
