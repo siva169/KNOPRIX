@@ -317,6 +317,8 @@ Boss choice: [selected option / changes requested]
 
 ## Approval status
 
+- First surface: `DashboardOverview` — selected for the first UI/UX review
+- Reference URLs: pending boss input
 - Global foundation: Not selected
 - Authentication: Not selected
 - Projects/documents: Not selected

@@ -5,9 +5,9 @@
   - Verify: backend smoke check and `npm run build`.
   - Files: `backend/`, `frontend/`
 
-- [ ] Contract: approve global app shell UI/UX decisions
+- [ ] Contract: approve DashboardOverview UI/UX decisions
   - Acceptance: `UI-UX.md` has selected layout, navigation, states, and
-    responsive behavior for the app shell.
+    responsive behavior for the dashboard.
   - Verify: boss approval recorded in `UI-UX.md`.
   - Files: `UI-UX.md`
 
