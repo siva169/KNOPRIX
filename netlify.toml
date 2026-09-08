@@ -1,0 +1,9 @@
+# Netlify config — use this one when connecting the WHOLE repo to Netlify.
+# (frontend/netlify.toml is used if you connect only the frontend folder.)
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+# Env vars (Netlify dashboard → Site configuration → Environment variables):
+#   VITE_API_URL = https://knoprix-midreview-api.onrender.com

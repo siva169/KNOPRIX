@@ -1,0 +1,13 @@
+# Netlify build config for the Knoprix mid-review frontend.
+#
+# Drag-drop deploy: drag the CONTENTS of frontend/dist (index.html, assets/,
+# pdf.worker.min.js) — no config needed.
+#
+# Git-based deploy: connect this folder as the root and Netlify will run
+#   npm run build  ->  publish dist/
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Environment variables — set in Netlify dashboard → Site settings → Env vars:
+#   VITE_API_URL = https://your-backend.pythonanywhere.com
