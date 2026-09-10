@@ -1,5 +1,58 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-11 — Implemented the foundation shell slice (Bruce)
+
+### What was done
+1. Loaded skills before coding: `frontend-management`, `react-best-practices`,
+   `frontend-dev-guidelines` (its MUI/TanStack parts don't apply to this
+   Tailwind project — universal rules were applied instead).
+2. Read the full shell source first (App.jsx, contexts, Navbar, Sidebar,
+   auth pages, index.css, index.html) and identified three real gaps — no
+   scope creep beyond them.
+3. **ErrorBoundary** (`frontend/src/components/ErrorBoundary.jsx`): class
+   component with on-brand fallback (Try again / Reset session). Wired at the
+   root in `main.jsx` and around the main content region in `App.jsx` so a
+   viewer/dashboard crash can no longer white-screen the app.
+4. **Skip-to-content link** + `main#main-content` landmark in `App.jsx`
+   (polish checklist #11, keyboard a11y).
+5. **Head hygiene** in `index.html`: added meta description (fix #2), added
+   `public/favicon.svg` matching the K brand mark (fix #3), and removed the
+   unused Inter/Outfit/JetBrains Mono Google-Fonts import (real fonts are
+   Space Grotesk + IBM Plex Mono loaded via `index.css` — verified by code
+   search that zero components used the other three).
+6. Restored the backend dev environment: system Python 3.14 upgrade had wiped
+   the previous global FastAPI/uvicorn install (verified). Boss approved a
+   local `.venv` created from `requirements.txt` (gitignored).
+7. Fixed an own bug pre-commit: ErrorBoundary initially hardcoded guessed
+   token key names; corrected to import the real `ACCESS_KEY`/`REFRESH_KEY`
+   constants from `api.js` (`knoprix_mr_*`).
+
+### Verification
+- `npm run build` passes (same pre-existing pdfjs eval warning only).
+- Playwright QA (`frontend/qa/foundation-shell.spec.mjs`): **10/10 checks** —
+  no horizontal overflow at 390/425/768/1024px, title, meta description,
+  favicon served (HTTP 200), zero unexpected console errors on the real app,
+  and a forced render crash caught by the ErrorBoundary with the recovery
+  screen rendered (harness page, real component).
+- Backend smoke (`backend/qa_smoke.py`): **9/9 checks** — health, demo login,
+  /auth/me, projects, documents (10 docs), Trie autocomplete, inverted-index
+  search, bookmarks, 401 auth guard.
+- Evidence: `qa-artifacts/knoprix-foundation-shell/` (screenshots +
+  results.json; folder gitignored).
+- Commits: `ab88f5a` (foundation shell slice, 9 files) and the qa_smoke.py
+  test commit, both as `siva169 <tvssphanindra@gmail.com>` (identity
+  disclosed and approved per Rule 038). Local only, no push.
+- Stale `tasks/todo.md` checkboxes updated with evidence dates.
+
+### Honest notes
+- The first backend boot appeared hung; it was a slow cold start (~15 s) and
+  resolved without changes — health returned 200 afterwards.
+- `vite preview` serves `dist/` only and cannot transform the JSX crash
+  harness; the harness runs on a dev server (port 5176) instead. QA servers
+  were stopped after evidence capture.
+- QA smoke hit the copied mid-review DB (`knoprix.db`, 10 seeded docs);
+  read-only checks except the demo login itself.
+
 ## 2026-09-09 — Made all reference links clickable (md + HTML version)
 
 - Converted the 124 bare URLs in `UI-UX-updated.md` into titled markdown
