@@ -17,3 +17,6 @@ backend/*.sqlite*
 
 # Logs
 *.log
+
+# QA evidence (screenshots, dumps) — reproducible, not source
+qa-artifacts/

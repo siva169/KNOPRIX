@@ -11,6 +11,7 @@ import DSAStatsModal from './components/DSAStatsModal.jsx';
 import UploadModal from './components/UploadModal.jsx';
 import Toast from './components/Toast.jsx';
 import DashboardOverview from './components/DashboardOverview.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 
 const BrowserPDFViewer = lazy(() => import('./components/BrowserPDFViewer.jsx'));
 
@@ -68,6 +69,13 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-midnight text-ivory selection:bg-primary selection:text-white">
+      {/* Keyboard users can jump straight past the nav + sidebar into content */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-3 focus:py-2 focus:rounded-lg focus:bg-primary focus:text-white focus:text-xs focus:font-semibold focus:shadow-lg"
+      >
+        Skip to content
+      </a>
       <Navbar
         onUpload={() => setIsUploadOpen(true)}
         onStats={() => setIsStatsOpen(true)}
@@ -85,8 +93,14 @@ export default function App() {
           onClose={() => setMobileSidebar(false)}
         />
 
-        <main className="flex-1 flex flex-col overflow-hidden relative">
-          <Suspense
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex-1 flex flex-col overflow-hidden relative focus:outline-none"
+        >
+          {/* A crash inside the viewer or dashboard must not take down the whole shell */}
+          <ErrorBoundary>
+            <Suspense
             fallback={
               <div className="flex-1 flex flex-col items-center justify-center">
                 <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -96,6 +110,7 @@ export default function App() {
           >
             {activeDocument ? <BrowserPDFViewer /> : <DashboardOverview loading={projectsLoading} onUpload={() => setIsUploadOpen(true)} />}
           </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
 
