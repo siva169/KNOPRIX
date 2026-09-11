@@ -19,7 +19,15 @@ export default function LoginPage({ onSwitch }) {
     try {
       await login(email.trim(), password);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed. Check your credentials.');
+      const data = err.response?.data;
+      if (!err.response || typeof data === 'string') {
+        // No backend at all (connection refused), or a proxy/gateway HTML
+        // error page — e.g. the Vite dev proxy answers 500 with HTML text
+        // when :8000 is down, so there is no JSON detail to show.
+        setError("Can't reach the server. Start the backend on :8000 first, then try again.");
+      } else {
+        setError(data?.detail || 'Login failed. Check your credentials.');
+      }
     } finally {
       setBusy(false);
     }

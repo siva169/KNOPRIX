@@ -1,5 +1,22 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-12 — Fixed misleading login error + backend-down diagnosis (Bruce)
+
+- Boss screenshot: correct demo creds showed "Login failed. Check your
+  credentials." Root cause (proven by curl): backend on :8000 was DOWN, and
+  the catch-all message blamed the credentials. Demo account itself verified
+  working (200 + tokens, user Alex Mercer).
+- Fix in `LoginPage.jsx` (login screen only): no-response AND proxy-HTML
+  responses (Vite dev proxy answers 500 with an HTML page when :8000 is
+  down — caught live during QA) now show "Can't reach the server. Start the
+  backend on :8000 first, then try again." Real JSON errors (401 "Invalid
+  email or password") still show truthfully.
+- Verified in a real browser: wrong-password path shows the 401 text, killed-
+  backend path shows the unreachable text, full `qa-goldauth.mjs` still
+  45/45, `npm run build` pass. Backend restarted (SQLite, seed ran) and left
+  running on :8000 — boss can log in now with demo@knoprix.io /
+  Password123! (type by hand; no shortcut, per boss).
+
 ## 2026-09-12 — Black Mirror login (boss image ref 04, Anurati headline) (Bruce)
 
 - Boss supplied the "04 / BLACK MIRROR" reference image and picked: breathe +
