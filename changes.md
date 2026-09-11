@@ -1,5 +1,22 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-12 — Completed gold-theme auth (RegisterPage parity with LoginPage) (Bruce)
+
+- RegisterPage was still on the old orange theme (ember canvas, primary/accent)
+  while LoginPage had moved to gold (GoldOrbs + gold-glass card). Rewrote
+  RegisterPage to mirror LoginPage: same `#0a0603` bg, GoldOrbs, K-mark,
+  REGISTER tracking heading, gold inputs with labels, gold pill button,
+  matching error card + footer divider. Logic untouched (register call,
+  minLength 8); added password show/hide for parity (fix #16).
+- Verified: `npm run build` pass (pre-existing pdfjs eval warning only);
+  Playwright `frontend/qa-goldauth.mjs` **36/36** — login + register at
+  390/768/1024, no h-overflow, zero JS errors. Evidence
+  `qa-artifacts/knoprix-gold-auth/` (6 PNGs, gitignored).
+- Note: `InteractiveBackground.jsx` is now unused (no imports). Left in place
+  per surgical-change rule — say the word and it gets deleted.
+- Unrelated uncommitted work left untouched: `database.py` legacy-name cleanup,
+  `graph.py` glue words, `KnowledgeMap.jsx` Escape-close.
+
 ## 2026-09-11 — Implemented the foundation shell slice (Bruce)
 
 ### What was done
