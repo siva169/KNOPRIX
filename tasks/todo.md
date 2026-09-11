@@ -34,11 +34,15 @@
     (dsa/highlights routers registered and mounted); their dedicated QA lands
     with their own slices.
 
-- [ ] Spec: design BYOK provider security contract
+- [x] Spec: design BYOK provider security contract
   - Acceptance: key storage, authorization, allowlist, privacy notice, limits,
     deletion, and provider errors are specified.
   - Verify: security review before implementation.
   - Files: `docs/`
+  - Done 2026-09-11 (`docs/byok-security-contract.md`): boss locked FREE-only
+    providers, BROWSER-LOCAL keys, SELECTED-docs scope. Self-review vs skill
+    gates: threat model, data classes, trust boundaries, auth, token handling,
+    logging, retention/deletion, runbook, 7 go/no-go gates — all present.
 
 - [ ] Slice: implement first AI document-chat capability
   - Acceptance: user selects documents, chooses approved provider/model, chats,
