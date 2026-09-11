@@ -65,3 +65,7 @@
     (now GPT-OSS 20B). Verify: `qa-chatlive.mjs` PASS (LIVE badge, real answer).
     Key NEVER written to any file. Multi-key rotation deferred per boss (judge
     performance first).
+- [x] Slice: summary as its own view (boss: button + result at TOP of chat panel)
+  - Done 2026-09-11: backend `summary.py` (extractive, quotes only, 6/6
+    `qa_summary.py`); frontend summarize button + numbered key-lines card.
+    Verify: build pass, browser 2/2 at 390+1280.

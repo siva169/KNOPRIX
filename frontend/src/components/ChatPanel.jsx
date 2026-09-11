@@ -30,6 +30,8 @@ export default function ChatPanel({ onClose }) {
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [liveNote, setLiveNote] = useState('');
+  const [summary, setSummary] = useState(null);
+  const [summarizing, setSummarizing] = useState(false);
 
   // Browser-direct live paths (OpenAI-compatible; baseUrl already holds the
   // version prefix, so only '/chat/completions' is appended). Gemini uses a
@@ -78,6 +80,19 @@ export default function ChatPanel({ onClose }) {
   };
 
   const toggleDoc = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
+  const summarizeOpen = async () => {
+    if (!activeDocument || summarizing) return;
+    setSummarizing(true);
+    try {
+      const { data } = await api.post(`/documents/${activeDocument.id}/summary`, { maxSentences: 5 });
+      setSummary(data);
+    } catch {
+      notify('Could not summarize this document', 'error');
+    } finally {
+      setSummarizing(false);
+    }
+  };
 
   const ask = async () => {
     if (!question.trim() || !selected.length || loading) return;
@@ -172,6 +187,35 @@ export default function ChatPanel({ onClose }) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3">
+        {/* Summary — boss pick: button + result live at the TOP of the panel */}
+        {activeDocument && (
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={summarizeOpen}
+              disabled={summarizing}
+              className="w-full px-3 py-2 rounded-xl bg-secondary/15 border border-secondary/40 text-secondary text-xs font-bold hover:bg-secondary/25 transition disabled:opacity-50"
+            >
+              {summarizing ? 'Summarizing…' : `Summarize ${activeDocument.file_name}`}
+            </button>
+            {summary && (
+              <div className="rounded-xl border border-secondary/40 bg-secondary/10 p-3 flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <p className="text-[11px] font-bold text-secondary flex-1">
+                    Summary · {summary.sentenceCount} key lines (quoted, not invented)
+                  </p>
+                  <button onClick={() => setSummary(null)} title="Hide summary" className="p-1 rounded hover:bg-white/10 text-ivory/60">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <ol className="flex flex-col gap-1.5 list-decimal list-inside">
+                  {summary.summary.map((s, i) => (
+                    <li key={i} className="text-xs text-ivory/85 leading-relaxed">{s}</li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </div>
+        )}
         {/* Privacy notice — spec gate: shown before first key entry */}
         {!noticeSeen && (
           <div className="rounded-xl border border-primary/40 bg-primary/10 p-3 text-xs text-ivory/90">
