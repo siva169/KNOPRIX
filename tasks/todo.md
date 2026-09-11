@@ -85,3 +85,4 @@
     popover clamp for phones + icon-only popover buttons under 640px.
     Verify: build pass, browser 4/4 at 390+1280 (presence + no-crash; audio needs
     a real device, stated openly).
+- [ ] Later: Gemini live protocol (different API language; Groq/OpenRouter/ZAI already live). Boss: update later.
