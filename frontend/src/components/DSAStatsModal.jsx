@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, BarChart3, RefreshCw, TrendingUp, Layers, FileText } from 'lucide-react';
+import { X, BarChart3, RefreshCw, TrendingUp, Layers, FileText, ArrowDownWideNarrow, Search } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import api from '../api';
 
@@ -37,6 +37,25 @@ export default function DSAStatsModal({ onClose }) {
   const [stats, setStats] = useState(null);
   const [keywords, setKeywords] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [heapQ, setHeapQ] = useState('');
+  const [heapK, setHeapK] = useState(3);
+  const [heapOut, setHeapOut] = useState(null);
+  const [heapBusy, setHeapBusy] = useState(false);
+
+  const runHeap = async () => {
+    if (!heapQ.trim() || !activeProject) return;
+    setHeapBusy(true);
+    try {
+      const { data } = await api.get(`/projects/${activeProject.id}/dsa/top-passages`, {
+        params: { q: heapQ.trim(), k: heapK },
+      });
+      setHeapOut(data);
+    } catch {
+      notify('Heap ranking failed', 'error');
+    } finally {
+      setHeapBusy(false);
+    }
+  };
 
   const load = async () => {
     if (!activeProject) return;
@@ -83,7 +102,7 @@ export default function DSAStatsModal({ onClose }) {
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.94, y: 12 }}
         onClick={(e) => e.stopPropagation()}
-        className="glass-panel rounded-3xl w-full max-w-2xl p-6 shadow-2xl shadow-primary/20 border border-glass-borderDark"
+        className="glass-panel rounded-3xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto p-6 shadow-2xl shadow-primary/20 border border-glass-borderDark"
       >
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
@@ -152,8 +171,55 @@ export default function DSAStatsModal({ onClose }) {
             </div>
 
             <p className="mt-5 text-[10px] text-ivory/40 font-mono text-center">
-              Trie · Inverted Index · Bookmark Collection — Knowledge Graph &amp; Min-Heap arrive in the final review
+              Trie · Inverted Index · Bookmark Collection · Knowledge Graph · Min-Heap — all live
             </p>
+
+            <div className="mt-6 rounded-2xl border border-glass-borderDark bg-midnight-panel/85 p-4">
+              <h4 className="text-[11px] font-bold text-accent uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <ArrowDownWideNarrow className="w-3.5 h-3.5" /> Min-Heap top-k ranking
+              </h4>
+              <p className="text-[10px] text-ivory/40 font-mono mb-3">O(n log k) · keeps only k winners in memory</p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-ivory/40" />
+                  <input
+                    value={heapQ}
+                    onChange={(e) => setHeapQ(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') runHeap(); }}
+                    placeholder="Query, e.g. signal"
+                    aria-label="Heap demo query"
+                    className="w-full rounded-xl bg-midnight/60 border border-glass-borderDark text-ivory text-xs pl-8 pr-2 py-2 focus:outline-none focus:border-accent"
+                  />
+                </div>
+                <select
+                  value={heapK} onChange={(e) => setHeapK(Number(e.target.value))}
+                  aria-label="k value"
+                  className="rounded-xl bg-midnight/60 border border-glass-borderDark text-ivory text-xs px-2 py-2 focus:outline-none focus:border-accent"
+                >
+                  {[1, 2, 3, 5, 10].map((v) => <option key={v} value={v}>top {v}</option>)}
+                </select>
+                <button
+                  onClick={runHeap} disabled={!heapQ.trim() || heapBusy}
+                  className="px-3 py-2 rounded-xl bg-accent/20 border border-accent/50 text-accent text-xs font-bold disabled:opacity-40 transition"
+                >
+                  Rank
+                </button>
+              </div>
+              {heapOut && (
+                <div className="mt-3 flex flex-col gap-1.5">
+                  <p className="text-[10px] font-mono text-ivory/40">
+                    {heapOut.considered} considered → {heapOut.passages.length} kept
+                  </p>
+                  {heapOut.passages.map((p, i) => (
+                    <div key={`${p.documentId}-${i}`} className="flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 bg-white/5">
+                      <span className="font-mono font-bold text-accent w-5">#{i + 1}</span>
+                      <span className="truncate flex-1 text-ivory/85">{p.fileName}</span>
+                      <span className="font-mono text-ivory/50">score {p.score}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </>
         )}
       </motion.div>

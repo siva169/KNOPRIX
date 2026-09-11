@@ -75,3 +75,7 @@
     (dashboard button, doc filter chips, SVG ring, tap-to-jump, track-a-word).
     Use: cross-doc concept jumps + self-tracked keywords. Verify: build pass,
     browser 4/4 at 390+1280.
+- [x] Slice: Min-Heap top-k ranking (product: best passages surface fastest)
+  - Done 2026-09-11: `dsa/minheap.py` (own heap + top_k, O(n log k)) wired into
+    chat citations + `top-passages` demo endpoint (13/13 `qa_heap.py`, chat
+    regression 11/11); visualizer card with live query demo (2/2 browser).
