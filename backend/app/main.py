@@ -1,4 +1,4 @@
-"""Knoprix — mid-review FastAPI application entrypoint.
+"""Knoprix — FastAPI application entrypoint.
 
 Run (from backend/):  py -m uvicorn app.main:app --port 8000
 Interactive docs at /docs.
@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Knoprix API — Mid Review",
+    title="Knoprix API",
     description="DSA-powered document knowledge platform (Trie · Inverted Index · Bookmark Collection)",
     version="0.5.0",
     lifespan=lifespan,
@@ -51,4 +51,4 @@ app.include_router(highlights.router)
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "knoprix-mid-review"}
+    return {"status": "ok", "service": "knoprix"}

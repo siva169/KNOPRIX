@@ -1,4 +1,4 @@
-"""Persistence for Knoprix mid-review.
+"""Persistence for Knoprix.
 
 Two backends, same API:
 

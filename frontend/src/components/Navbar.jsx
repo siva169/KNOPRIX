@@ -95,7 +95,7 @@ export default function Navbar({ onUpload, onStats, onBookmarks, onToggleSidebar
         </div>
         <div className="leading-tight hidden sm:block">
           <span className="font-display font-extrabold tracking-widest text-sm">KNOPRIX</span>
-          <span className="block text-[9px] text-secondary/80 font-semibold tracking-widest uppercase">Mid Review · DSA Engine</span>
+          <span className="block text-[9px] text-secondary/80 font-semibold tracking-widest uppercase">DSA Engine</span>
         </div>
         {activeProject && (
           <span className="ml-1 hidden lg:inline-flex text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-secondary border border-primary/40 items-center gap-1">

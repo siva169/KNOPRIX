@@ -112,7 +112,7 @@ export default function DSAStatsModal({ onClose }) {
             <div>
               <h3 className="font-bold text-sm font-display">DSA Index Visualizer</h3>
               <p className="text-[11px] text-ivory/60">
-                Mid-review structures for <span className="text-secondary">{activeProject?.name}</span>
+                Knowledge structures for <span className="text-secondary">{activeProject?.name}</span>
               </p>
             </div>
           </div>

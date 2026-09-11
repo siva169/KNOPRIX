@@ -1,11 +1,12 @@
 """DSA indexer — builds the Trie + Inverted Index from a project's documents
 and persists them as JSON in `dsa_indices`.
 
-Mid-review scope: this build features 3 of the project's 5 data structures:
+Featured structures:
   - Trie           → autocomplete in the navbar search
   - Inverted Index → ranked full-text search across documents
   - Hash Table + Doubly Linked List → ordered bookmark lookup
-(Knowledge Graph and Min-Heap arrive in the final review.)
+  - Knowledge Graph → auto concept linking (routers/graph.py)
+  - Min-Heap         → top-k passage ranking (dsa/minheap.py)
 """
 from __future__ import annotations
 
