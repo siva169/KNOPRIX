@@ -1,5 +1,28 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-12 — Black Mirror login (boss image ref 04, Anurati headline) (Bruce)
+
+- Boss supplied the "04 / BLACK MIRROR" reference image and picked: breathe +
+  follow-cursor mirror, NO passkey link, NO demo-fill button, Anurati font on
+  the headline. Login only — RegisterPage untouched.
+- `frontend/public/fonts/Anurati-Regular.otf` (copied from boss's
+  `siva169-profile/assets/fonts/`, 8KB) + `@font-face` + `.font-anurati`
+  utility in `index.css`. Headline "Enter quietly." renders in Anurati.
+- New `BlackMirror.jsx`: black core with cursor-sliding sheen, thin gold ring
+  + faint outer ring, 7s breathing scale, eased cursor parallax (GPU
+  transforms, one rAF, CSS vars — same cheap pattern as GoldOrbs).
+  `prefers-reduced-motion` disables the breathing. (Fixed own bug pre-QA:
+  scale keyframes would have overridden the cursor translate — split onto
+  nested elements.)
+- Rewrote `LoginPage.jsx`: KNOPRIX wordmark + gold rule, BLACK MIRROR / 04
+  tag, Anurati headline, EMAIL/PASSWORD dark fields, gold SIGN IN pill,
+  quiet Create-account link (kept — only way to reach register), mirror +
+  NO DISTRACTIONS caption, 04 footer strip. Auth logic identical. No passkey,
+  no demo-fill, per boss.
+- Verified: `npm run build` pass; `qa-goldauth.mjs` **45/45** at 390/768/1024
+  incl. mirror visible, demo-fill/passkey absent, zero JS errors; font URL
+  serves HTTP 200. Evidence `qa-artifacts/knoprix-gold-auth/` (gitignored).
+
 ## 2026-09-12 — Completed gold-theme auth (RegisterPage parity with LoginPage) (Bruce)
 
 - RegisterPage was still on the old orange theme (ember canvas, primary/accent)

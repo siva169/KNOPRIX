@@ -1,4 +1,4 @@
-/* Gold-theme auth QA: login + register parity at 390/768/1024.
+/* Black-mirror auth QA: login (new design) + register (gold) at 390/768/1024.
    Saves PNG evidence. Run with dev server on 127.0.0.1:5199. */
 import { chromium } from 'playwright';
 
@@ -26,20 +26,23 @@ for (const [tag, vp] of VIEWPORTS) {
   page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 120)); });
   try {
     await page.goto('http://127.0.0.1:5199/', { waitUntil: 'networkidle' });
-    // --- LOGIN ---
-    check(`[${tag}] login heading`, await page.getByText('LOGIN', { exact: true }).isVisible());
-    check(`[${tag}] login email field`, await page.getByLabel('Email address').isVisible());
-    check(`[${tag}] login password field`, await page.getByLabel('Password').isVisible());
+    // --- LOGIN (black mirror) ---
+    check(`[${tag}] headline`, await page.getByText('Enter quietly.').isVisible());
+    check(`[${tag}] wordmark + edition`, await page.getByText('BLACK MIRROR / 04').isVisible());
+    check(`[${tag}] email field`, await page.getByLabel('EMAIL ADDRESS').isVisible());
+    check(`[${tag}] password field`, await page.getByLabel('PASSWORD').isVisible());
     check(`[${tag}] sign-in button`, await page.getByRole('button', { name: /SIGN IN/ }).isVisible());
-    check(`[${tag}] demo-fill button`, await page.getByRole('button', { name: /Fill demo credentials/ }).isVisible());
+    check(`[${tag}] mirror visual`, await page.getByTestId('black-mirror').isVisible());
+    check(`[${tag}] no demo-fill (removed)`, (await page.getByRole('button', { name: /Fill demo credentials/ }).count()) === 0);
+    check(`[${tag}] no passkey (removed)`, (await page.getByText('passkey', { exact: false }).count()) === 0);
+    check(`[${tag}] footer strip`, await page.getByText('04 / BLACK MIRROR').isVisible());
     check(`[${tag}] no h-overflow (login)`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
     await page.screenshot({ path: `${SHOTS}login-${tag}.png` });
-    // --- REGISTER ---
+    // --- REGISTER (gold, unchanged) ---
     await page.getByRole('button', { name: /Create an account/ }).click();
     check(`[${tag}] register heading`, await page.getByText('REGISTER', { exact: true }).isVisible());
     check(`[${tag}] register name field`, await page.getByLabel('Full name').isVisible());
     check(`[${tag}] register create button`, await page.getByRole('button', { name: /CREATE ACCOUNT/ }).isVisible());
-    check(`[${tag}] register back-link`, await page.getByRole('button', { name: /Sign in/ }).isVisible());
     check(`[${tag}] no h-overflow (register)`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
     await page.screenshot({ path: `${SHOTS}register-${tag}.png` });
     check(`[${tag}] zero JS errors`, errors.length === 0, errors.slice(0, 2).join(' | '));

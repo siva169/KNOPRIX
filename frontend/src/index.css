@@ -1,5 +1,18 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
+/* Anurati — boss's display font, served locally (black-mirror auth headline) */
+@font-face {
+  font-family: 'Anurati';
+  src: url('/fonts/Anurati-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-anurati {
+  font-family: 'Anurati', 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
