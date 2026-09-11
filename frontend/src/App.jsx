@@ -11,6 +11,7 @@ import DSAStatsModal from './components/DSAStatsModal.jsx';
 import UploadModal from './components/UploadModal.jsx';
 import Toast from './components/Toast.jsx';
 import DashboardOverview from './components/DashboardOverview.jsx';
+import KnowledgeMap from './components/KnowledgeMap.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 
@@ -28,6 +29,7 @@ export default function App() {
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isMapOpen, setIsMapOpen] = useState(false);
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [projectsLoading, setProjectsLoading] = useState(true);
 
@@ -110,7 +112,7 @@ export default function App() {
               </div>
             }
           >
-            {activeDocument ? <BrowserPDFViewer onOpenChat={() => setIsChatOpen(true)} /> : <DashboardOverview loading={projectsLoading} onUpload={() => setIsUploadOpen(true)} />}
+            {activeDocument ? <BrowserPDFViewer onOpenChat={() => setIsChatOpen(true)} /> : <DashboardOverview loading={projectsLoading} onUpload={() => setIsUploadOpen(true)} onOpenMap={() => setIsMapOpen(true)} />}
           </Suspense>
           </ErrorBoundary>
         </main>
@@ -125,6 +127,12 @@ export default function App() {
       <AnimatePresence>
         {isChatOpen && (
           <ChatPanel onClose={() => setIsChatOpen(false)} />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isMapOpen && activeProject && (
+          <KnowledgeMap projectId={activeProject.id} onClose={() => setIsMapOpen(false)} />
         )}
       </AnimatePresence>
 

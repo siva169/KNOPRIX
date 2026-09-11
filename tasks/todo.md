@@ -69,3 +69,9 @@
   - Done 2026-09-11: backend `summary.py` (extractive, quotes only, 6/6
     `qa_summary.py`); frontend summarize button + numbered key-lines card.
     Verify: build pass, browser 2/2 at 390+1280.
+- [x] Slice: Knowledge Graph map (boss: home-page button + doc picker + circle)
+  - Done 2026-09-11: backend `graph.py` (scan-all-words, glue dropped, top-30/doc,
+    strength>=2, pin/unpin word, 9/9 `qa_graph.py`); frontend `KnowledgeMap.jsx`
+    (dashboard button, doc filter chips, SVG ring, tap-to-jump, track-a-word).
+    Use: cross-doc concept jumps + self-tracked keywords. Verify: build pass,
+    browser 4/4 at 390+1280.

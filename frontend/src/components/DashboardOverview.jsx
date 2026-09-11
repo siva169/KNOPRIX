@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowUpRight, FileText, FolderOpen, UploadCloud } from 'lucide-react';
+import { ArrowUpRight, FileText, FolderOpen, Share2, UploadCloud } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 
 function formatDate(value) {
@@ -20,7 +20,7 @@ function LoadingLedger() {
   );
 }
 
-export default function DashboardOverview({ loading = false, onUpload }) {
+export default function DashboardOverview({ loading = false, onUpload, onOpenMap }) {
   const {
     projects,
     activeProject,
@@ -57,6 +57,17 @@ export default function DashboardOverview({ loading = false, onUpload }) {
               <UploadCloud className="h-4 w-4" aria-hidden="true" />
               Add document
             </button>
+            {onOpenMap && activeProject && documents.length > 0 && (
+              <button
+                type="button"
+                onClick={onOpenMap}
+                title="Open the knowledge map"
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-secondary/50 bg-secondary/10 px-4 py-2.5 text-xs font-semibold text-secondary transition hover:-translate-y-px hover:bg-secondary/20 active:scale-[0.98]"
+              >
+                <Share2 className="h-4 w-4" aria-hidden="true" />
+                Knowledge map
+              </button>
+            )}
           </div>
         </header>
 
