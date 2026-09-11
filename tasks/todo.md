@@ -79,3 +79,9 @@
   - Done 2026-09-11: `dsa/minheap.py` (own heap + top_k, O(n log k)) wired into
     chat citations + `top-passages` demo endpoint (13/13 `qa_heap.py`, chat
     regression 11/11); visualizer card with live query demo (2/2 browser).
+- [x] Slice: read-aloud on selection (boss: Speak beside Bookmark/Copy/Highlight)
+  - Done 2026-09-11: browser speechSynthesis (offline, no key) with Stop toggle;
+    Edge free endpoint verified dead (401) so no provider path. Fixed on the way:
+    popover clamp for phones + icon-only popover buttons under 640px.
+    Verify: build pass, browser 4/4 at 390+1280 (presence + no-crash; audio needs
+    a real device, stated openly).

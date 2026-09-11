@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Bookmark, Copy, AlertTriangle, BookmarkCheck, Sparkles, Highlighter, Eraser } from 'lucide-react';
+import { FileText, Bookmark, Copy, AlertTriangle, BookmarkCheck, Sparkles, Highlighter, Eraser, Volume2, Square } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import PDFToolbar from './PDFToolbar.jsx';
 import SlideViewer from './SlideViewer.jsx';
@@ -287,7 +287,13 @@ export default function BrowserPDFViewer({ onOpenChat }) {
       const pageEl = range.startContainer?.parentElement?.closest?.('[data-page]');
       const page = pageEl ? Number(pageEl.dataset.page) : currentPage;
       // Clamp so the popover never renders off-screen (mobile / edge selections).
-      const x = Math.min(Math.max(rect.left + rect.width / 2, 150), window.innerWidth - 150);
+      // Half-width follows the viewport: 4 buttons need ~185px each side on
+      // phones, ~150px on desktop (fewer, roomier rows).
+      const half = window.innerWidth < 640 ? 185 : 150;
+      const x = Math.min(
+        Math.max(rect.left + rect.width / 2, half + 8),
+        window.innerWidth - half - 8,
+      );
       const y = Math.min(Math.max(rect.top - 8, 8), window.innerHeight - 170);
       setSelection({ text, x, y, page });
       setColorMenuOpen(false);
@@ -323,6 +329,30 @@ export default function BrowserPDFViewer({ onOpenChat }) {
     await navigator.clipboard.writeText(sel.text);
     notify('Copied to clipboard', 'success');
     setSelection(null);
+  };
+
+  // ── Read aloud (browser speech — offline, no key) ──────────────────────────
+  const [speaking, setSpeaking] = useState(false);
+
+  const speakSelection = (sel) => {
+    if (!('speechSynthesis' in window)) {
+      notify('Speech not supported in this browser', 'error');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const text = sel.text.replace(/\s+/g, ' ').trim().slice(0, 2000);
+    if (!text) return;
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1;
+    u.onend = () => setSpeaking(false);
+    u.onerror = () => setSpeaking(false);
+    setSpeaking(true);
+    window.speechSynthesis.speak(u);
+  };
+
+  const stopSpeaking = () => {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    setSpeaking(false);
   };
 
   // ── Highlight save / remove ────────────────────────────────────────────────
@@ -761,15 +791,24 @@ export default function BrowserPDFViewer({ onOpenChat }) {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
             style={{ top: selection.y, left: selection.x }}
-            className="fixed z-50 -translate-x-1/2 glass-panel rounded-xl px-1.5 py-1 shadow-2xl flex flex-col gap-0.5 border border-primary/40"
+            className="fixed z-50 -translate-x-1/2 glass-panel rounded-xl px-1.5 py-1 shadow-2xl flex flex-col gap-0.5 border border-primary/40 max-w-[94vw]"
           >
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-0.5 overflow-x-auto">
               <button onClick={() => saveBookmark(selection)} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-ivory hover:bg-primary/20 hover:text-secondary transition">
-                <Bookmark className="w-3.5 h-3.5 text-amber-400" /> Bookmark
+                <Bookmark className="w-3.5 h-3.5 text-amber-400" /> <span className="hidden sm:inline">Bookmark</span>
               </button>
               <button onClick={() => copyText(selection)} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-ivory hover:bg-primary/20 hover:text-secondary transition">
-                <Copy className="w-3.5 h-3.5" /> Copy
+                <Copy className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Copy</span>
               </button>
+              {speaking ? (
+                <button onClick={stopSpeaking} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-secondary bg-primary/20 transition">
+                  <Square className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Stop</span>
+                </button>
+              ) : (
+                <button onClick={() => speakSelection(selection)} title="Read this aloud" className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-ivory hover:bg-primary/20 hover:text-secondary transition">
+                  <Volume2 className="w-3.5 h-3.5 text-accent" /> <span className="hidden sm:inline">Speak</span>
+                </button>
+              )}
               <button
                 onClick={() => setColorMenuOpen((o) => !o)}
                 title="Highlight this selection"
@@ -777,7 +816,7 @@ export default function BrowserPDFViewer({ onOpenChat }) {
                   colorMenuOpen ? 'text-secondary bg-primary/20' : 'text-ivory hover:bg-primary/20 hover:text-secondary'
                 }`}
               >
-                <Highlighter className="w-3.5 h-3.5 text-amber-400" /> Highlight
+                <Highlighter className="w-3.5 h-3.5 text-amber-400" /> <span className="hidden sm:inline">Highlight</span>
               </button>
             </div>
             {colorMenuOpen && (
