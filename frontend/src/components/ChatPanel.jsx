@@ -29,6 +29,17 @@ export default function ChatPanel({ onClose }) {
   const [answer, setAnswer] = useState(null);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [liveNote, setLiveNote] = useState('');
+
+  // Browser-direct live paths (OpenAI-compatible; baseUrl already holds the
+  // version prefix, so only '/chat/completions' is appended). Gemini uses a
+  // different protocol — stays mocked until its own wiring lands. Keys NEVER
+  // leave the browser: this fetch goes straight to the provider, not backend.
+  const LIVE_PATHS = {
+    'groq-free': '/chat/completions',
+    'openrouter-free': '/chat/completions',
+    'zai-glm-free': '/chat/completions',
+  };
 
   const provider = providers.find((p) => p.id === providerId) || null;
 
@@ -73,11 +84,50 @@ export default function ChatPanel({ onClose }) {
     setLoading(true);
     setError('');
     setAnswer(null);
+    setLiveNote('');
     try {
+      // Step 1 — backend: allowlist/model validation + citations from OWN index.
       const { data } = await api.post('/chat/ask', {
         providerId, model, documentIds: selected, question: question.trim(),
       });
-      setAnswer(data);
+      // Step 2 — live answer, browser DIRECT to provider (key never backend).
+      const livePath = LIVE_PATHS[providerId];
+      const savedKey = keys[providerId];
+      if (livePath && savedKey && provider?.baseUrl) {
+        try {
+          const context = (data.citations || [])
+            .map((c) => `[${c.fileName} p.${c.pageNumber}] ${c.excerpt}`)
+            .join('\n').slice(0, 3000);
+          const res = await fetch(`${provider.baseUrl}${livePath}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${savedKey}`,
+            },
+            body: JSON.stringify({
+              model,
+              temperature: 0.2,
+              max_tokens: 500,
+              messages: [
+                { role: 'system', content: 'Answer ONLY from the passages below. Say when unsure.' },
+                { role: 'user', content: `Passages:\n${context || '(no matching passages)'}\n\nQuestion: ${question.trim()}` },
+              ],
+            }),
+          });
+          if (!res.ok) throw new Error(`provider HTTP ${res.status}`);
+          const live = await res.json();
+          const text = live.choices?.[0]?.message?.content?.trim();
+          if (!text) throw new Error('empty provider reply');
+          setAnswer({ ...data, answer: text, live: true });
+        } catch (liveErr) {
+          // Fail open to mock — user still gets cited passages, never a blank.
+          setAnswer(data);
+          setLiveNote(`Live call failed (${liveErr.message}); showing mock instead.`);
+        }
+      } else {
+        setAnswer(data);
+        if (savedKey && !livePath) setLiveNote('This provider needs its own wiring; showing mock.');
+      }
     } catch (e) {
       setError(e.response?.data?.detail || 'Chat failed. Try again.');
     } finally {
@@ -104,7 +154,11 @@ export default function ChatPanel({ onClose }) {
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-glass-borderDark shrink-0">
         <Cpu className="w-4 h-4 text-primary shrink-0" />
         <h2 className="font-bold text-sm text-ivory flex-1 truncate">Document chat</h2>
-        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300 border border-amber-300/30">MOCK</span>
+        {answer?.live ? (
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-400/15 text-emerald-300 border border-emerald-300/30">LIVE</span>
+        ) : (
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300 border border-amber-300/30">MOCK</span>
+        )}
         <button
           onClick={() => setMode(mode === 'side' ? 'full' : 'side')}
           title={mode === 'side' ? 'Full screen' : 'Side panel'}
@@ -194,6 +248,7 @@ export default function ChatPanel({ onClose }) {
           </div>
         )}
         {error && <p className="text-xs text-rose-300 rounded-xl border border-rose-400/40 bg-rose-500/10 p-2.5">{error}</p>}
+        {liveNote && <p className="text-[11px] text-ivory/50">{liveNote}</p>}
         {answer && (
           <div className="flex flex-col gap-2">
             <div className="flex items-start gap-2">

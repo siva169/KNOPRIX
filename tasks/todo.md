@@ -58,3 +58,10 @@
     backend 9/9 + 11/11, Playwright 10/10 at 390+1280 (evidence
     `qa-artifacts/knoprix-chat-slice/`, gitignored). Live-provider test still
     pending boss key + authorization. Commits: backend `2b6b4f3`, frontend (this).
+- [x] Live: browser-direct Groq answer (boss key, ephemeral test only)
+  - Done 2026-09-11: `ChatPanel` tries provider-direct fetch (OpenAI-compatible
+    path) with the browser-held key, falls back to mock on any failure;
+    LIVE/MOCK badge. Fixed on the way: doubled URL path, retired Groq model ID
+    (now GPT-OSS 20B). Verify: `qa-chatlive.mjs` PASS (LIVE badge, real answer).
+    Key NEVER written to any file. Multi-key rotation deferred per boss (judge
+    performance first).
