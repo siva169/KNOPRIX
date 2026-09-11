@@ -13,6 +13,7 @@ Contract (`docs/byok-security-contract.md`):
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..database import get_db
+from ..dsa.minheap import top_k
 from ..security import get_current_user, get_owned_document, get_owned_project
 from ..services.indexer import search_project
 
@@ -120,8 +121,13 @@ def chat_ask(body: dict, user=Depends(get_current_user), db=Depends(get_db)):
     selected = {d["id"] for d in docs}
 
     # Mocked answer from the project's OWN index — no provider call exists.
-    hits = [h for h in search_project(db, project_id, question.strip(), 6)
-            if h["documentId"] in selected][:3]
+    # Citations are the top-3 by score via OUR MinHeap (O(n log 3)), not a
+    # full sort — same matches, cheapest ranking.
+    scored = [
+        (h["score"], h) for h in search_project(db, project_id, question.strip(), 6)
+        if h["documentId"] in selected
+    ]
+    hits = [h for _, h in top_k(scored, 3)]
     citations = [
         {
             "documentId": h["documentId"],
