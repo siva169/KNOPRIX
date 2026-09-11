@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import cfg
 from .database import init_db
-from .routers import auth, bookmarks, chat, documents, dsa, highlights, projects, search, summary
+from .routers import auth, bookmarks, chat, documents, dsa, graph, highlights, projects, search, summary
 from .seed import seed
 
 
@@ -43,6 +43,7 @@ app.include_router(documents.router)
 app.include_router(search.router)
 app.include_router(chat.router)
 app.include_router(summary.router)
+app.include_router(graph.router)
 app.include_router(dsa.router)
 app.include_router(bookmarks.router)
 app.include_router(highlights.router)
