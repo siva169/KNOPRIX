@@ -11,6 +11,7 @@ import DSAStatsModal from './components/DSAStatsModal.jsx';
 import UploadModal from './components/UploadModal.jsx';
 import Toast from './components/Toast.jsx';
 import DashboardOverview from './components/DashboardOverview.jsx';
+import ChatPanel from './components/ChatPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 
 const BrowserPDFViewer = lazy(() => import('./components/BrowserPDFViewer.jsx'));
@@ -26,6 +27,7 @@ export default function App() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [projectsLoading, setProjectsLoading] = useState(true);
 
@@ -108,7 +110,7 @@ export default function App() {
               </div>
             }
           >
-            {activeDocument ? <BrowserPDFViewer /> : <DashboardOverview loading={projectsLoading} onUpload={() => setIsUploadOpen(true)} />}
+            {activeDocument ? <BrowserPDFViewer onOpenChat={() => setIsChatOpen(true)} /> : <DashboardOverview loading={projectsLoading} onUpload={() => setIsUploadOpen(true)} />}
           </Suspense>
           </ErrorBoundary>
         </main>
@@ -117,6 +119,12 @@ export default function App() {
       <AnimatePresence>
         {isBookmarksOpen && (
           <BookmarksDrawer onClose={() => setIsBookmarksOpen(false)} />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isChatOpen && (
+          <ChatPanel onClose={() => setIsChatOpen(false)} />
         )}
       </AnimatePresence>
 

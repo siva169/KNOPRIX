@@ -44,9 +44,17 @@
     gates: threat model, data classes, trust boundaries, auth, token handling,
     logging, retention/deletion, runbook, 7 go/no-go gates — all present.
 
-- [ ] Slice: implement first AI document-chat capability
+- [x] Slice: implement first AI document-chat capability
   - Acceptance: user selects documents, chooses approved provider/model, chats,
     and receives cited answers without exposing the key.
   - Verify: mocked provider tests plus approved live-provider test only after
     boss supplies credentials and authorizes use.
   - Files: `backend/`, `frontend/src/`
+  - Done 2026-09-11: backend `chat.py` (allowlist + mocked cited ask, 11/11
+    `qa_chat.py`); frontend `ChatPanel.jsx` (toolbar entry, side+full toggle,
+    bottom sheet on mobile, citation cards, browser-local keys, privacy notice,
+    copy button). Boss UI picks: toolbar entry, both layouts, bottom sheet,
+    cards (Bruce chose cards as friendlier). Verify: `npm run build` pass,
+    backend 9/9 + 11/11, Playwright 10/10 at 390+1280 (evidence
+    `qa-artifacts/knoprix-chat-slice/`, gitignored). Live-provider test still
+    pending boss key + authorization. Commits: backend `2b6b4f3`, frontend (this).

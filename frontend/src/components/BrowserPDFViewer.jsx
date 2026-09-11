@@ -12,7 +12,7 @@ import { HIGHLIGHT_COLORS, colorById } from '../highlights';
 // Worker served locally (frontend/public/) — no CDN dependency, works offline
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
-export default function BrowserPDFViewer() {
+export default function BrowserPDFViewer({ onOpenChat }) {
   const {
     activeDocument, currentPage, setCurrentPage, zoomLevel,
     highlightSnippet, notify, activeProject, fetchBookmarks
@@ -749,6 +749,7 @@ export default function BrowserPDFViewer() {
         eraseMode={eraseMode}
         setEraseMode={setEraseMode}
         highlightCount={highlights.length}
+        onOpenChat={onOpenChat}
       />
       {isPdf ? renderPDFViewer() : isSlideshow ? renderSlidesViewer() : renderTextViewer()}
 

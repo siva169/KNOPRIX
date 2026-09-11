@@ -1,8 +1,8 @@
 import React from 'react';
-import { ZoomIn, ZoomOut, ChevronLeft, ChevronRight, BookOpen, Layers, Printer, Bookmark, BookmarkCheck, Eraser } from 'lucide-react';
+import { ZoomIn, ZoomOut, ChevronLeft, ChevronRight, BookOpen, Layers, Printer, Bookmark, BookmarkCheck, Eraser, MessageSquare } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 
-export default function PDFToolbar({ numPages, viewMode, setViewMode, currentPageSaved = false, onBookmarkPage, eraseMode = false, setEraseMode, highlightCount = 0 }) {
+export default function PDFToolbar({ numPages, viewMode, setViewMode, currentPageSaved = false, onBookmarkPage, eraseMode = false, setEraseMode, highlightCount = 0, onOpenChat }) {
   const { currentPage, setCurrentPage, zoomLevel, setZoomLevel, activeDocument } = useApp();
 
   const total = numPages || 1;
@@ -102,6 +102,16 @@ export default function PDFToolbar({ numPages, viewMode, setViewMode, currentPag
         >
           <Printer className="w-3.5 h-3.5" />
         </button>
+        {onOpenChat && (
+          <button
+            onClick={onOpenChat}
+            className="p-1.5 rounded-xl bg-primary text-white border border-primary shadow-lg shadow-primary/30 transition flex items-center gap-1.5 font-semibold hover:brightness-110"
+            title="Chat with your documents"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span className="hidden md:inline text-[10px]">Chat</span>
+          </button>
+        )}
       </div>
     </div>
   );
