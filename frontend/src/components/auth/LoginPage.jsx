@@ -46,7 +46,7 @@ export default function LoginPage({ onSwitch }) {
         {/* top bar */}
         <header className="flex items-start justify-between pt-6">
           <div>
-            <p className="text-xs font-semibold tracking-[0.35em] text-[#e8be6a]">KNOPRIX</p>
+            <p className="text-[18px] font-semibold tracking-[0.35em] text-[#e8be6a]">KNOPRIX</p>
             <div className="mt-2 h-px w-16" style={{ background: 'rgba(232,190,106,0.6)' }} />
           </div>
           <p className="font-mono text-[10px] tracking-[0.2em] text-ivory/40">BLACK MIRROR / 04</p>
@@ -156,14 +156,6 @@ export default function LoginPage({ onSwitch }) {
           </motion.aside>
         </main>
 
-        {/* footer strip */}
-        <footer
-          className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-6 py-5"
-          style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
-        >
-          <p className="text-xs font-bold tracking-[0.14em] text-ivory/80">04 / BLACK MIRROR</p>
-          <p className="text-[11px] text-ivory/40">Editorial minimalism meets a singular silence. The form is direct, the atmosphere does the work.</p>
-        </footer>
       </div>
     </div>
   );

@@ -58,8 +58,7 @@ export default function RegisterPage({ onSwitch }) {
             >
               K
             </div>
-            <h1 className="font-display text-sm font-semibold tracking-[0.42em] text-[#e8be6a]">REGISTER</h1>
-            <p className="text-[11px] text-ivory/50 mt-2">DSA-powered document knowledge platform</p>
+            <h1 className="font-display text-[18px] font-semibold tracking-[0.42em] text-[#e8be6a]">REGISTER</h1>
           </div>
 
           <form onSubmit={submit} className="space-y-4">

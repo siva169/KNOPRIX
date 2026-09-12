@@ -1,5 +1,12 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-12 — Simplified active authentication screens
+
+- Updated the live-project KNOPRIX wordmark to 18px.
+- Removed the login footer strip and its editorial/team-style copy.
+- Removed the registration DSA-powered tagline and set its heading to 18px.
+- Applied this fix to `knoprix-final-project`, the project served on port 5173.
+
 ## 2026-09-12 — Fixed misleading login error + backend-down diagnosis (Bruce)
 
 - Boss screenshot: correct demo creds showed "Login failed. Check your
