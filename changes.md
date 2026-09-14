@@ -1,5 +1,20 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-15 — Prepared Oracle Always Free deployment foundation
+
+- Added optional S3-compatible document storage with Cloudflare R2 support.
+- Uploads use local disk in development and `r2://` object keys in production;
+  PDF streaming, PPTX extraction, and document deletion work through the same
+  storage boundary.
+- Added strict object-storage configuration validation and a safe
+  `backend/.env.example` containing placeholders only.
+- Added a production Dockerfile and Oracle-oriented Docker Compose file.
+- Replaced the stale deployment guide with the Oracle VM, Neon, R2, HTTPS,
+  frontend, verification, and rollback workflow.
+- Preserved local SQLite and local uploads as the default development path.
+- Verification: backend `compileall` and frontend production build passed;
+  the existing `pdfjs-dist` eval warning remains unrelated.
+
 ## 2026-09-14 — Added persistent precise-highlight preference
 
 - Added an annotation-menu setting named `Highlight all matching occurrences`.

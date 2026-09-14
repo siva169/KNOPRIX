@@ -1,17 +1,20 @@
 """Document routes — upload / list / stream / get / delete (owner-scoped)."""
 import re
 import shutil
+import tempfile
 import uuid
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from ..config import cfg, UPLOAD_DIR
 from ..database import get_db
 from ..security import get_current_user, get_owned_document, get_owned_project
 from ..services.indexer import rebuild_project_indices
 from ..services.pdf_parser import extract_document, extract_pptx_slides
+from ..services import storage
 
 router = APIRouter(prefix="/api", tags=["documents"])
 
@@ -33,6 +36,17 @@ def _resolve_path(doc: dict) -> Path:
     if not path.exists():
         path = UPLOAD_DIR / path.name
     return path
+
+
+def _materialize_document(doc: dict) -> tuple[Path, bool]:
+    """Return a readable path and whether the caller owns the temporary file."""
+    if storage.enabled() and str(doc["file_path"]).startswith("r2://"):
+        fd, temp_name = tempfile.mkstemp(prefix="knoprix-document-")
+        os.close(fd)
+        temp = Path(temp_name)
+        storage.download(str(doc["file_path"])[5:], temp)
+        return temp, True
+    return _resolve_path(doc), False
 
 
 @router.get("/projects/{project_id}/documents")
@@ -75,8 +89,15 @@ async def upload_document(project_id: str, file: UploadFile = File(...),
         dest.unlink(missing_ok=True)
         raise HTTPException(422, "Uploaded file is empty")
 
-    parsed = extract_document(dest, ext.lstrip("."))
     doc_id = str(uuid.uuid4())
+    parsed = extract_document(dest, ext.lstrip("."))
+    if storage.enabled():
+        key = storage.object_key(doc_id, original)
+        storage.upload(dest, key, file.content_type)
+        dest.unlink(missing_ok=True)
+        file_path = f"r2://{key}"
+    else:
+        file_path = str(dest)
     db.execute(
         """
         INSERT INTO documents (id, project_id, file_name, file_type, file_path,
@@ -84,7 +105,7 @@ async def upload_document(project_id: str, file: UploadFile = File(...),
                                extraction_method, is_scanned)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (doc_id, project_id, original, ext.lstrip("."), str(dest),
+        (doc_id, project_id, original, ext.lstrip("."), file_path,
          size, parsed["page_count"], parsed["text"], parsed["method"],
          1 if parsed["is_scanned"] else 0),
     )
@@ -113,13 +134,16 @@ def get_slides(document_id: str, user=Depends(get_current_user), db=Depends(get_
     doc = get_owned_document(db, user["id"], document_id)
     if (doc["file_type"] or "").lower() not in ("pptx", "ppt"):
         raise HTTPException(404, "Not a slideshow document")
-    path = _resolve_path(doc)
+    path, temporary = _materialize_document(doc)
     if not path.exists():
         raise HTTPException(404, "File missing on disk")
     try:
         data = extract_pptx_slides(path)
     except Exception:
         raise HTTPException(422, "Could not parse this slideshow")
+    finally:
+        if temporary:
+            path.unlink(missing_ok=True)
     return {"slides": data["slides"], "widthPt": data["widthPt"], "heightPt": data["heightPt"]}
 
 
@@ -136,6 +160,14 @@ def get_pages(document_id: str, user=Depends(get_current_user), db=Depends(get_d
 @router.get("/documents/{document_id}/stream")
 def stream_document(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
     doc = get_owned_document(db, user["id"], document_id)
+    if storage.enabled() and str(doc["file_path"]).startswith("r2://"):
+        body = storage.stream(str(doc["file_path"])[5:])
+        media = "application/pdf" if doc["file_type"] == "pdf" else "application/octet-stream"
+        return StreamingResponse(
+            body.iter_chunks(),
+            media_type=media,
+            headers={"Content-Disposition": f'inline; filename="{doc["file_name"]}"'},
+        )
     path = _resolve_path(doc)
     if not path.exists():
         raise HTTPException(404, "File missing on disk")
@@ -146,7 +178,11 @@ def stream_document(document_id: str, user=Depends(get_current_user), db=Depends
 @router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
     doc = get_owned_document(db, user["id"], document_id)
-    Path(doc["file_path"]).unlink(missing_ok=True)
+    file_path = str(doc["file_path"])
+    if storage.enabled() and file_path.startswith("r2://"):
+        storage.delete(file_path[5:])
+    else:
+        Path(file_path).unlink(missing_ok=True)
     db.execute("DELETE FROM documents WHERE id = ?", (document_id,))
     rebuild_project_indices(db, doc["project_id"])
     return None

@@ -45,10 +45,20 @@ class Config:
         "http://127.0.0.1:3000",
     ]
 
-    # Safety net: any Netlify-published site may call the API, so the demo
-    # never breaks on a CORS mismatch. Can be tightened via env override.
-    CORS_ORIGIN_REGEX = os.getenv(
-        "CORS_ORIGIN_REGEX", r"https://.*\.netlify\.app"
+    CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX") or None
+
+    OBJECT_STORAGE_BUCKET = os.getenv("OBJECT_STORAGE_BUCKET", "")
+    OBJECT_STORAGE_ENDPOINT = os.getenv("OBJECT_STORAGE_ENDPOINT", "")
+    OBJECT_STORAGE_ACCESS_KEY = os.getenv("OBJECT_STORAGE_ACCESS_KEY", "")
+    OBJECT_STORAGE_SECRET_KEY = os.getenv("OBJECT_STORAGE_SECRET_KEY", "")
+    OBJECT_STORAGE_REGION = os.getenv("OBJECT_STORAGE_REGION", "auto")
+    OBJECT_STORAGE_ENABLED = all(
+        (
+            OBJECT_STORAGE_BUCKET,
+            OBJECT_STORAGE_ENDPOINT,
+            OBJECT_STORAGE_ACCESS_KEY,
+            OBJECT_STORAGE_SECRET_KEY,
+        )
     )
 
 
@@ -58,3 +68,15 @@ class Config:
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 cfg = Config()
+
+_storage_values = (
+    cfg.OBJECT_STORAGE_BUCKET,
+    cfg.OBJECT_STORAGE_ENDPOINT,
+    cfg.OBJECT_STORAGE_ACCESS_KEY,
+    cfg.OBJECT_STORAGE_SECRET_KEY,
+)
+if any(_storage_values) and not cfg.OBJECT_STORAGE_ENABLED:
+    raise RuntimeError(
+        "Object storage configuration is incomplete; set bucket, endpoint, "
+        "access key, and secret key together"
+    )
