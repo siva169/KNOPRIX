@@ -47,6 +47,9 @@ tablet, or laptop.
 - Existing persisted highlight and bookmark behavior remains unchanged. Tools
   whose document-specific persistence model is not yet implemented report
   their state honestly instead of creating a misleading marker.
+- Highlight creation defaults to the selected occurrence only. The annotation
+  menu provides a persistent `Highlight all matching occurrences` preference
+  for users who explicitly want related matches painted together.
 
 ## Product Boundaries
 

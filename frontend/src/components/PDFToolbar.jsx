@@ -22,6 +22,7 @@ export default function PDFToolbar({
   eraseMode = false, setEraseMode, highlightCount = 0, onOpenChat,
   focusMode = false, onToggleFocusMode, browseMode, setBrowseMode,
   annotationTool, setAnnotationTool, thumbnailsOpen, onToggleThumbnails,
+  matchAllMode = false, setMatchAllMode,
 }) {
   const { currentPage, setCurrentPage, zoomLevel, setZoomLevel, activeDocument } = useApp();
   const [annotationMenuOpen, setAnnotationMenuOpen] = React.useState(false);
@@ -156,7 +157,20 @@ export default function PDFToolbar({
                   <span className="text-[11px]">Show more annotation tools</span>
                 </button>
                 <button
-                  onClick={() => { setAnnotationMenuOpen(false); }}
+                  onClick={() => setMatchAllMode?.(!matchAllMode)}
+                  className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-ivory/70 hover:bg-white/10 text-left"
+                  role="menuitem"
+                  aria-checked={matchAllMode}
+                >
+                  <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] ${
+                    matchAllMode ? 'bg-secondary border-secondary text-midnight' : 'border-white/30'
+                  }`}>
+                    {matchAllMode ? '✓' : ''}
+                  </span>
+                  <span className="text-[11px]">Highlight all matching occurrences</span>
+                </button>
+                <button
+                  onClick={() => setAnnotationMenuOpen(false)}
                   className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-ivory/70 hover:bg-white/10 text-left"
                   role="menuitem"
                 >

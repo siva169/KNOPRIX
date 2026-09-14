@@ -11,6 +11,7 @@ import { HIGHLIGHT_COLORS, colorById } from '../highlights';
 
 // Worker served locally (frontend/public/) — no CDN dependency, works offline
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+const HIGHLIGHT_ALL_KEY = 'knoprix_highlight_all_matches';
 
 function ThumbnailRail({ pdfDoc, numPages, currentPage, onSelectPage }) {
   const canvasRefs = useRef({});
@@ -81,11 +82,17 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   const [savedPages, setSavedPages] = useState(new Set());
   const [highlights, setHighlights] = useState([]);
   const [colorMenuOpen, setColorMenuOpen] = useState(false);
-  const [matchAllMode, setMatchAllMode] = useState(false); // paint every occurrence
+  const [matchAllMode, setMatchAllMode] = useState(
+    () => localStorage.getItem(HIGHLIGHT_ALL_KEY) === 'true'
+  );
   const [eraseMode, setEraseMode] = useState(false);
   const [markMenu, setMarkMenu] = useState(null); // {id, x, y}
   const highlightsRef = useRef([]);
   const restoredDocumentRef = useRef(null);
+
+  useEffect(() => {
+    localStorage.setItem(HIGHLIGHT_ALL_KEY, String(matchAllMode));
+  }, [matchAllMode]);
 
   // Keep a ref in sync so renderPage can read the latest highlights without
   // being re-created (and re-rendering every page) on every highlight change.
@@ -376,7 +383,6 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       const y = Math.min(Math.max(rect.top - 8, 8), window.innerHeight - 170);
       setSelection({ text, x, y, page });
       setColorMenuOpen(false);
-      setMatchAllMode(false);
       setMarkMenu(null);
     } else {
       setSelection(null);
@@ -900,6 +906,8 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         setAnnotationTool={setAnnotationTool}
         thumbnailsOpen={thumbnailsOpen}
         onToggleThumbnails={() => setThumbnailsOpen((open) => !open)}
+        matchAllMode={matchAllMode}
+        setMatchAllMode={setMatchAllMode}
         currentPageSaved={savedPages.has(currentPage)}
         onBookmarkPage={() => bookmarkPage(currentPage)}
         eraseMode={eraseMode}

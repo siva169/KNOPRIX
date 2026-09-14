@@ -1,5 +1,16 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-14 — Added persistent precise-highlight preference
+
+- Added an annotation-menu setting named `Highlight all matching occurrences`.
+- The setting is disabled by default, so a new highlight paints only the
+  selected occurrence instead of every matching word in the document.
+- The preference persists in browser-local storage and can be enabled again
+  when a user intentionally wants all matches.
+- Existing saved highlights keep their stored behavior; changing this setting
+  affects new highlights only.
+- Verified with the frontend production build and the live reader toolbar.
+
 ## 2026-09-14 — Fixed PPTX reader crash from annotation range merge
 
 - Root cause: the previous overlapping-highlight fix referenced
