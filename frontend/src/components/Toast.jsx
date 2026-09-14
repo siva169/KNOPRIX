@@ -17,7 +17,17 @@ export default function Toast({ toast }) {
       className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] glass-panel rounded-xl px-4 py-2.5 shadow-2xl flex items-center gap-2 text-xs font-medium text-ivory"
     >
       {icons[toast.type] || icons.info}
-      {toast.message}
+      <span>{toast.message}</span>
+      {toast.action && (
+        <button
+          onClick={() => {
+            toast.action.run();
+          }}
+          className="ml-2 rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-secondary hover:bg-primary/20"
+        >
+          {toast.action.label}
+        </button>
+      )}
     </motion.div>
   );
 }

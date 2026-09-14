@@ -1,5 +1,15 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-14 — Added safe Undo feedback for highlight removal
+
+- Extended the existing toast status surface with an optional Undo action.
+- Highlight deletion now offers a real restoration path through the existing
+  highlights API; failed restoration is reported instead of being swallowed.
+- Kept Undo scoped to this safe, fully reconstructable action rather than
+  implying unsupported rollback for destructive operations.
+- Verified with `npm run build`; the existing `pdfjs-dist` eval warning remains
+  unrelated.
+
 ## 2026-09-14 — Added reversible reader focus mode
 
 - Added a reader-only focus mode that removes the navbar and folder rail while

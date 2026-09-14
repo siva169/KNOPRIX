@@ -408,10 +408,30 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   };
 
   const removeHighlight = async (id) => {
+    const removed = highlights.find((h) => h.id === id);
+    if (!removed) return;
     try {
       await api.delete(`/highlights/${id}`);
       setHighlights((h) => h.filter((x) => x.id !== id));
-      notify('Highlight removed', 'info');
+      notify('Highlight removed', 'info', {
+        label: 'Undo',
+        run: async () => {
+          try {
+            const { data } = await api.post('/highlights', {
+              projectId: activeProject.id,
+              documentId: activeDocument.id,
+              pageNumber: removed.pageNumber,
+              text: removed.text,
+              color: removed.color,
+              matchAll: removed.matchAll,
+            });
+            setHighlights((h) => [...h, { ...removed, id: data.id }]);
+            notify('Highlight restored', 'success');
+          } catch {
+            notify('Could not restore highlight', 'error');
+          }
+        },
+      });
       setMarkMenu(null);
     } catch {
       notify('Could not remove highlight', 'error');

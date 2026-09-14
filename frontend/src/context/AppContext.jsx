@@ -24,8 +24,8 @@ export function AppProvider({ children }) {
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
-  const notify = useCallback((message, type = 'info') => {
-    setToast({ id: Date.now(), message, type });
+  const notify = useCallback((message, type = 'info', action = null) => {
+    setToast({ id: Date.now(), message, type, action });
   }, []);
 
   useEffect(() => {
