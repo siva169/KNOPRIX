@@ -15,7 +15,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 export default function BrowserPDFViewer({ onOpenChat }) {
   const {
     activeDocument, currentPage, setCurrentPage, zoomLevel,
-    highlightSnippet, notify, activeProject, fetchBookmarks
+    highlightSnippet, notify, activeProject, fetchBookmarks,
+    getReadingProgress, saveReadingProgress,
   } = useApp();
 
   const [numPages, setNumPages] = useState(0);
@@ -31,6 +32,7 @@ export default function BrowserPDFViewer({ onOpenChat }) {
   const [eraseMode, setEraseMode] = useState(false);
   const [markMenu, setMarkMenu] = useState(null); // {id, x, y}
   const highlightsRef = useRef([]);
+  const restoredDocumentRef = useRef(null);
 
   // Keep a ref in sync so renderPage can read the latest highlights without
   // being re-created (and re-rendering every page) on every highlight change.
@@ -41,6 +43,28 @@ export default function BrowserPDFViewer({ onOpenChat }) {
   const pageCanvasRefs = useRef({});
   const pageTextLayerRefs = useRef({});
   const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!activeDocument) {
+      restoredDocumentRef.current = null;
+      return;
+    }
+    const saved = getReadingProgress(activeDocument.id);
+    const totalPages = activeDocument.page_count || 1;
+    const page = Math.min(Math.max(Number(saved?.page) || 1, 1), totalPages);
+    restoredDocumentRef.current = activeDocument.id;
+    setCurrentPage(page);
+  }, [activeDocument, getReadingProgress, setCurrentPage]);
+
+  useEffect(() => {
+    const totalPages = numPages || activeDocument?.page_count || 0;
+    if (
+      !activeDocument ||
+      !totalPages ||
+      restoredDocumentRef.current !== activeDocument.id
+    ) return;
+    saveReadingProgress(activeDocument.id, currentPage, totalPages);
+  }, [activeDocument, currentPage, numPages, saveReadingProgress]);
 
   // ── Track which pages of this document are bookmarked ─────────────────────
   const refreshSavedPages = useCallback(async () => {

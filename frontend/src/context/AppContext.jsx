@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import api from '../api';
 
 const AppContext = createContext(null);
+const readingProgressKey = (documentId) => `knoprix_reading_progress_${documentId}`;
 
 export function AppProvider({ children }) {
   const [projects, setProjects] = useState([]);
@@ -72,6 +73,26 @@ export function AppProvider({ children }) {
     setCurrentPage(1);
   }, []);
 
+  const getReadingProgress = useCallback((documentId) => {
+    if (!documentId) return null;
+    const raw = localStorage.getItem(readingProgressKey(documentId));
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      localStorage.removeItem(readingProgressKey(documentId));
+      return null;
+    }
+  }, []);
+
+  const saveReadingProgress = useCallback((documentId, page, totalPages) => {
+    if (!documentId || !page || !totalPages) return;
+    localStorage.setItem(
+      readingProgressKey(documentId),
+      JSON.stringify({ page, totalPages, updatedAt: new Date().toISOString() }),
+    );
+  }, []);
+
   const navigateToLocation = useCallback((documentId, pageNumber, snippet) => {
     const doc = documents.find((d) => d.id === documentId);
     if (doc) setActiveDocument(doc);
@@ -88,6 +109,7 @@ export function AppProvider({ children }) {
         projects, activeProject, selectProject, fetchProjects, resetWorkspace,
         documents, fetchDocuments,
         activeDocument, openDocument, navigateToLocation,
+        getReadingProgress, saveReadingProgress,
         bookmarks, fetchBookmarks,
         theme, toggleTheme,
         toast, notify,

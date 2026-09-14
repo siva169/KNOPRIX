@@ -1,5 +1,17 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-14 — Added local reading progress and resume position
+
+- Persisted each document's current page and total-page snapshot in browser
+  storage, keyed by document ID, so reopening or reloading resumes safely.
+- Restored saved positions with page bounds clamped to the current document and
+  removed malformed stored entries instead of allowing them to break the
+  reader.
+- Added a restrained desktop-only reading percentage to the reader toolbar;
+  mobile keeps the existing compact controls.
+- Verified with `npm run build`; the existing `pdfjs-dist` eval warning remains
+  unrelated.
+
 ## 2026-09-14 — Started authenticated gold reader redesign
 
 - Added the approved reader redesign contract at

@@ -6,6 +6,7 @@ export default function PDFToolbar({ numPages, viewMode, setViewMode, currentPag
   const { currentPage, setCurrentPage, zoomLevel, setZoomLevel, activeDocument } = useApp();
 
   const total = numPages || 1;
+  const progress = Math.round((Math.min(currentPage, total) / total) * 100);
 
   return (
     <div className="h-12 border-b border-glass-borderDark glass-panel px-2 sm:px-4 flex items-center justify-between gap-2 sm:gap-3 text-xs select-none w-full z-10 shrink-0 overflow-x-auto">
@@ -17,6 +18,9 @@ export default function PDFToolbar({ numPages, viewMode, setViewMode, currentPag
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2 bg-midnight-panel px-2 sm:px-3 py-1 rounded-xl border border-glass-borderDark shrink-0">
+        <span className="hidden lg:inline font-mono text-[10px] text-secondary/80" aria-label={`${progress}% read`}>
+          {progress}% read
+        </span>
         <button
           onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
           disabled={currentPage <= 1}
