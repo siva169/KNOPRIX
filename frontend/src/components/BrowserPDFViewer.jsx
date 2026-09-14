@@ -12,7 +12,7 @@ import { HIGHLIGHT_COLORS, colorById } from '../highlights';
 // Worker served locally (frontend/public/) — no CDN dependency, works offline
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
-export default function BrowserPDFViewer({ onOpenChat }) {
+export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onToggleFocusMode }) {
   const {
     activeDocument, currentPage, setCurrentPage, zoomLevel,
     highlightSnippet, notify, activeProject, fetchBookmarks,
@@ -804,6 +804,8 @@ export default function BrowserPDFViewer({ onOpenChat }) {
         setEraseMode={setEraseMode}
         highlightCount={highlights.length}
         onOpenChat={onOpenChat}
+        focusMode={focusMode}
+        onToggleFocusMode={onToggleFocusMode}
       />
       {isPdf ? renderPDFViewer() : isSlideshow ? renderSlidesViewer() : renderTextViewer()}
 

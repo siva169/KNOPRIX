@@ -1,5 +1,14 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-14 — Added reversible reader focus mode
+
+- Added a reader-only focus mode that removes the navbar and folder rail while
+  preserving the active document, page, zoom, bookmarks, and highlights.
+- Added an accessible toolbar toggle and Escape-to-exit behavior; the normal
+  shell returns without resetting reader state.
+- Verified with `npm run build`; the existing `pdfjs-dist` eval warning remains
+  unrelated.
+
 ## 2026-09-14 — Added keyboard-first command palette
 
 - Added a real `Ctrl/Cmd+K` command palette with focus management, Escape

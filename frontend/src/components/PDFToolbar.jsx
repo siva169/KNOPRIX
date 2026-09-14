@@ -1,8 +1,8 @@
 import React from 'react';
-import { ZoomIn, ZoomOut, ChevronLeft, ChevronRight, BookOpen, Layers, Printer, Bookmark, BookmarkCheck, Eraser, MessageSquare } from 'lucide-react';
+import { ZoomIn, ZoomOut, ChevronLeft, ChevronRight, BookOpen, Layers, Printer, Bookmark, BookmarkCheck, Eraser, MessageSquare, Maximize2, Minimize2 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 
-export default function PDFToolbar({ numPages, viewMode, setViewMode, currentPageSaved = false, onBookmarkPage, eraseMode = false, setEraseMode, highlightCount = 0, onOpenChat }) {
+export default function PDFToolbar({ numPages, viewMode, setViewMode, currentPageSaved = false, onBookmarkPage, eraseMode = false, setEraseMode, highlightCount = 0, onOpenChat, focusMode = false, onToggleFocusMode }) {
   const { currentPage, setCurrentPage, zoomLevel, setZoomLevel, activeDocument } = useApp();
 
   const total = numPages || 1;
@@ -114,6 +114,16 @@ export default function PDFToolbar({ numPages, viewMode, setViewMode, currentPag
           >
             <MessageSquare className="w-3.5 h-3.5" />
             <span className="hidden md:inline text-[10px]">Chat</span>
+          </button>
+        )}
+        {onToggleFocusMode && (
+          <button
+            onClick={onToggleFocusMode}
+            title={focusMode ? 'Exit focus mode (Escape)' : 'Enter focus mode'}
+            aria-label={focusMode ? 'Exit focus mode' : 'Enter focus mode'}
+            className="p-1.5 rounded-xl border border-glass-borderDark text-ivory/70 hover:text-secondary hover:bg-white/10 transition"
+          >
+            {focusMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
         )}
       </div>

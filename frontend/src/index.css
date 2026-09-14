@@ -161,3 +161,7 @@ mark.kn-hl-plain:hover {
 .collection-card {
   box-shadow: 0 -6px 14px -8px rgba(201, 144, 63, 0.22), 0 10px 24px -12px rgba(0, 0, 0, 0.6);
 }
+
+.focus-reader-shell main {
+  width: 100%;
+}

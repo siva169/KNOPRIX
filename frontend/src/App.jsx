@@ -35,6 +35,7 @@ export default function App() {
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -46,6 +47,15 @@ export default function App() {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!focusMode) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setFocusMode(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [focusMode]);
 
   // On login: load the user's saved projects immediately
   useEffect(() => {
@@ -89,7 +99,7 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-midnight text-ivory selection:bg-primary selection:text-white">
+    <div className={`h-screen flex flex-col overflow-hidden bg-midnight text-ivory selection:bg-primary selection:text-white ${focusMode ? 'focus-reader-shell' : ''}`}>
       {/* Keyboard users can jump straight past the nav + sidebar into content */}
       <a
         href="#main-content"
@@ -97,23 +107,23 @@ export default function App() {
       >
         Skip to content
       </a>
-      <Navbar
+      {!focusMode && <Navbar
         onUpload={() => setIsUploadOpen(true)}
         onStats={() => setIsStatsOpen(true)}
         onBookmarks={() => setIsBookmarksOpen(true)}
         onOpenPalette={() => setIsPaletteOpen(true)}
         onToggleSidebar={() => setMobileSidebar((v) => !v)}
         mobileSidebar={mobileSidebar}
-      />
+      />}
 
       <div className="flex-1 flex overflow-hidden relative">
-        <Sidebar
+        {!focusMode && <Sidebar
           onUpload={() => setIsUploadOpen(true)}
           onStats={() => setIsStatsOpen(true)}
           onBookmarks={() => setIsBookmarksOpen(true)}
           mobileOpen={mobileSidebar}
           onClose={() => setMobileSidebar(false)}
-        />
+        />}
 
         <main
           id="main-content"
@@ -130,7 +140,7 @@ export default function App() {
               </div>
             }
           >
-            {activeDocument ? <BrowserPDFViewer onOpenChat={() => setIsChatOpen(true)} /> : <DashboardOverview loading={projectsLoading || documentsLoading} onUpload={() => setIsUploadOpen(true)} onOpenMap={() => setIsMapOpen(true)} />}
+            {activeDocument ? <BrowserPDFViewer focusMode={focusMode} onToggleFocusMode={() => setFocusMode((value) => !value)} onOpenChat={() => setIsChatOpen(true)} /> : <DashboardOverview loading={projectsLoading || documentsLoading} onUpload={() => setIsUploadOpen(true)} onOpenMap={() => setIsMapOpen(true)} />}
           </Suspense>
           </ErrorBoundary>
         </main>
