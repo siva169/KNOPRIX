@@ -289,3 +289,10 @@
 - Captured evidence in `../qa-artifacts/knoprix-dashboard/`.
 - The isolated QA backend required `CORS_ORIGINS=http://127.0.0.1:5175`;
   this was a test-port runtime setting, not an application-code change.
+
+# 2026-09-14 — Portable PDF resolution and workspace rail
+
+- Fixed document streaming for database rows containing Windows paths when the API runs on Linux; the resolver now normalizes separators before checking the portable uploads directory.
+- Replaced the flat sidebar emphasis with a context-aware workspace rail: project switcher, Continue reading, Saved sources, and a clearer source index.
+- Research basis: Material Design navigation principles, WAI-ARIA navigation expectations, Apple HIG hierarchy, and the product-specific reader contract in `docs/reader-gold-redesign-spec.md`.
+- Verification target: the known Neon PDF stream must return 200 when its binary exists in `backend/uploads`; otherwise the UI must continue to present the extracted text honestly.

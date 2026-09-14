@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Bookmark, Copy, AlertTriangle, BookmarkCheck, Sparkles, Highlighter, Eraser, Volume2, Square } from 'lucide-react';
+import { FileText, Bookmark, Copy, BookmarkCheck, Sparkles, Highlighter, Eraser, Volume2, Square } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import PDFToolbar from './PDFToolbar.jsx';
 import SlideViewer from './SlideViewer.jsx';
@@ -759,8 +759,9 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       )}
 
       {error === 'pdf_load_failed' && (
-        <div className="max-w-4xl mx-auto mb-4 p-3 rounded-xl bg-accent/10 border border-accent/30 text-accent text-xs flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4" /> PDF stream unavailable — showing extracted text preview instead.
+        <div className="max-w-4xl mx-auto mb-4 p-3 rounded-xl bg-white/[0.035] border border-glass-borderDark text-ivory/65 text-xs flex items-center gap-2">
+          <FileText className="w-4 h-4 text-secondary shrink-0" />
+          <span><strong className="text-ivory/85">Text-first preview.</strong> The original PDF binary is not available on this workspace, so your extracted content remains readable here.</span>
         </div>
       )}
 

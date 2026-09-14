@@ -26,7 +26,10 @@ def _resolve_path(doc: dict) -> Path:
     have moved since upload (e.g. Downloads -> AI-Rules), which leaves the
     stored absolute path stale while the file copy still lives in uploads/.
     """
-    path = Path(doc["file_path"])
+    stored_path = str(doc["file_path"] or "")
+    # Neon can contain paths written on Windows while the API runs on Linux.
+    # Normalize both separators before resolving the portable uploads fallback.
+    path = Path(stored_path.replace("\\", "/"))
     if not path.exists():
         path = UPLOAD_DIR / path.name
     return path
