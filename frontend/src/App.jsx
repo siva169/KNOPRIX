@@ -36,6 +36,17 @@ export default function App() {
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem('knoprix_sidebar_collapsed') === 'true',
+  );
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((collapsed) => {
+      const next = !collapsed;
+      localStorage.setItem('knoprix_sidebar_collapsed', String(next));
+      return next;
+    });
+  };
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -123,6 +134,8 @@ export default function App() {
           onBookmarks={() => setIsBookmarksOpen(true)}
           mobileOpen={mobileSidebar}
           onClose={() => setMobileSidebar(false)}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={toggleSidebar}
         />}
 
         <main

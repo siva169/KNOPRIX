@@ -296,3 +296,9 @@
 - Replaced the flat sidebar emphasis with a context-aware workspace rail: project switcher, Continue reading, Saved sources, and a clearer source index.
 - Research basis: Material Design navigation principles, WAI-ARIA navigation expectations, Apple HIG hierarchy, and the product-specific reader contract in `docs/reader-gold-redesign-spec.md`.
 - Verification target: the known Neon PDF stream must return 200 when its binary exists in `backend/uploads`; otherwise the UI must continue to present the extracted text honestly.
+
+# 2026-09-14 — Collapsible workspace rail
+
+- Added a persistent desktop collapse control to the workspace sidebar.
+- Collapsed mode preserves project switching and utility actions as an accessible icon rail with labels available through tooltips and ARIA names.
+- Mobile navigation remains an expanded drawer so document names and touch targets stay usable.

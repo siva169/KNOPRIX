@@ -3,12 +3,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Folder, FolderOpen, Plus, FileText, ChevronRight, ChevronDown,
   Bookmark, BarChart3, UploadCloud, X, Check, Clock3, LibraryBig,
-  Network, ArrowUpRight, PanelLeftClose
+  Network, ArrowUpRight, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import api from '../api';
 
-export default function Sidebar({ onUpload, onStats, onBookmarks, mobileOpen = false, onClose }) {
+export default function Sidebar({
+  onUpload, onStats, onBookmarks, mobileOpen = false, onClose,
+  collapsed = false, onToggleCollapse,
+}) {
   const {
     projects, activeProject, selectProject, fetchProjects, documents, openDocument,
     activeDocument, notify, getReadingProgress, bookmarks,
@@ -94,11 +97,38 @@ export default function Sidebar({ onUpload, onStats, onBookmarks, mobileOpen = f
         />
       )}
       <aside
-        className={`w-72 lg:w-64 border-r border-glass-borderDark glass-panel flex-col justify-between h-full select-none shrink-0 ${
+        className={`${collapsed ? 'lg:w-[68px]' : 'w-72 lg:w-64'} border-r border-glass-borderDark glass-panel flex-col justify-between h-full select-none shrink-0 transition-[width] duration-200 ${
           mobileOpen ? 'flex absolute inset-y-0 left-0 z-40 shadow-2xl' : 'hidden'
         } lg:flex lg:static lg:shadow-none`}
       >
-      <div className="p-4 overflow-y-auto space-y-3">
+      <div className={`p-4 overflow-y-auto space-y-3 ${collapsed ? 'lg:px-2' : ''}`}>
+        {collapsed ? (
+          <div className="hidden lg:flex flex-col items-center gap-2">
+            <button
+              onClick={onToggleCollapse}
+              className="grid place-items-center size-10 rounded-xl text-secondary hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+              aria-label="Expand workspace navigation"
+              title="Expand workspace navigation"
+            >
+              <PanelLeftOpen className="size-4" />
+            </button>
+            <div className="h-px w-8 bg-glass-borderDark" />
+            {projects.map((proj) => (
+              <button
+                key={proj.id}
+                onClick={() => selectProject(proj.id)}
+                className={`grid place-items-center size-10 rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary ${
+                  activeProject?.id === proj.id ? 'bg-primary/25 text-secondary' : 'text-ivory/55 hover:bg-white/5 hover:text-ivory'
+                }`}
+                aria-label={`Open project ${proj.name}`}
+                title={`${proj.name} · ${proj.file_count} sources`}
+              >
+                {activeProject?.id === proj.id ? <FolderOpen className="size-4" /> : <Folder className="size-4" />}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <div className={collapsed ? 'lg:hidden' : ''}>
         <div className="flex items-center justify-between px-1">
           <div>
             <p className="text-[10px] uppercase tracking-[0.22em] text-secondary/80 font-semibold">Your workspace</p>
@@ -107,6 +137,14 @@ export default function Sidebar({ onUpload, onStats, onBookmarks, mobileOpen = f
             </p>
           </div>
           <button onClick={onClose} className="lg:hidden p-2 rounded-lg text-ivory/60 hover:bg-white/10" aria-label="Close navigation">
+            <PanelLeftClose className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onToggleCollapse}
+            className="hidden lg:grid place-items-center p-2 rounded-lg text-ivory/55 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+            aria-label="Collapse workspace navigation"
+            title="Collapse workspace navigation"
+          >
             <PanelLeftClose className="w-4 h-4" />
           </button>
         </div>
@@ -248,17 +286,21 @@ export default function Sidebar({ onUpload, onStats, onBookmarks, mobileOpen = f
             )}
           </div>
         )}
+        </div>
       </div>
 
-      <div className="p-3 md:p-4 border-t border-glass-borderDark space-y-1.5">
+      <div className={`p-3 md:p-4 border-t border-glass-borderDark space-y-1.5 ${collapsed ? 'lg:px-2' : ''}`}>
         <button onClick={onBookmarks} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-ivory/70 hover:bg-white/5 hover:text-ivory transition">
-          <Bookmark className="w-4 h-4 text-secondary" /> Bookmarks Drawer
+          <Bookmark className="w-4 h-4 text-secondary shrink-0" />
+          <span className={collapsed ? 'lg:hidden' : ''}>Bookmarks Drawer</span>
         </button>
         <button onClick={onStats} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-ivory/70 hover:bg-white/5 hover:text-ivory transition">
-          <BarChart3 className="w-4 h-4 text-accent" /> DSA Index Visualizer
+          <BarChart3 className="w-4 h-4 text-accent shrink-0" />
+          <span className={collapsed ? 'lg:hidden' : ''}>DSA Index Visualizer</span>
         </button>
         <button onClick={onUpload} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-ivory/70 hover:bg-white/5 hover:text-ivory transition">
-          <UploadCloud className="w-4 h-4 text-secondary" /> Upload File
+          <UploadCloud className="w-4 h-4 text-secondary shrink-0" />
+          <span className={collapsed ? 'lg:hidden' : ''}>Upload File</span>
         </button>
       </div>
       </aside>
