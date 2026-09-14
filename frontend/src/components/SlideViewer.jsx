@@ -31,18 +31,6 @@ function runSegments(text, pageHighlights) {
       );
     }
   }
-  // Overlapping saved highlights must share one painted range; otherwise
-  // overlapping spans render the same slide text twice.
-  paintRanges.sort((a, b) => a.s - b.s || a.e - b.e);
-  const mergedPaintRanges = [];
-  for (const range of paintRanges) {
-    const previous = mergedPaintRanges[mergedPaintRanges.length - 1];
-    if (previous && range.s <= previous.e) {
-      previous.e = Math.max(previous.e, range.e);
-    } else {
-      mergedPaintRanges.push({ ...range });
-    }
-  }
   return [{ text }];
 }
 
@@ -72,6 +60,18 @@ function TextShape({ s, defaultColor, pageHighlights = [] }) {
         paintRanges.push({ s: pos, e: pos + seg.text.length, id: h.id, color: colorById(h.color).bg });
       }
       pos += seg.text.length;
+    }
+  }
+  // Overlapping saved highlights must share one painted range; otherwise
+  // overlapping spans render the same slide text twice.
+  paintRanges.sort((a, b) => a.s - b.s || a.e - b.e);
+  const mergedPaintRanges = [];
+  for (const range of paintRanges) {
+    const previous = mergedPaintRanges[mergedPaintRanges.length - 1];
+    if (previous && range.s <= previous.e) {
+      previous.e = Math.max(previous.e, range.e);
+    } else {
+      mergedPaintRanges.push({ ...range });
     }
   }
 

@@ -1,5 +1,16 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-14 — Fixed PPTX reader crash from annotation range merge
+
+- Root cause: the previous overlapping-highlight fix referenced
+  `mergedPaintRanges` from `TextShape` even though it had accidentally been
+  declared inside the unrelated `runSegments` helper.
+- Moved the range merge into `TextShape`, where `paintRanges` is built, and
+  restored `runSegments` to its table-cell rendering responsibility.
+- This prevents `mergedPaintRanges is not defined` from crashing the reader
+  when a PPTX contains text shapes.
+- Verification: frontend production build and live PPTX reader reload.
+
 ## 2026-09-14 — Added approved Okular-inspired reader navigation
 
 - Added compact first/previous/current/next/last page controls to the reader
