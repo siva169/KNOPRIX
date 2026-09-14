@@ -12,6 +12,56 @@ import { HIGHLIGHT_COLORS, colorById } from '../highlights';
 // Worker served locally (frontend/public/) — no CDN dependency, works offline
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
+function ThumbnailRail({ pdfDoc, numPages, currentPage, onSelectPage }) {
+  const canvasRefs = useRef({});
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!pdfDoc || !numPages) return undefined;
+    (async () => {
+      for (let pageNumber = 1; pageNumber <= numPages; pageNumber += 1) {
+        const canvas = canvasRefs.current[pageNumber];
+        if (!canvas) continue;
+        const page = await pdfDoc.getPage(pageNumber);
+        if (cancelled) return;
+        const baseViewport = page.getViewport({ scale: 1 });
+        const scale = Math.min(0.16, 112 / baseViewport.width);
+        const viewport = page.getViewport({ scale });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        if (cancelled) return;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [pdfDoc, numPages]);
+
+  return (
+    <aside className="w-24 sm:w-28 shrink-0 border-r border-glass-borderDark bg-midnight-panel/90 overflow-y-auto p-2 space-y-2" aria-label="Page thumbnails">
+      {Array.from({ length: numPages || 0 }, (_, index) => {
+        const pageNumber = index + 1;
+        const selected = pageNumber === currentPage;
+        return (
+          <button
+            key={pageNumber}
+            onClick={() => onSelectPage(pageNumber)}
+            className={`w-full rounded-lg p-1.5 border transition ${selected ? 'border-secondary bg-primary/15' : 'border-white/10 hover:border-primary/60'}`}
+            aria-label={`Go to page ${pageNumber}`}
+            aria-current={selected ? 'page' : undefined}
+          >
+            <span className="block rounded bg-white overflow-hidden min-h-12">
+              <canvas ref={(el) => { canvasRefs.current[pageNumber] = el; }} className="block w-full h-auto" />
+            </span>
+            <span className={`block mt-1 text-[10px] font-mono ${selected ? 'text-secondary' : 'text-ivory/50'}`}>
+              {pageNumber}
+            </span>
+          </button>
+        );
+      })}
+    </aside>
+  );
+}
+
 export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onToggleFocusMode }) {
   const {
     activeDocument, currentPage, setCurrentPage, zoomLevel,
@@ -24,6 +74,9 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState('continuous');
+  const [browseMode, setBrowseMode] = useState(false);
+  const [annotationTool, setAnnotationTool] = useState('yellow');
+  const [thumbnailsOpen, setThumbnailsOpen] = useState(false);
   const [selection, setSelection] = useState(null); // {text, x, y, page}
   const [savedPages, setSavedPages] = useState(new Set());
   const [highlights, setHighlights] = useState([]);
@@ -298,6 +351,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
 
   // ── Selection → action popover ─────────────────────────────────────────────
   const handleMouseUp = (e) => {
+    if (browseMode) return;
     // Clicking an existing highlight marker opens the remove menu instead of
     // the selection popover.
     if (e?.target?.closest?.('mark[data-hlid]')) {
@@ -406,6 +460,16 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     } catch {
       notify('Could not save highlight', 'error');
     }
+  };
+
+  const applySelectedAnnotation = () => {
+    if (!selection) return;
+    if (annotationTool === 'yellow' || annotationTool === 'green') {
+      saveHighlight(selection, annotationTool);
+      return;
+    }
+    notify(`${annotationTool.replace('-', ' ')} is selected; its editor is not available for this document type yet`, 'info');
+    setSelection(null);
   };
 
   const removeHighlight = async (id) => {
@@ -748,7 +812,16 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
 
   // ── PDF canvas viewer ──────────────────────────────────────────────────────
   const renderPDFViewer = () => (
-    <div ref={containerRef} onMouseUp={handleMouseUp} onClick={handleMarkClick} className="flex-1 overflow-auto p-2 sm:p-6 bg-midnight/60 relative">
+    <div className="flex-1 flex min-h-0 bg-midnight/60">
+      {thumbnailsOpen && isPdf && pdfDoc && (
+        <ThumbnailRail
+          pdfDoc={pdfDoc}
+          numPages={numPages}
+          currentPage={currentPage}
+          onSelectPage={setCurrentPage}
+        />
+      )}
+      <div ref={containerRef} onMouseUp={handleMouseUp} onClick={handleMarkClick} className="flex-1 overflow-auto p-2 sm:p-6 relative">
       {highlightSnippet && (
         <motion.div
           initial={{ opacity: 0, y: -8 }}
@@ -811,6 +884,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         </div>
       )}
 
+      </div>
     </div>
   );
 
@@ -820,6 +894,12 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         numPages={numPages || activeDocument.page_count || 1}
         viewMode={viewMode}
         setViewMode={setViewMode}
+        browseMode={browseMode}
+        setBrowseMode={setBrowseMode}
+        annotationTool={annotationTool}
+        setAnnotationTool={setAnnotationTool}
+        thumbnailsOpen={thumbnailsOpen}
+        onToggleThumbnails={() => setThumbnailsOpen((open) => !open)}
         currentPageSaved={savedPages.has(currentPage)}
         onBookmarkPage={() => bookmarkPage(currentPage)}
         eraseMode={eraseMode}
@@ -858,14 +938,23 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
                 </button>
               )}
               <button
-                onClick={() => setColorMenuOpen((o) => !o)}
-                title="Highlight this selection"
+                onClick={applySelectedAnnotation}
+                title={`Apply ${annotationTool.replace('-', ' ')} to this selection`}
                 className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${
                   colorMenuOpen ? 'text-secondary bg-primary/20' : 'text-ivory hover:bg-primary/20 hover:text-secondary'
                 }`}
               >
-                <Highlighter className="w-3.5 h-3.5 text-secondary" /> <span className="hidden sm:inline">Highlight</span>
+                <Highlighter className="w-3.5 h-3.5 text-secondary" /> <span className="hidden sm:inline">{annotationTool === 'yellow' || annotationTool === 'green' ? 'Apply' : 'Use tool'}</span>
               </button>
+              {(annotationTool === 'yellow' || annotationTool === 'green') && (
+                <button
+                  onClick={() => setColorMenuOpen((o) => !o)}
+                  title="Choose highlight color"
+                  className="px-2 py-1.5 rounded-lg text-[10px] text-ivory/70 hover:bg-primary/20 transition"
+                >
+                  Color
+                </button>
+              )}
             </div>
             {colorMenuOpen && (
               <div className="flex flex-col gap-1.5 px-2.5 pb-2 pt-1.5 border-t border-white/10">

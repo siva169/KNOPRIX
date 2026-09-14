@@ -142,3 +142,8 @@ The project follows the complete checklist at:
 
 Progress is intentionally `0/33` until each item is evaluated against the new
 interface and either implemented or marked `N/A` with a reason.
+
+For the approved reader slice, the source checklists remain:
+
+- `../checklists/016-vibecoding-polish-checklist.md`
+- `../checklists/017-vibecoding-fix-checklist.md`

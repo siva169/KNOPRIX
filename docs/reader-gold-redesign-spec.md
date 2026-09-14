@@ -30,6 +30,24 @@ tablet, or laptop.
 5. Add undo-capable status feedback for reversible reader actions.
 6. Add a continue-reading entry point to the dashboard.
 
+## Approved Okular-Inspired Reader Slice — 2026-09-14
+
+- Page navigation uses the compact Okular pattern: first, previous, editable
+  current page, next, and last controls.
+- View controls expose Single Page and Continuous modes.
+- A page-thumbnail rail can be opened beside PDF content and jumps directly to
+  a selected page.
+- Browse and Text Selection modes are explicit toolbar choices rather than
+  hidden interaction rules.
+- The annotation picker exposes Yellow Highlighter, Green Highlighter,
+  Underline, Strikethrough, Inline Text, Inline Note, and Pop-up Note, with
+  numbered shortcuts shown in the menu.
+- The toolbar remains horizontally scrollable on mobile, as approved by the
+  boss, so no required control is silently hidden below 1024px.
+- Existing persisted highlight and bookmark behavior remains unchanged. Tools
+  whose document-specific persistence model is not yet implemented report
+  their state honestly instead of creating a misleading marker.
+
 ## Product Boundaries
 
 - Always preserve existing PDF/PPTX/TXT/DOCX reading behavior.

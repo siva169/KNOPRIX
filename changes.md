@@ -1,5 +1,22 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-14 — Added approved Okular-inspired reader navigation
+
+- Added compact first/previous/current/next/last page controls to the reader
+  toolbar.
+- Added explicit Browse and Text Selection modes.
+- Added an annotation picker matching the supplied references with yellow and
+  green highlighters, underline, strikethrough, inline text, inline note, and
+  pop-up note entries plus visible keyboard shortcuts.
+- Added a PDF thumbnail rail that renders small page previews and jumps to the
+  selected page.
+- Added Single Page and Continuous view-mode menus while preserving existing
+  reader state, bookmarks, highlights, chat, print, and focus controls.
+- Kept unsupported annotation persistence honest: currently persisted
+  annotations remain highlights/bookmarks; selecting an unsupported annotation
+  tool reports that its editor is not yet available for the document type.
+- Verified with `npm run build` and `python -m compileall -q backend/app`.
+
 ## 2026-09-14 — Completed authenticated gold palette rollout
 
 - Replaced the remaining warm-brown authenticated surfaces with near-black
