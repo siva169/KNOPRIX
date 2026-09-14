@@ -309,3 +309,9 @@
 - Upgraded the graph selection panel from a document list to an evidence workflow with page-level source links.
 - Selecting an excerpt opens the existing reader at that document/page and preserves the concept as the reader context.
 - Preserved original page-text casing for evidence excerpts while keeping the lowercased lookup text used by search and graph matching.
+
+# 2026-09-14 — Explicit bookmark removal and slide highlight fix
+
+- Page bookmark controls now clearly switch to `Remove` with an accessible removal label when a page is saved.
+- Bookmark drawer deletion is always reachable on touch and desktop, rather than appearing only on hover.
+- Merged overlapping slide highlight ranges so a phrase and word highlight cannot paint duplicate text.

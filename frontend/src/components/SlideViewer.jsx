@@ -31,6 +31,18 @@ function runSegments(text, pageHighlights) {
       );
     }
   }
+  // Overlapping saved highlights must share one painted range; otherwise
+  // overlapping spans render the same slide text twice.
+  paintRanges.sort((a, b) => a.s - b.s || a.e - b.e);
+  const mergedPaintRanges = [];
+  for (const range of paintRanges) {
+    const previous = mergedPaintRanges[mergedPaintRanges.length - 1];
+    if (previous && range.s <= previous.e) {
+      previous.e = Math.max(previous.e, range.e);
+    } else {
+      mergedPaintRanges.push({ ...range });
+    }
+  }
   return [{ text }];
 }
 
@@ -68,7 +80,7 @@ function TextShape({ s, defaultColor, pageHighlights = [] }) {
     const parts = [];
     let prevEnd = start;
     let painted = false;
-    for (const r of paintRanges) {
+    for (const r of mergedPaintRanges) {
       const rs = Math.max(r.s, start);
       const re = Math.min(r.e, runEnd);
       if (re <= rs) continue;

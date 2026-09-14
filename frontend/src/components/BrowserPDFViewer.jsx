@@ -282,15 +282,16 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     return (
       <button
         onClick={() => bookmarkPage(pageNum)}
-        title={saved ? `Page ${pageNum} bookmarked — click to remove it` : `Bookmark page ${pageNum}`}
+        title={saved ? `Remove bookmark from page ${pageNum}` : `Bookmark page ${pageNum}`}
+        aria-label={saved ? `Remove bookmark from page ${pageNum}` : `Bookmark page ${pageNum}`}
         className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition shadow-lg ${
           saved
-            ? 'bg-primary text-white border-primary shadow-primary/40'
+            ? 'bg-primary/20 text-secondary border-primary/60 shadow-primary/20'
             : 'bg-midnight/80 text-ivory/80 border-white/15 hover:border-primary/60 hover:text-secondary'
         }`}
       >
         {saved ? <BookmarkCheck className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
-        {saved ? 'Saved' : 'Bookmark'}
+        {saved ? 'Remove' : 'Bookmark'}
       </button>
     );
   };

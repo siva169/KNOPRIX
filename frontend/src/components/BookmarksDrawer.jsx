@@ -145,7 +145,9 @@ export default function BookmarksDrawer({ onClose }) {
                     </span>
                     <button
                       onClick={(e) => remove(bm.id, e)}
-                      className="p-1 text-ivory/40 hover:text-rose-400 transition opacity-0 group-hover:opacity-100"
+                      aria-label="Remove bookmark"
+                      title="Remove bookmark"
+                      className="min-w-8 min-h-8 grid place-items-center rounded-lg text-ivory/55 hover:bg-rose-500/10 hover:text-rose-400 transition"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
