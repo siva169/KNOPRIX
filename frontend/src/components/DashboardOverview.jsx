@@ -27,9 +27,20 @@ export default function DashboardOverview({ loading = false, onUpload, onOpenMap
     selectProject,
     documents,
     openDocument,
+    getReadingProgress,
   } = useApp();
 
   const totalDocuments = projects.reduce((sum, project) => sum + (project.file_count || 0), 0);
+  const continueReading = documents
+    .map((document) => {
+      const saved = getReadingProgress(document.id);
+      const totalPages = Number(saved?.totalPages) || Number(document.page_count) || 1;
+      const page = Math.min(Math.max(Number(saved?.page) || 1, 1), totalPages);
+      return saved?.updatedAt && page > 1 ? { document, page, totalPages, updatedAt: saved.updatedAt } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+    .slice(0, 3);
 
   if (loading) return <LoadingLedger />;
 
@@ -82,6 +93,44 @@ export default function DashboardOverview({ loading = false, onUpload, onOpenMap
         ) : (
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1.7fr)_minmax(240px,.8fr)]">
             <div className="min-w-0">
+              {continueReading.length > 0 && (
+                <div className="mb-10 border-y border-primary/30 bg-primary/[0.06] px-4 py-5 sm:px-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-secondary">Pick up where you left off</p>
+                      <p className="mt-1 text-xs text-ivory/50">Saved on this device · {continueReading.length} document{continueReading.length === 1 ? '' : 's'}</p>
+                    </div>
+                    <span className="font-mono text-[10px] text-ivory/40">LOCAL READING MEMORY</span>
+                  </div>
+                  <div className="mt-4 divide-y divide-glass-borderDark">
+                    {continueReading.map(({ document, page, totalPages }) => {
+                      const progress = Math.round((page / totalPages) * 100);
+                      return (
+                        <button
+                          key={document.id}
+                          type="button"
+                          onClick={() => openDocument(document)}
+                          className="group flex w-full items-center gap-3 py-3 text-left transition hover:translate-x-1"
+                        >
+                          <FileText className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold text-ivory">{document.file_name}</span>
+                            <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.1em] text-ivory/40">Page {page} of {totalPages}</span>
+                          </span>
+                          <span className="w-16 shrink-0">
+                            <span className="block text-right font-mono text-[10px] text-secondary">{progress}%</span>
+                            <span className="mt-1 block h-1 overflow-hidden rounded-full bg-white/10">
+                              <span className="block h-full rounded-full bg-secondary" style={{ width: `${progress}%` }} />
+                            </span>
+                          </span>
+                          <ArrowUpRight className="h-4 w-4 shrink-0 text-ivory/30 group-hover:text-accent" aria-hidden="true" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="mb-3 flex items-baseline justify-between border-b border-glass-borderDark pb-3">
                 <div>
                   <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ivory/40">Current trail</p>

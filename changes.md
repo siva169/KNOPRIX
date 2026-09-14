@@ -1,5 +1,16 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-14 — Added continue-reading dashboard state
+
+- Added a real continue-reading ledger sourced only from browser-local page
+  progress; documents without saved progress stay out of the section.
+- Shows the most recently updated documents, bounded page progress, and a
+  direct resume action that reuses the reader's existing restoration flow.
+- Labels the state as local device memory so users understand its scope.
+- Verified in-browser with a real saved document state showing page 2 of 5 and
+  40% progress; responsive widths 390, 425, 768, and 1024 had no horizontal
+  overflow.
+
 ## 2026-09-14 — Added safe Undo feedback for highlight removal
 
 - Extended the existing toast status surface with an optional Undo action.
