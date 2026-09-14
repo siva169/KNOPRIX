@@ -49,7 +49,6 @@ export default function LoginPage({ onSwitch }) {
             <p className="text-[18px] font-semibold tracking-[0.35em] text-[#e8be6a]">KNOPRIX</p>
             <div className="mt-2 h-px w-16" style={{ background: 'rgba(232,190,106,0.6)' }} />
           </div>
-          <p className="font-mono text-[10px] tracking-[0.2em] text-ivory/40">BLACK MIRROR / 04</p>
         </header>
 
         {/* main: form + mirror */}

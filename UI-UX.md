@@ -51,12 +51,17 @@ No visual choice is treated as approved until it is selected here.
 ### A5. `CommandPalette` — keyboard-friendly action/search launcher
 - Used for: global navigation, document search, quick actions.
 - Decisions: shortcut, command groups, recent items, result density.
-- Reference URLs: _add here_
+- Reference URLs:
+  - https://developer.apple.com/design/human-interface-guidelines/menus
+  - https://developer.apple.com/design/human-interface-guidelines/search-fields
+  - https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
 
 ### A6. `ToastRegion` — temporary success/error message area
 - Used for: save, delete, copy, upload, provider connection, AI errors.
 - Decisions: position, duration, stacking, severity colors, undo action.
-- Reference URLs: _add here_
+- Reference URLs:
+  - https://m3.material.io/components/snackbar/overview
+  - https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html
 
 ### A7. `ModalDialog` — focused overlay requiring a decision or input
 - Used for: confirmations, provider key setup, DSA stats, settings.
@@ -140,7 +145,9 @@ No visual choice is treated as approved until it is selected here.
 - Used for: PDF/PPT viewing with surrounding tools.
 - Decisions: centered page, two-pane layout, distraction-free mode, zoom
   controls, responsive collapse.
-- Reference URLs: _add here_
+- Reference URLs:
+  - https://developer.apple.com/design/human-interface-guidelines/undo-and-redo
+  - https://m3.material.io/foundations/interaction/states/overview
 
 ### D2. `DocumentViewer` — rendered PDF or slide content
 - Used for: reading the selected document.
@@ -150,7 +157,9 @@ No visual choice is treated as approved until it is selected here.
 ### D3. `ReaderToolbar` — document actions and view controls
 - Used for: page navigation, zoom, fullscreen, download, search.
 - Decisions: icon-only versus labeled controls, grouping, overflow menu.
-- Reference URLs: _add here_
+- Reference URLs:
+  - https://m3.material.io/foundations/interaction/states/overview
+  - https://developer.apple.com/design/human-interface-guidelines/menus
 
 ### D4. `PageNavigator` — page number and previous/next controls
 - Used for: direct movement through a document.

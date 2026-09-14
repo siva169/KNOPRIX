@@ -41,3 +41,15 @@ accessibility review, changes-log entry, and a local commit.
 - Run backend and frontend checks.
 - Review security and provider data flow.
 - Ask separately before deployment or remote Git operations.
+
+## Phase 5 — Gold reader experience
+
+1. Apply and verify the restrained gold token system.
+2. Add local reading progress and resume position.
+3. Add the command palette with real document and reader actions.
+4. Add focus mode with safe restoration of reader state.
+5. Add undo-capable status feedback for reversible reader actions.
+6. Add continue-reading state to the dashboard.
+
+Each slice must follow `docs/reader-gold-redesign-spec.md`, be checked at
+390/425/768/1024px, and receive its own local checkpoint.

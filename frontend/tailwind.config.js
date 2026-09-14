@@ -5,26 +5,26 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Warm ink — a deep roasted charcoal with an orange undertone
+        // Warm ink — the restrained charcoal used by the gold reader system
         midnight: {
-          DEFAULT: '#170d06',
-          deep: '#1f1207',
-          panel: '#291a0d'
+          DEFAULT: '#0a0603',
+          deep: '#120b06',
+          panel: '#1b1108'
         },
-        // Warm cream — Saraswati ivory
+        // Warm ivory for document content and readable controls
         ivory: '#fff7ed',
-        // Saffron — the study-hall primary
+        // Gold hierarchy: primary actions, active states, and focus signals
         primary: {
-          DEFAULT: '#f97316',
-          hover: '#fb923c'
+          DEFAULT: '#c9903f',
+          hover: '#d9a957'
         },
-        secondary: '#fec38d',
-        accent: '#f59e0b',
+        secondary: '#e8be6a',
+        accent: '#f4d696',
         glass: {
-          dark: 'rgba(41, 26, 13, 0.66)',
-          borderDark: 'rgba(255, 237, 213, 0.17)',
+          dark: 'rgba(27, 17, 8, 0.72)',
+          borderDark: 'rgba(232, 190, 106, 0.18)',
           light: 'rgba(255, 255, 255, 0.82)',
-          borderLight: 'rgba(23, 13, 6, 0.12)'
+          borderLight: 'rgba(28, 17, 8, 0.14)'
         }
       },
       fontFamily: {
@@ -34,7 +34,7 @@ export default {
       },
       backgroundImage: {
         aurora:
-          'radial-gradient(ellipse 80% 60% at 20% -10%, rgba(249,115,22,0.24), transparent 60%), radial-gradient(ellipse 60% 50% at 90% 0%, rgba(245,158,11,0.18), transparent 55%), radial-gradient(ellipse 70% 60% at 50% 110%, rgba(255,237,213,0.06), transparent 60%)'
+          'radial-gradient(ellipse 80% 60% at 20% -10%, rgba(201,144,63,0.16), transparent 60%), radial-gradient(ellipse 60% 50% at 90% 0%, rgba(232,190,106,0.11), transparent 55%), radial-gradient(ellipse 70% 60% at 50% 110%, rgba(255,237,213,0.04), transparent 60%)'
       },
       animation: {
         'fade-up': 'fadeUp 0.5s ease-out both',
@@ -57,8 +57,8 @@ export default {
           '50%': { transform: 'translateY(-10px)' }
         },
         glow: {
-          '0%, 100%': { boxShadow: '0 0 20px rgba(249,115,22,0.35)' },
-          '50%': { boxShadow: '0 0 42px rgba(245,158,11,0.55)' }
+          '0%, 100%': { boxShadow: '0 0 20px rgba(201,144,63,0.22)' },
+          '50%': { boxShadow: '0 0 42px rgba(232,190,106,0.35)' }
         }
       }
     }

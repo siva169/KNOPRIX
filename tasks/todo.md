@@ -86,3 +86,36 @@
     Verify: build pass, browser 4/4 at 390+1280 (presence + no-crash; audio needs
     a real device, stated openly).
 - [ ] Later: Gemini live protocol (different API language; Groq/OpenRouter/ZAI already live). Boss: update later.
+
+- [x] Slice: establish authenticated restrained gold theme
+  - Acceptance: signed-in token system matches the approved gold-on-charcoal
+    direction without changing reader behavior; login `BLACK MIRROR / 04`
+    label is removed.
+  - Verify: frontend build and localhost browser smoke with no console errors.
+  - Done 2026-09-14; spec in `docs/reader-gold-redesign-spec.md`.
+
+- [ ] Slice: persistent reading progress and resume position
+  - Acceptance: active document progress survives reload locally and resumes
+    without changing backend schema.
+  - Verify: focused browser check at 390 and 1024px.
+  - Files: `frontend/src/components/BrowserPDFViewer.jsx`,
+    `frontend/src/context/AppContext.jsx`
+
+- [ ] Slice: reader command palette
+  - Acceptance: visible and Ctrl/Cmd+K entry points open a focus-safe palette
+    containing only real document and reader actions.
+  - Verify: keyboard browser check, Escape close, no console errors.
+  - Files: `frontend/src/components/`, `frontend/src/App.jsx`
+
+- [ ] Slice: reader focus mode and undo feedback
+  - Acceptance: focus mode restores chrome and reader state; reversible actions
+    expose accessible Undo feedback.
+  - Verify: browser checks at 390/768/1024px.
+  - Files: `frontend/src/components/`, `frontend/src/context/AppContext.jsx`
+
+- [ ] Slice: continue-reading dashboard entry
+  - Acceptance: dashboard shows the real last reading position and opens the
+    corresponding document without invented activity.
+  - Verify: browser reload and open-document flow.
+  - Files: `frontend/src/components/DashboardOverview.jsx`,
+    `frontend/src/context/AppContext.jsx`

@@ -1,5 +1,17 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-14 — Started authenticated gold reader redesign
+
+- Added the approved reader redesign contract at
+  `docs/reader-gold-redesign-spec.md`, including responsive acceptance criteria,
+  reversibility requirements, and researched interaction sources.
+- Replaced the authenticated app's orange/saffron tokens with the restrained
+  gold system from the login screen: charcoal surfaces, ivory content, and
+  pale-gold active/focus signals.
+- Removed the login-only `BLACK MIRROR / 04` label from the top-right corner.
+- Verified the frontend build and a localhost browser reload with no console
+  errors. Reader behavior is unchanged in this first visual-token slice.
+
 ## 2026-09-14 — Added login credential autocomplete metadata
 
 - Added `autocomplete="email"` and `autocomplete="current-password"` to the
