@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Share2, Pin, PinOff, FileText } from 'lucide-react';
+import { X, Share2, Pin, PinOff, FileText, ExternalLink, Quote } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import api from '../api';
 
 // Knowledge map: concept dots on a ring, strings = shared documents.
 // Tap a dot -> every linked passage, jump straight in. Pin box tracks YOUR word.
 export default function KnowledgeMap({ projectId, onClose }) {
-  const { documents, openDocument, notify } = useApp();
+  const { documents, navigateToLocation, notify } = useApp();
   const [graph, setGraph] = useState(null);
   const [error, setError] = useState('');
   const [picked, setPicked] = useState(null); // picked node id
@@ -20,6 +20,12 @@ export default function KnowledgeMap({ projectId, onClose }) {
       .catch(() => setError('Could not build the map.'));
   };
   useEffect(load, [projectId]);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   const toggleDoc = (id) => setOnlyDocs((s) => {
     const base = s === null ? documents.map((d) => d.id) : s;
@@ -142,22 +148,50 @@ export default function KnowledgeMap({ projectId, onClose }) {
             </svg>
           )}
 
-          {/* Picked dot: linked passages */}
+          {/* Picked dot: source-grounded evidence and navigation */}
           {pickedNode && (
-            <div className="rounded-xl border border-accent/40 bg-accent/10 p-3 flex flex-col gap-2">
-              <p className="text-xs font-bold text-ivory">
-                “{pickedNode.label}” · in {pickedNode.docCount} document(s)
+            <div className="rounded-xl border border-accent/40 bg-accent/10 p-3 flex flex-col gap-3">
+              <div>
+                <p className="text-xs font-bold text-ivory">
+                  “{pickedNode.label}” · in {pickedNode.docCount} document(s)
                 {pickedNode.pinned && <span className="ml-2 text-[10px] text-secondary">TRACKED</span>}
-              </p>
+                </p>
+                <p className="mt-1 text-[11px] text-ivory/55">
+                  Grounded in the pages below. Select a passage to open the source.
+                </p>
+              </div>
               {pickedNode.documents.map((d) => (
-                <button
-                  key={d.documentId}
-                  onClick={() => { const doc = documents.find((x) => x.id === d.documentId); if (doc) openDocument(doc); onClose(); }}
-                  className="flex items-center gap-2 text-left text-xs text-ivory/85 rounded-lg px-2 py-1.5 hover:bg-white/5"
-                >
-                  <FileText className="w-3.5 h-3.5 text-ivory/50 shrink-0" />
-                  <span className="truncate">{d.fileName} · p.{(d.pages || [1]).join(', p.')}</span>
-                </button>
+                <div key={d.documentId} className="rounded-xl border border-white/10 bg-black/10 p-2.5">
+                  <div className="flex items-center gap-2 text-xs text-ivory/85">
+                    <FileText className="w-3.5 h-3.5 text-secondary shrink-0" />
+                    <span className="truncate font-semibold">{d.fileName}</span>
+                    <span className="ml-auto text-[10px] text-ivory/45">{(d.pages || []).length} pages</span>
+                  </div>
+                  <div className="mt-2 space-y-1.5">
+                    {(d.evidence || []).map((item) => (
+                      <button
+                        key={`${d.documentId}-${item.page}`}
+                        onClick={() => { navigateToLocation(d.documentId, item.page, pickedNode.label); onClose(); }}
+                        className="w-full flex items-start gap-2 text-left rounded-lg px-2 py-2 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary transition"
+                      >
+                        <Quote className="w-3.5 h-3.5 text-secondary/80 shrink-0 mt-0.5" />
+                        <span className="min-w-0">
+                          <span className="block text-[10px] uppercase tracking-wider text-secondary/80">Page {item.page}</span>
+                          <span className="block mt-0.5 text-[11px] leading-relaxed text-ivory/70">{item.excerpt}</span>
+                        </span>
+                        <ExternalLink className="w-3.5 h-3.5 text-ivory/35 shrink-0 mt-0.5" />
+                      </button>
+                    ))}
+                    {(d.evidence || []).length === 0 && (
+                      <button
+                        onClick={() => { navigateToLocation(d.documentId, d.pages?.[0] || 1, pickedNode.label); onClose(); }}
+                        className="text-[11px] text-secondary hover:text-ivory px-2 py-1"
+                      >
+                        Open source pages: {(d.pages || [1]).join(', ')}
+                      </button>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           )}

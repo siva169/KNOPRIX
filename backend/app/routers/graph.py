@@ -9,6 +9,7 @@ Pipeline (every word scanned, glue dropped):
 Review-proof: no AI key, no internet — pure DSA over the existing index.
 """
 from collections import Counter
+import re
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -27,6 +28,8 @@ MAX_WORD_LEN = 40
 EXTRA_GLUE = {
     "across", "among", "around", "behind", "along", "toward", "towards",
     "upon", "within", "without",
+    "to", "of", "in", "is", "on", "at", "no", "as", "by", "or", "an",
+    "be", "do", "if", "up", "out",
 }
 
 
@@ -51,6 +54,28 @@ def _doc_concepts(page_map: dict, doc_id: str) -> Counter:
     for page in page_map.get(doc_id, []):
         counts.update(w for w in tokenize(page.get("text", "")) if w not in EXTRA_GLUE)
     return counts
+
+
+def _evidence_for_word(page_map: dict, doc_id: str, word: str, cap: int = 3) -> list[dict]:
+    """Return short, source-grounded excerpts with their exact page numbers."""
+    pattern = re.compile(rf"\b{re.escape(word)}\b", re.IGNORECASE)
+    evidence = []
+    for page in page_map.get(doc_id, []):
+        text = (page.get("raw_text") or page.get("text") or "").strip()
+        match = pattern.search(text)
+        if not match:
+            continue
+        start = max(0, match.start() - 110)
+        end = min(len(text), match.end() + 170)
+        excerpt = text[start:end].replace("\n", " ").strip()
+        if start > 0:
+            excerpt = f"…{excerpt}"
+        if end < len(text):
+            excerpt = f"{excerpt}…"
+        evidence.append({"page": page["page_number"], "excerpt": excerpt})
+        if len(evidence) >= cap:
+            break
+    return evidence
 
 
 @router.get("/projects/{project_id}/graph")
@@ -86,6 +111,8 @@ def get_graph(project_id: str, user=Depends(get_current_user), db=Depends(get_db
     nodes = []
     for w in concepts:
         locs = word_locations(db, project_id, w, page_map)
+        for location in locs:
+            location["evidence"] = _evidence_for_word(page_map, location["documentId"], w)
         nodes.append({
             "id": w,
             "label": w,

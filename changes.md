@@ -302,3 +302,10 @@
 - Added a persistent desktop collapse control to the workspace sidebar.
 - Collapsed mode preserves project switching and utility actions as an accessible icon rail with labels available through tooltips and ARIA names.
 - Mobile navigation remains an expanded drawer so document names and touch targets stay usable.
+
+# 2026-09-14 — Evidence-backed knowledge graph
+
+- Added source-grounded concept evidence to the graph API: each concept now includes short excerpts and exact page numbers from the stored document pages.
+- Upgraded the graph selection panel from a document list to an evidence workflow with page-level source links.
+- Selecting an excerpt opens the existing reader at that document/page and preserves the concept as the reader context.
+- Preserved original page-text casing for evidence excerpts while keeping the lowercased lookup text used by search and graph matching.

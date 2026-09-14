@@ -149,7 +149,11 @@ def _project_page_map(db, project_id: str) -> dict[str, list[dict]]:
     pages: dict[str, list[dict]] = {}
     for r in rows:
         pages.setdefault(r["document_id"], []).append(
-            {"page_number": r["page_number"], "text": (r["page_text"] or "").lower()}
+            {
+                "page_number": r["page_number"],
+                "text": (r["page_text"] or "").lower(),
+                "raw_text": r["page_text"] or "",
+            }
         )
     return pages
 
