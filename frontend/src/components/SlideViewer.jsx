@@ -343,8 +343,8 @@ function SlidePage({ slide, pageNum, designW, designH, zoom, saved, onBookmarkPa
             Slide {pageNum}
           </div>
           {pageHighlights.length > 0 && (
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-400/30">
-              <span className="text-[9px] font-bold text-amber-700">{pageHighlights.length} highlight{pageHighlights.length > 1 ? 's' : ''}</span>
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 px-2 py-0.5 rounded bg-secondary/20 border border-secondary/30">
+              <span className="text-[9px] font-bold text-secondary">{pageHighlights.length} highlight{pageHighlights.length > 1 ? 's' : ''}</span>
             </div>
           )}
           <div className="absolute top-2 left-3 z-10">
@@ -420,7 +420,7 @@ export default function SlideViewer({
   if (state.error) {
     return (
       <div className="flex-1 overflow-auto p-8" onMouseUp={onMouseUp}>
-        <div className="max-w-4xl mx-auto mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
+        <div className="max-w-4xl mx-auto mb-4 p-3 rounded-xl bg-accent/10 border border-accent/30 text-accent text-xs flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" /> Couldn't render these slides — showing extracted text instead.
         </div>
         <div className="max-w-4xl mx-auto p-10 rounded-2xl border border-glass-borderDark bg-midnight-panel shadow-2xl">

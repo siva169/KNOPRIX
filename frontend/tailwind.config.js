@@ -7,21 +7,21 @@ export default {
       colors: {
         // Warm ink — the restrained charcoal used by the gold reader system
         midnight: {
-          DEFAULT: '#0a0603',
-          deep: '#120b06',
-          panel: '#1b1108'
+          DEFAULT: '#090a0c',
+          deep: '#0f1114',
+          panel: '#15181c'
         },
         // Warm ivory for document content and readable controls
-        ivory: '#fff7ed',
+        ivory: '#f7f3ea',
         // Gold hierarchy: primary actions, active states, and focus signals
         primary: {
-          DEFAULT: '#c9903f',
-          hover: '#d9a957'
+          DEFAULT: '#c5a15a',
+          hover: '#d7b873'
         },
         secondary: '#e8be6a',
         accent: '#f4d696',
         glass: {
-          dark: 'rgba(27, 17, 8, 0.72)',
+          dark: 'rgba(21, 24, 28, 0.78)',
           borderDark: 'rgba(232, 190, 106, 0.18)',
           light: 'rgba(255, 255, 255, 0.82)',
           borderLight: 'rgba(28, 17, 8, 0.14)'
@@ -34,7 +34,7 @@ export default {
       },
       backgroundImage: {
         aurora:
-          'radial-gradient(ellipse 80% 60% at 20% -10%, rgba(201,144,63,0.16), transparent 60%), radial-gradient(ellipse 60% 50% at 90% 0%, rgba(232,190,106,0.11), transparent 55%), radial-gradient(ellipse 70% 60% at 50% 110%, rgba(255,237,213,0.04), transparent 60%)'
+          'radial-gradient(ellipse 80% 60% at 20% -10%, rgba(232,190,106,0.10), transparent 60%), radial-gradient(ellipse 60% 50% at 90% 0%, rgba(244,214,150,0.08), transparent 55%), radial-gradient(ellipse 70% 60% at 50% 110%, rgba(255,247,224,0.03), transparent 60%)'
       },
       animation: {
         'fade-up': 'fadeUp 0.5s ease-out both',
@@ -57,7 +57,7 @@ export default {
           '50%': { transform: 'translateY(-10px)' }
         },
         glow: {
-          '0%, 100%': { boxShadow: '0 0 20px rgba(201,144,63,0.22)' },
+          '0%, 100%': { boxShadow: '0 0 20px rgba(232,190,106,0.18)' },
           '50%': { boxShadow: '0 0 42px rgba(232,190,106,0.35)' }
         }
       }

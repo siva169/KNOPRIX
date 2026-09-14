@@ -172,7 +172,7 @@ export default function ChatPanel({ onClose }) {
         {answer?.live ? (
           <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-400/15 text-emerald-300 border border-emerald-300/30">LIVE</span>
         ) : (
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300 border border-amber-300/30">MOCK</span>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-secondary/15 text-secondary border border-secondary/30">MOCK</span>
         )}
         <button
           onClick={() => setMode(mode === 'side' ? 'full' : 'side')}

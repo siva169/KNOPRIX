@@ -1,5 +1,20 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-14 — Completed authenticated gold palette rollout
+
+- Replaced the remaining warm-brown authenticated surfaces with near-black
+  charcoal values matching the login screen.
+- Removed amber utility accents from the sidebar, navbar, reader fallback,
+  slides, chat status, and selection actions; those surfaces now use the
+  shared champagne-gold tokens.
+- Confirmed the original orange appearance was caused by a stale Vite process
+  retaining the previous Tailwind-generated stylesheet. Restarted the local
+  frontend on port 5173 and verified the live computed surface color is
+  `rgb(9, 10, 12)`.
+- Rechecked the live dashboard screenshot after restart. The intentional
+  orange document-highlight option and unused legacy component comment were
+  left unchanged.
+
 ## 2026-09-14 — Added continue-reading dashboard state
 
 - Added a real continue-reading ledger sourced only from browser-local page

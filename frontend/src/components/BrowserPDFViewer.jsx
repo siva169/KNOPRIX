@@ -759,7 +759,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       )}
 
       {error === 'pdf_load_failed' && (
-        <div className="max-w-4xl mx-auto mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
+        <div className="max-w-4xl mx-auto mb-4 p-3 rounded-xl bg-accent/10 border border-accent/30 text-accent text-xs flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" /> PDF stream unavailable — showing extracted text preview instead.
         </div>
       )}
@@ -841,7 +841,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
           >
             <div className="flex items-center gap-0.5 overflow-x-auto">
               <button onClick={() => saveBookmark(selection)} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-ivory hover:bg-primary/20 hover:text-secondary transition">
-                <Bookmark className="w-3.5 h-3.5 text-amber-400" /> <span className="hidden sm:inline">Bookmark</span>
+                <Bookmark className="w-3.5 h-3.5 text-secondary" /> <span className="hidden sm:inline">Bookmark</span>
               </button>
               <button onClick={() => copyText(selection)} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-ivory hover:bg-primary/20 hover:text-secondary transition">
                 <Copy className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Copy</span>
@@ -862,7 +862,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
                   colorMenuOpen ? 'text-secondary bg-primary/20' : 'text-ivory hover:bg-primary/20 hover:text-secondary'
                 }`}
               >
-                <Highlighter className="w-3.5 h-3.5 text-amber-400" /> <span className="hidden sm:inline">Highlight</span>
+                <Highlighter className="w-3.5 h-3.5 text-secondary" /> <span className="hidden sm:inline">Highlight</span>
               </button>
             </div>
             {colorMenuOpen && (

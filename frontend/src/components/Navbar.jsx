@@ -245,7 +245,7 @@ export default function Navbar({ onUpload, onStats, onBookmarks, onOpenPalette, 
           title="Toggle theme"
           className="p-1.5 sm:p-2 rounded-lg bg-white/5 border border-glass-borderDark text-ivory/70 hover:text-secondary hover:bg-white/10 transition"
         >
-          {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-accent" />}
+          {theme === 'dark' ? <Sun className="w-4 h-4 text-secondary" /> : <Moon className="w-4 h-4 text-accent" />}
         </button>
         <div className="flex items-center gap-1 sm:gap-2 pl-1 sm:pl-2 border-l border-glass-borderDark">
           <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-[10px] font-bold text-white">
