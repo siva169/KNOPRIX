@@ -69,6 +69,7 @@ export default function LoginPage({ onSwitch }) {
                 <input
                   id="login-email"
                   type="email"
+                  autoComplete="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -85,6 +86,7 @@ export default function LoginPage({ onSwitch }) {
                   <input
                     id="login-password"
                     type={showPw ? 'text' : 'password'}
+                    autoComplete="current-password"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

@@ -1,5 +1,12 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-14 — Added login credential autocomplete metadata
+
+- Added `autocomplete="email"` and `autocomplete="current-password"` to the
+  login fields so browsers and password managers can identify them correctly.
+- Verified on localhost: the login warning disappeared, demo login reached the
+  dashboard, and no browser errors were reported.
+
 ## 2026-09-12 — Simplified active authentication screens
 
 - Updated the live-project KNOPRIX wordmark to 18px.
