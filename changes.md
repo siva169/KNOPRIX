@@ -1,5 +1,17 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-14 — Added keyboard-first command palette
+
+- Added a real `Ctrl/Cmd+K` command palette with focus management, Escape
+  close, arrow-key navigation, Enter activation, and an accessible modal
+  dialog/listbox structure.
+- Wired the palette to actual project documents and existing upload, bookmark,
+  and index-visualizer actions; it does not fabricate results.
+- Added a visible desktop entry point in the authenticated navbar while
+  preserving the existing full-text search field.
+- Verified with `npm run build`; the existing `pdfjs-dist` eval warning remains
+  unrelated.
+
 ## 2026-09-14 — Added local reading progress and resume position
 
 - Persisted each document's current page and total-page snapshot in browser

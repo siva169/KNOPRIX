@@ -14,6 +14,7 @@ import DashboardOverview from './components/DashboardOverview.jsx';
 import KnowledgeMap from './components/KnowledgeMap.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import CommandPalette from './components/CommandPalette.jsx';
 
 const BrowserPDFViewer = lazy(() => import('./components/BrowserPDFViewer.jsx'));
 
@@ -33,6 +34,18 @@ export default function App() {
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setIsPaletteOpen(true);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   // On login: load the user's saved projects immediately
   useEffect(() => {
@@ -88,6 +101,7 @@ export default function App() {
         onUpload={() => setIsUploadOpen(true)}
         onStats={() => setIsStatsOpen(true)}
         onBookmarks={() => setIsBookmarksOpen(true)}
+        onOpenPalette={() => setIsPaletteOpen(true)}
         onToggleSidebar={() => setMobileSidebar((v) => !v)}
         mobileSidebar={mobileSidebar}
       />
@@ -121,6 +135,16 @@ export default function App() {
           </ErrorBoundary>
         </main>
       </div>
+
+      <AnimatePresence>
+        <CommandPalette
+          open={isPaletteOpen}
+          onClose={() => setIsPaletteOpen(false)}
+          onUpload={() => setIsUploadOpen(true)}
+          onStats={() => setIsStatsOpen(true)}
+          onBookmarks={() => setIsBookmarksOpen(true)}
+        />
+      </AnimatePresence>
 
       <AnimatePresence>
         {isBookmarksOpen && (

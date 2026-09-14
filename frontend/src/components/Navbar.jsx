@@ -2,13 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Sun, Moon, BarChart3, Bookmark, LogOut, UploadCloud, Folder, TrendingUp,
-  Menu, FileText, X, MapPin
+  Menu, FileText, X, MapPin, Command
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import api from '../api';
 
-export default function Navbar({ onUpload, onStats, onBookmarks, onToggleSidebar, mobileSidebar }) {
+export default function Navbar({ onUpload, onStats, onBookmarks, onOpenPalette, onToggleSidebar, mobileSidebar }) {
   const { activeProject, theme, toggleTheme, notify, openDocument } = useApp();
   const { user, logout } = useAuth();
   const [query, setQuery] = useState('');
@@ -196,6 +196,14 @@ export default function Navbar({ onUpload, onStats, onBookmarks, onToggleSidebar
       </div>
 
       {/* Mobile sidebar toggle */}
+      <button
+        onClick={onOpenPalette}
+        aria-label="Open command palette"
+        title="Command palette (Ctrl K)"
+        className="hidden sm:flex items-center gap-1.5 rounded-lg border border-glass-borderDark bg-white/5 px-2 py-1.5 text-[10px] text-ivory/60 hover:text-secondary transition"
+      >
+        <Command className="h-3.5 w-3.5" /><span>Ctrl K</span>
+      </button>
       <div className="flex items-center gap-1 lg:hidden shrink-0">
         <button
           onClick={onToggleSidebar}
