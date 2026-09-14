@@ -7,6 +7,13 @@
 - Verified on localhost: the login warning disappeared, demo login reached the
   dashboard, and no browser errors were reported.
 
+## 2026-09-14 — Fixed dashboard loading race on reload
+
+- Kept the dashboard skeleton visible while the selected project's documents
+  are loading, preventing a false `00 files` empty state during the API request.
+- Verified on localhost: reload shows `Loading dashboard` first, then the
+  selected project's real `13 files`; the frontend build passes.
+
 ## 2026-09-12 — Simplified active authentication screens
 
 - Updated the live-project KNOPRIX wordmark to 18px.

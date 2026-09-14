@@ -32,6 +32,7 @@ export default function App() {
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [projectsLoading, setProjectsLoading] = useState(true);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
 
   // On login: load the user's saved projects immediately
   useEffect(() => {
@@ -46,7 +47,10 @@ export default function App() {
   useEffect(() => {
     if (!user || !projects.length || activeProject) return;
     const best = [...projects].sort((a, b) => (b.file_count || 0) - (a.file_count || 0))[0];
-    selectProject(best.id).catch(() => notify('Could not load documents', 'error'));
+    setDocumentsLoading(true);
+    selectProject(best.id)
+      .catch(() => notify('Could not load documents', 'error'))
+      .finally(() => setDocumentsLoading(false));
   }, [user, projects, activeProject, selectProject, notify]);
 
   // Clear the workspace on logout so the next login starts fresh
@@ -112,7 +116,7 @@ export default function App() {
               </div>
             }
           >
-            {activeDocument ? <BrowserPDFViewer onOpenChat={() => setIsChatOpen(true)} /> : <DashboardOverview loading={projectsLoading} onUpload={() => setIsUploadOpen(true)} onOpenMap={() => setIsMapOpen(true)} />}
+            {activeDocument ? <BrowserPDFViewer onOpenChat={() => setIsChatOpen(true)} /> : <DashboardOverview loading={projectsLoading || documentsLoading} onUpload={() => setIsUploadOpen(true)} onOpenMap={() => setIsMapOpen(true)} />}
           </Suspense>
           </ErrorBoundary>
         </main>

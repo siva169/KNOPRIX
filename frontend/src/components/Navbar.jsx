@@ -212,6 +212,7 @@ export default function Navbar({ onUpload, onStats, onBookmarks, onToggleSidebar
           <motion.button
             whileHover={{ y: -1 }}
             onClick={onUpload}
+            aria-label="Upload file"
             className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-semibold shadow-lg shadow-primary/30 hover:opacity-95 transition"
           >
             <UploadCloud className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Upload</span>
