@@ -1,5 +1,14 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-15 — Hardened Supabase S3 request compatibility
+
+- Normalized a pooler hostname accidentally supplied as the storage region so
+  signing uses the embedded AWS region instead.
+- Added explicit upload length and disabled payload signing for Supabase's S3
+  gateway while retaining SigV4 and path-style requests.
+- Verification: backend compilation, region normalization checks, and
+  `git diff --check` passed.
+
 ## 2026-09-15 — Use direct S3 PutObject for Supabase uploads
 
 - Replaced boto3's high-level transfer manager with a direct `PutObject`

@@ -4,6 +4,7 @@ Local disk remains the default for development. Production deployments can
 use any S3-compatible object store, including Supabase Storage.
 """
 from pathlib import Path
+import re
 
 from ..config import cfg
 
@@ -23,14 +24,24 @@ def _client():
         endpoint_url=cfg.OBJECT_STORAGE_ENDPOINT,
         aws_access_key_id=cfg.OBJECT_STORAGE_ACCESS_KEY,
         aws_secret_access_key=cfg.OBJECT_STORAGE_SECRET_KEY,
-        region_name=cfg.OBJECT_STORAGE_REGION,
+        region_name=_region(),
         config=BotoConfig(
             request_checksum_calculation="when_required",
             response_checksum_validation="when_required",
-            s3={"addressing_style": "path"},
+            s3={
+                "addressing_style": "path",
+                "payload_signing_enabled": False,
+            },
             signature_version="s3v4",
         ),
     )
+
+
+def _region() -> str:
+    """Accept the actual region or recover it from a pasted pooler hostname."""
+    value = cfg.OBJECT_STORAGE_REGION.strip()
+    match = re.search(r"\b((?:us|eu|ap|ca|sa|me|af|il|mx)-[a-z0-9-]+)\b", value)
+    return match.group(1) if match else value
 
 
 def object_key(document_id: str, file_name: str) -> str:
@@ -44,6 +55,7 @@ def upload(path: Path, key: str, content_type: str | None = None) -> None:
             Bucket=cfg.OBJECT_STORAGE_BUCKET,
             Key=key,
             Body=source,
+            ContentLength=path.stat().st_size,
             **extra,
         )
 
