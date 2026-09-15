@@ -24,7 +24,11 @@ def _client():
         aws_access_key_id=cfg.OBJECT_STORAGE_ACCESS_KEY,
         aws_secret_access_key=cfg.OBJECT_STORAGE_SECRET_KEY,
         region_name=cfg.OBJECT_STORAGE_REGION,
-        config=BotoConfig(s3={"addressing_style": "path"}),
+        config=BotoConfig(
+            request_checksum_calculation="when_required",
+            response_checksum_validation="when_required",
+            s3={"addressing_style": "path"},
+        ),
     )
 
 

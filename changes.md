@@ -1,5 +1,15 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-15 — Disabled unsupported S3 upload checksums
+
+- Configured boto3 to calculate request and validate response checksums only
+  when the S3 operation requires them.
+- This avoids checksum headers that Supabase Storage rejects during `PutObject`
+  while preserving path-style addressing and checksum behavior for AWS APIs
+  that explicitly require it.
+- Verification: storage module compilation, boto3 `Config` construction, and
+  `git diff --check` passed.
+
 ## 2026-09-15 — Fixed Supabase S3 upload addressing
 
 - Configured boto3 to use path-style S3 addressing, which is required for
