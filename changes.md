@@ -1,5 +1,14 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-15 — Use direct S3 PutObject for Supabase uploads
+
+- Replaced boto3's high-level transfer manager with a direct `PutObject`
+  request for document uploads.
+- Kept path-style addressing, SigV4 signing, and optional checksum behavior
+  disabled for compatibility with Supabase Storage's S3 endpoint.
+- This removes the multipart/transfer wrapper from the failing upload path,
+  while preserving content type metadata and the existing storage interface.
+
 ## 2026-09-15 — Disabled unsupported S3 upload checksums
 
 - Configured boto3 to calculate request and validate response checksums only

@@ -28,6 +28,7 @@ def _client():
             request_checksum_calculation="when_required",
             response_checksum_validation="when_required",
             s3={"addressing_style": "path"},
+            signature_version="s3v4",
         ),
     )
 
@@ -38,12 +39,13 @@ def object_key(document_id: str, file_name: str) -> str:
 
 def upload(path: Path, key: str, content_type: str | None = None) -> None:
     extra = {"ContentType": content_type} if content_type else {}
-    _client().upload_file(
-        str(path),
-        cfg.OBJECT_STORAGE_BUCKET,
-        key,
-        ExtraArgs=extra,
-    )
+    with path.open("rb") as source:
+        _client().put_object(
+            Bucket=cfg.OBJECT_STORAGE_BUCKET,
+            Key=key,
+            Body=source,
+            **extra,
+        )
 
 
 def download(key: str, destination: Path) -> None:
