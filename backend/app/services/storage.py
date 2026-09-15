@@ -16,6 +16,7 @@ def _client():
     if not enabled():
         raise RuntimeError("Object storage is not configured")
     import boto3
+    from botocore.config import Config as BotoConfig
 
     return boto3.client(
         "s3",
@@ -23,6 +24,7 @@ def _client():
         aws_access_key_id=cfg.OBJECT_STORAGE_ACCESS_KEY,
         aws_secret_access_key=cfg.OBJECT_STORAGE_SECRET_KEY,
         region_name=cfg.OBJECT_STORAGE_REGION,
+        config=BotoConfig(s3={"addressing_style": "path"}),
     )
 
 

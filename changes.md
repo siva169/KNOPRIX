@@ -1,5 +1,12 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-15 — Fixed Supabase S3 upload addressing
+
+- Configured boto3 to use path-style S3 addressing, which is required for
+  reliable requests through the Supabase Storage S3 endpoint.
+- Kept the change provider-neutral so other S3-compatible endpoints continue
+  using the same storage boundary.
+
 ## 2026-09-15 — Prepared Supabase Storage and Render/Vercel configuration
 
 - Updated the S3-compatible storage documentation and environment template for
