@@ -20,6 +20,14 @@ router = APIRouter(prefix="/api", tags=["documents"])
 
 ALLOWED_TYPES = {".pdf", ".pptx", ".ppt", ".docx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".webp"}
 PREFIX_RE = re.compile(r"^\d+-\d+-")
+OBJECT_URI_PREFIXES = ("s3://", "r2://")
+
+
+def _object_key(file_path: str) -> str | None:
+    for prefix in OBJECT_URI_PREFIXES:
+        if file_path.startswith(prefix):
+            return file_path[len(prefix):]
+    return None
 
 
 def _resolve_path(doc: dict) -> Path:
@@ -40,11 +48,12 @@ def _resolve_path(doc: dict) -> Path:
 
 def _materialize_document(doc: dict) -> tuple[Path, bool]:
     """Return a readable path and whether the caller owns the temporary file."""
-    if storage.enabled() and str(doc["file_path"]).startswith("r2://"):
+    object_key_value = _object_key(str(doc["file_path"]))
+    if storage.enabled() and object_key_value:
         fd, temp_name = tempfile.mkstemp(prefix="knoprix-document-")
         os.close(fd)
         temp = Path(temp_name)
-        storage.download(str(doc["file_path"])[5:], temp)
+        storage.download(object_key_value, temp)
         return temp, True
     return _resolve_path(doc), False
 
@@ -95,7 +104,7 @@ async def upload_document(project_id: str, file: UploadFile = File(...),
         key = storage.object_key(doc_id, original)
         storage.upload(dest, key, file.content_type)
         dest.unlink(missing_ok=True)
-        file_path = f"r2://{key}"
+        file_path = f"s3://{key}"
     else:
         file_path = str(dest)
     db.execute(
@@ -160,8 +169,9 @@ def get_pages(document_id: str, user=Depends(get_current_user), db=Depends(get_d
 @router.get("/documents/{document_id}/stream")
 def stream_document(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
     doc = get_owned_document(db, user["id"], document_id)
-    if storage.enabled() and str(doc["file_path"]).startswith("r2://"):
-        body = storage.stream(str(doc["file_path"])[5:])
+    object_key_value = _object_key(str(doc["file_path"]))
+    if storage.enabled() and object_key_value:
+        body = storage.stream(object_key_value)
         media = "application/pdf" if doc["file_type"] == "pdf" else "application/octet-stream"
         return StreamingResponse(
             body.iter_chunks(),
@@ -179,8 +189,9 @@ def stream_document(document_id: str, user=Depends(get_current_user), db=Depends
 def delete_document(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
     doc = get_owned_document(db, user["id"], document_id)
     file_path = str(doc["file_path"])
-    if storage.enabled() and file_path.startswith("r2://"):
-        storage.delete(file_path[5:])
+    object_key_value = _object_key(file_path)
+    if storage.enabled() and object_key_value:
+        storage.delete(object_key_value)
     else:
         Path(file_path).unlink(missing_ok=True)
     db.execute("DELETE FROM documents WHERE id = ?", (document_id,))

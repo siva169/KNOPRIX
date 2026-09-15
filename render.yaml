@@ -3,8 +3,8 @@
 # How to use:
 #   1. Push this repo to GitHub.
 #   2. https://render.com → New → Blueprint → connect the repo.
-#   3. After first deploy, edit the CORS_ORIGINS env var in Render → Environment
-#      to your real Netlify URL (https://your-site.netlify.app).
+#   3. After first deploy, edit CORS_ORIGINS in Render → Environment to the
+#      exact Vercel origin (https://your-site.vercel.app).
 services:
   - type: web
     name: knoprix-midreview-api
@@ -19,10 +19,18 @@ services:
       - key: JWT_REFRESH_SECRET
         generateValue: true
       - key: CORS_ORIGINS
-        value: https://YOUR-NETLIFY-SITE.netlify.app # <-- replace after deploy
-      # Persistent Postgres (Neon). REQUIRED — Render's free tier uses an
-      # ephemeral disk that wipes the local SQLite file on every restart,
-      # deleting user accounts and documents. Paste your Neon connection
-      # string here; the backend then stores everything in Postgres.
+        value: https://YOUR-VERCEL-SITE.vercel.app
+      # Supabase PostgreSQL is required because Render's local filesystem is
+      # ephemeral and cannot persist SQLite data between restarts.
       - key: DATABASE_URL
-        value: postgresql://USER:PASSWORD@host/dbname?sslmode=require
+        sync: false
+      - key: OBJECT_STORAGE_BUCKET
+        value: knoprix-documents
+      - key: OBJECT_STORAGE_ENDPOINT
+        sync: false
+      - key: OBJECT_STORAGE_ACCESS_KEY
+        sync: false
+      - key: OBJECT_STORAGE_SECRET_KEY
+        sync: false
+      - key: OBJECT_STORAGE_REGION
+        value: ap-northeast-1

@@ -1,5 +1,16 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-15 — Prepared Supabase Storage and Render/Vercel configuration
+
+- Updated the S3-compatible storage documentation and environment template for
+  Supabase Storage.
+- Added provider-neutral `s3://` document URIs while retaining compatibility
+  with existing `r2://` records.
+- Updated the Render blueprint to keep database and storage credentials as
+  Render-managed secrets.
+- Replaced the Oracle/Neon/R2 deployment guide with the Render, Vercel, and
+  Supabase deployment workflow.
+
 ## 2026-09-15 — Prepared Oracle Always Free deployment foundation
 
 - Added optional S3-compatible document storage with Cloudflare R2 support.

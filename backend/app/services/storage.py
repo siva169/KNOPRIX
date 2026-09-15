@@ -1,7 +1,7 @@
 """Document storage backends.
 
 Local disk remains the default for development. Production deployments can
-use any S3-compatible object store, including Cloudflare R2.
+use any S3-compatible object store, including Supabase Storage.
 """
 from pathlib import Path
 
