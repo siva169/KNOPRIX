@@ -1,5 +1,33 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-16 — Replaced Supabase S3 gateway with native Storage REST API
+
+- Root cause evidence: the deployed backend failed in `put_object` with
+  botocore's empty `ClientError` (no code, no message) — Supabase's S3
+  gateway returned a response botocore cannot parse. In the newest deploy
+  the S3 environment variables were absent, so uploads silently fell back
+  to Render's ephemeral disk: the API returned 201 while files were wiped
+  on every restart.
+- Replaced the boto3 client with Supabase's native Storage REST API using
+  stdlib `urllib` only (no new dependencies): POST upload streamed from
+  disk with exact Content-Length, GET download, DELETE, GET streaming for
+  the reader, and percent-encoded object keys so filenames with spaces
+  survive the URL.
+- Config simplified to three variables: `OBJECT_STORAGE_ENDPOINT` (project
+  URL; also accepts `/storage/v1` or the old `/storage/v1/s3` form),
+  `OBJECT_STORAGE_API_KEY` (service_role secret), `OBJECT_STORAGE_BUCKET`.
+  Region and S3 access/secret key variables removed.
+- Failures are now explicit: every storage HTTP error raises `StorageError`
+  with the status code and the server's response body, replacing botocore's
+  empty error.
+- Removed `boto3` from requirements.
+- Verification: 9/9 checks in `backend/qa_storage_rest.py` (fake Storage
+  server over real HTTP: streamed upload byte-exactness, Bearer + apikey
+  headers, download round-trip, stream reassembly, delete, 404 mapping,
+  missing-key error, `/s3` endpoint normalization, space-containing keys);
+  6/6 `qa_smoke.py` against a fresh database booted from the updated
+  requirements; `compileall` clean.
+
 ## 2026-09-15 — Hardened Supabase S3 request compatibility
 
 - Normalized a pooler hostname accidentally supplied as the storage region so

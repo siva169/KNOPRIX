@@ -26,11 +26,8 @@ services:
         sync: false
       - key: OBJECT_STORAGE_BUCKET
         value: knoprix-documents
+      # Native Supabase Storage REST API: project URL + service_role secret.
       - key: OBJECT_STORAGE_ENDPOINT
         sync: false
-      - key: OBJECT_STORAGE_ACCESS_KEY
+      - key: OBJECT_STORAGE_API_KEY
         sync: false
-      - key: OBJECT_STORAGE_SECRET_KEY
-        sync: false
-      - key: OBJECT_STORAGE_REGION
-        value: ap-northeast-1
