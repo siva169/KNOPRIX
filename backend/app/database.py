@@ -138,6 +138,19 @@ class _EmptyResult:
         return []
 
 
+def _scrub_params(params):
+    """Postgres TEXT cannot contain NUL (0x00) — psycopg2 raises
+    'ValueError: A string literal cannot contain NUL (0x00) characters.'
+    pypdf extraction can emit NULs from malformed font/encoding tables in
+    real-world PDFs, so scrub them from every string parameter before it
+    reaches the driver. SQLite tolerates NULs, which is why this only
+    bites in production.
+    """
+    if isinstance(params, (tuple, list)):
+        return tuple(p.replace("\x00", "") if isinstance(p, str) else p for p in params)
+    return params
+
+
 class PgConnection:
     """psycopg2 connection exposing the sqlite3-style API the app uses."""
 
@@ -155,7 +168,7 @@ class PgConnection:
             except Exception:
                 pass
         cur = self._conn.cursor()
-        cur.execute(translated, params if params is not None else ())
+        cur.execute(translated, _scrub_params(params) if params is not None else ())
         self._cur = cur
         return cur
 
