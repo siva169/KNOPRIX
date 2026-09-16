@@ -1,5 +1,43 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-16 — Production root cause found and fixed end-to-end (boss tokens)
+
+With the boss's Render API key and Supabase service_role key, the whole
+failure chain was root-caused live:
+
+1. **The bucket never existed.** Direct Supabase API call returned
+   `NoSuchBucket` for `knoprix-documents` — the root cause behind every
+   cryptic S3-gateway failure. Created the private bucket via the Storage
+   API (bucket create with a 500MB file limit was rejected as
+   EntityTooLarge on the free tier; default limits worked).
+2. **Two Render services, two repos.** The real frontend
+   (`knoprixv2midreview.netlify.app`) calls `knoprix-midreview-api`, which
+   deploys from `siva169/knoprix-v2-midreview` — while all fixes had gone
+   to `siva169/KNOPRIX`. The storage env vars had also been saved on the
+   duplicate `-1qtc` service. The main service ran pre-storage code
+   writing uploads to Render's ephemeral disk.
+3. **CORS was broken for the real site.** `CORS_ORIGINS` held a bare
+   hostname without `https://` (browser preflights rejected, seen as
+   OPTIONS 400 in logs). Updated via Render API to the Netlify origin
+   (plus the Vercel candidate), and storage vars were moved to the main
+   service.
+4. **Ported the native-Storage fix to the v2 repo** (unrelated histories,
+   clean commit `a2f3cd7`): storage service, router wiring, config vars;
+   Render auto-deployed it live.
+5. **Upload verified end-to-end in production**: valid-PDF upload →
+   HTTP 201 with `file_path: s3://documents/...`, byte-identical read-back
+   directly from Supabase.
+6. **Reader stream 500 caught and fixed** (`ea89a84`): the rewritten
+   `storage.stream()` returns a generator, but the router still called the
+   boto3-era `body.iter_chunks()`. Fixed to pass the generator directly;
+   added `qa_e2e_storage.py` — a real end-to-end test booting the app
+   against a fake Storage server (register → upload → s3:// → byte-
+   identical stream → delete; 9/9). Deployed to the v2 repo.
+
+Verification artifacts: 9/9 `qa_storage_rest.py`, 9/9 `qa_e2e_storage.py`,
+6/6 `qa_smoke.py`, compileall clean; production upload returned 201 with
+`s3://` path and Supabase direct read matched byte-for-byte.
+
 ## 2026-09-16 — Replaced Supabase S3 gateway with native Storage REST API
 
 - Root cause evidence: the deployed backend failed in `put_object` with
