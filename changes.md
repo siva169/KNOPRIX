@@ -38,6 +38,22 @@ Verification artifacts: 9/9 `qa_storage_rest.py`, 9/9 `qa_e2e_storage.py`,
 6/6 `qa_smoke.py`, compileall clean; production upload returned 201 with
 `s3://` path and Supabase direct read matched byte-for-byte.
 
+## 2026-09-16 — Newer version (Vercel + knoprix-midreview-api-1qtc) verified
+
+Boss clarified the real target: the NEWER Knoprix is the Vercel frontend
+(`knoprix.vercel.app`) backed by the `-1qtc` Render service (KNOPRIX
+master, Supabase Postgres) — not the older Netlify track. Corrected the
+record: that service is not a ghost.
+- Stream fix `fe249d6` had not been pushed to KNOPRIX master; pushed
+  (`b81fcdf`) and deployed live on the service.
+- Fixed the failed manual deploys: Render rejects `clearCache:
+  "preserve"` — valid values are `clear` / `do_not_clear`.
+- Full E2E against the newer stack, all verified live: CORS preflight
+  for `https://knoprix.vercel.app` 200; register 201; project 201;
+  upload 201 with `s3://documents/...`; stream 200 byte-identical;
+  delete 204 with Supabase `NoSuchKey` confirmed. Both versions now
+  work against persistent Supabase Storage.
+
 ## 2026-09-16 — Replaced Supabase S3 gateway with native Storage REST API
 
 - Root cause evidence: the deployed backend failed in `put_object` with
