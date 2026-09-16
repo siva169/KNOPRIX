@@ -1,5 +1,30 @@
 # Knoprix Final Project — Changes
 
+## 2026-09-16 — NUL-byte 500 on upload fixed (scrub at the DB choke point)
+
+After the stream fix, the boss's real-world PDF still 500'd on upload.
+Render log: `ValueError: A string literal cannot contain NUL (0x00)
+characters` — raised by psycopg2 on the documents INSERT.
+
+- **Root cause confirmed by lab reproduction**: crafted a valid PDF whose
+  text operator contains NUL bytes; pypdf extracts `'A\x00B\x00C'` —
+  NULs survive extraction from real-world font/encoding tables. SQLite
+  (local dev) tolerates NULs in TEXT; Postgres (production) rejects them.
+- **Fix**: `_scrub_params()` in `database.py` strips `\x00` from every
+  string parameter inside `PgConnection.execute` — the single choke point
+  all inserts pass through (extracted text, page text, bookmarks,
+  highlights all covered at once).
+- **Verified**: 4/4 stub-cursor unit checks (scrubber, real execute path,
+  None passthrough, NUL-PDF pipeline) + py_compile both repos.
+- **Deployed**: KNOPRIX master `40f118e` (auto-deployed live on
+  `knoprix-midreview-api-1qtc` — the newer version's backend) and
+  knoprix-v2-midreview `0dc3e69`.
+- **Production E2E with the crash reproducer** (`/tmp/knx_nul_e2e.py`):
+  8/8 ALL GREEN — register 201, login 200, project 201, **NUL-PDF upload
+  201 + `s3://documents/...`** (previously the 500), stored page text
+  verified NUL-free via GET pages, stream byte-identical (532/532),
+  delete 204, gone after delete 404.
+
 ## 2026-09-16 — Production root cause found and fixed end-to-end (boss tokens)
 
 With the boss's Render API key and Supabase service_role key, the whole
