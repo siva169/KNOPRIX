@@ -174,7 +174,7 @@ def stream_document(document_id: str, user=Depends(get_current_user), db=Depends
         body = storage.stream(object_key_value)
         media = "application/pdf" if doc["file_type"] == "pdf" else "application/octet-stream"
         return StreamingResponse(
-            body.iter_chunks(),
+            body,
             media_type=media,
             headers={"Content-Disposition": f'inline; filename="{doc["file_name"]}"'},
         )
