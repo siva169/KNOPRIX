@@ -4,6 +4,7 @@ import { Bookmark, BookmarkCheck, FileText, AlertTriangle } from 'lucide-react';
 import api from '../api';
 import { useApp } from '../context/AppContext.jsx';
 import { colorById, matchSegments } from '../highlights';
+import { emphasizeBookmarkRange, findBookmarkRange } from '../bookmarkAnchors';
 
 const DEFAULT_TEXT = '#262626';
 
@@ -390,9 +391,17 @@ export default function SlideViewer({
   highlights = [],
   onMarkClick
 }) {
-  const { currentPage, zoomLevel } = useApp();
-  const [state, setState] = useState({ loading: true, error: false, slides: [], widthPt: 960, heightPt: 540 });
+  const { currentPage, zoomLevel, locationRequest } = useApp();
+  const [state, setState] = useState({
+    loading: true,
+    error: false,
+    slides: [],
+    widthPt: 960,
+    heightPt: 540,
+    documentId: null,
+  });
   const rootRef = useRef(null);
+  const appliedLocationRef = useRef(null);
 
   // Scroll the deck so the current slide is visible when the user navigates
   // with the arrows or types a page number (continuous mode renders every
@@ -402,7 +411,32 @@ export default function SlideViewer({
     if (!el) return;
     const slideEl = el.querySelector(`[data-page="${currentPage}"]`);
     if (slideEl) slideEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [currentPage]);
+  }, [currentPage, documentId, state.slides]);
+
+  useEffect(() => {
+    if (
+      state.loading ||
+      state.documentId !== documentId ||
+      !locationRequest ||
+      locationRequest.documentId !== documentId ||
+      appliedLocationRef.current === locationRequest.id
+    ) return undefined;
+
+    const slide = rootRef.current?.querySelector(
+      `[data-page="${locationRequest.pageNumber}"]`,
+    );
+    if (!slide) return undefined;
+
+    const range = findBookmarkRange(
+      slide,
+      locationRequest.anchorStart,
+      locationRequest.anchorEnd,
+      locationRequest.snippet,
+    );
+    const clearEmphasis = range ? emphasizeBookmarkRange(range) : () => {};
+    appliedLocationRef.current = locationRequest.id;
+    return clearEmphasis;
+  }, [documentId, locationRequest, state.loading, state.slides]);
 
   useEffect(() => {
     let cancelled = false;
@@ -411,7 +445,14 @@ export default function SlideViewer({
       .get(`/documents/${documentId}/slides`)
       .then(({ data }) => {
         if (cancelled) return;
-        setState({ loading: false, error: false, slides: data.slides, widthPt: data.widthPt, heightPt: data.heightPt });
+        setState({
+          loading: false,
+          error: false,
+          slides: data.slides,
+          widthPt: data.widthPt,
+          heightPt: data.heightPt,
+          documentId,
+        });
         onSlidesLoaded?.(data.slides.length);
       })
       .catch(() => {

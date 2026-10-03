@@ -68,11 +68,14 @@ CREATE TABLE IF NOT EXISTS bookmarks (
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     page_number INTEGER DEFAULT 1,
+    name TEXT NOT NULL DEFAULT '',
     highlighted_text TEXT DEFAULT '',
     notes TEXT DEFAULT '',
     color_tag TEXT DEFAULT 'yellow',
     bookmark_type TEXT DEFAULT 'text',
     tags_json TEXT DEFAULT '[]',
+    anchor_start INTEGER,
+    anchor_end INTEGER,
     created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -217,11 +220,25 @@ def init_db():
                 "WHERE table_name = 'highlights'"
             ).fetchall()
             cols = [r["column_name"] for r in rows]
+            bookmark_rows = conn.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'bookmarks'"
+            ).fetchall()
+            bookmark_cols = [r["column_name"] for r in bookmark_rows]
         else:
             cols = [c[1] for c in conn.execute("PRAGMA table_info(highlights)").fetchall()]
+            bookmark_cols = [
+                c[1] for c in conn.execute("PRAGMA table_info(bookmarks)").fetchall()
+            ]
         # Migration for DBs created before the match_all column existed.
         if "match_all" not in cols:
             conn.execute("ALTER TABLE highlights ADD COLUMN match_all INTEGER NOT NULL DEFAULT 0")
+        if "name" not in bookmark_cols:
+            conn.execute("ALTER TABLE bookmarks ADD COLUMN name TEXT NOT NULL DEFAULT ''")
+        if "anchor_start" not in bookmark_cols:
+            conn.execute("ALTER TABLE bookmarks ADD COLUMN anchor_start INTEGER")
+        if "anchor_end" not in bookmark_cols:
+            conn.execute("ALTER TABLE bookmarks ADD COLUMN anchor_end INTEGER")
         conn.commit()
     finally:
         conn.close()
