@@ -5,6 +5,25 @@ current academic prototype toward a trustworthy consumer product. It separates
 verified current capabilities from future work. A checkbox means the work has
 been implemented and verified; planning or partial wiring does not count.
 
+- [x] Slice: add named, searchable bookmarks with exact passage jumps
+  - Acceptance: names are optional for text/page bookmarks; project-scoped
+    case-insensitive live search covers name, selected text, and notes; legacy
+    rows migrate without loss; bookmark clicks open the correct document/page
+    and emphasize the stored passage when one exists.
+  - Verify: `backend/qa_bookmarks.py`, existing backend smoke QA, frontend
+    production build, and browser checks at 390/425/768/1024px.
+  - Files: backend bookmark route/schema and frontend bookmark drawer/reader.
+  - UI/UX: approved in `UI-UX.md` D8 on 2026-10-03.
+  - Done 2026-10-03: 4/4 focused bookmark tests, 9/9 isolated backend smoke
+    checks, 30/30 browser checks at 390/425/768/1024px, frontend build, Python
+    compilation, and diff check all pass. See `docs/changes.md`.
+
+- [x] Baseline: verify copied backend and frontend independently
+  - Acceptance: health endpoint responds and frontend build passes.
+  - Verify: backend smoke check and `npm run build`.
+  - Files: `backend/`, `frontend/`
+  - Done 2026-09-09 (baseline commit e86beed); re-verified 2026-09-11.
+
 ## Product direction
 
 - **Reading Desk**: proposed name for the document-first reading and annotation

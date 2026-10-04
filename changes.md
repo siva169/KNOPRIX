@@ -64,6 +64,141 @@
 - Kept the behavior local and reversible: the filters and search are client-side only and do not change any backend APIs or document state.
 - Verification: frontend production build completed successfully with `npm run build`.
 
+## 2026-09-16 — NUL-byte 500 on upload fixed (scrub at the DB choke point)
+
+After the stream fix, the boss's real-world PDF still 500'd on upload.
+Render log: `ValueError: A string literal cannot contain NUL (0x00)
+characters` — raised by psycopg2 on the documents INSERT.
+
+- **Root cause confirmed by lab reproduction**: crafted a valid PDF whose
+  text operator contains NUL bytes; pypdf extracts `'A\x00B\x00C'` —
+  NULs survive extraction from real-world font/encoding tables. SQLite
+  (local dev) tolerates NULs in TEXT; Postgres (production) rejects them.
+- **Fix**: `_scrub_params()` in `database.py` strips `\x00` from every
+  string parameter inside `PgConnection.execute` — the single choke point
+  all inserts pass through (extracted text, page text, bookmarks,
+  highlights all covered at once).
+- **Verified**: 4/4 stub-cursor unit checks (scrubber, real execute path,
+  None passthrough, NUL-PDF pipeline) + py_compile both repos.
+- **Deployed**: KNOPRIX master `40f118e` (auto-deployed live on
+  `knoprix-midreview-api-1qtc` — the newer version's backend) and
+  knoprix-v2-midreview `0dc3e69`.
+- **Production E2E with the crash reproducer** (`/tmp/knx_nul_e2e.py`):
+  8/8 ALL GREEN — register 201, login 200, project 201, **NUL-PDF upload
+  201 + `s3://documents/...`** (previously the 500), stored page text
+  verified NUL-free via GET pages, stream byte-identical (532/532),
+  delete 204, gone after delete 404.
+
+## 2026-09-16 — Production root cause found and fixed end-to-end (boss tokens)
+
+With the boss's Render API key and Supabase service_role key, the whole
+failure chain was root-caused live:
+
+1. **The bucket never existed.** Direct Supabase API call returned
+   `NoSuchBucket` for `knoprix-documents` — the root cause behind every
+   cryptic S3-gateway failure. Created the private bucket via the Storage
+   API (bucket create with a 500MB file limit was rejected as
+   EntityTooLarge on the free tier; default limits worked).
+2. **Two Render services, two repos.** The real frontend
+   (`knoprixv2midreview.netlify.app`) calls `knoprix-midreview-api`, which
+   deploys from `siva169/knoprix-v2-midreview` — while all fixes had gone
+   to `siva169/KNOPRIX`. The storage env vars had also been saved on the
+   duplicate `-1qtc` service. The main service ran pre-storage code
+   writing uploads to Render's ephemeral disk.
+3. **CORS was broken for the real site.** `CORS_ORIGINS` held a bare
+   hostname without `https://` (browser preflights rejected, seen as
+   OPTIONS 400 in logs). Updated via Render API to the Netlify origin
+   (plus the Vercel candidate), and storage vars were moved to the main
+   service.
+4. **Ported the native-Storage fix to the v2 repo** (unrelated histories,
+   clean commit `a2f3cd7`): storage service, router wiring, config vars;
+   Render auto-deployed it live.
+5. **Upload verified end-to-end in production**: valid-PDF upload →
+   HTTP 201 with `file_path: s3://documents/...`, byte-identical read-back
+   directly from Supabase.
+6. **Reader stream 500 caught and fixed** (`ea89a84`): the rewritten
+   `storage.stream()` returns a generator, but the router still called the
+   boto3-era `body.iter_chunks()`. Fixed to pass the generator directly;
+   added `qa_e2e_storage.py` — a real end-to-end test booting the app
+   against a fake Storage server (register → upload → s3:// → byte-
+   identical stream → delete; 9/9). Deployed to the v2 repo.
+
+Verification artifacts: 9/9 `qa_storage_rest.py`, 9/9 `qa_e2e_storage.py`,
+6/6 `qa_smoke.py`, compileall clean; production upload returned 201 with
+`s3://` path and Supabase direct read matched byte-for-byte.
+
+## 2026-09-16 — Newer version (Vercel + knoprix-midreview-api-1qtc) verified
+
+Boss clarified the real target: the NEWER Knoprix is the Vercel frontend
+(`knoprix.vercel.app`) backed by the `-1qtc` Render service (KNOPRIX
+master, Supabase Postgres) — not the older Netlify track. Corrected the
+record: that service is not a ghost.
+- Stream fix `fe249d6` had not been pushed to KNOPRIX master; pushed
+  (`b81fcdf`) and deployed live on the service.
+- Fixed the failed manual deploys: Render rejects `clearCache:
+  "preserve"` — valid values are `clear` / `do_not_clear`.
+- Full E2E against the newer stack, all verified live: CORS preflight
+  for `https://knoprix.vercel.app` 200; register 201; project 201;
+  upload 201 with `s3://documents/...`; stream 200 byte-identical;
+  delete 204 with Supabase `NoSuchKey` confirmed. Both versions now
+  work against persistent Supabase Storage.
+
+## 2026-09-16 — Replaced Supabase S3 gateway with native Storage REST API
+
+- Root cause evidence: the deployed backend failed in `put_object` with
+  botocore's empty `ClientError` (no code, no message) — Supabase's S3
+  gateway returned a response botocore cannot parse. In the newest deploy
+  the S3 environment variables were absent, so uploads silently fell back
+  to Render's ephemeral disk: the API returned 201 while files were wiped
+  on every restart.
+- Replaced the boto3 client with Supabase's native Storage REST API using
+  stdlib `urllib` only (no new dependencies): POST upload streamed from
+  disk with exact Content-Length, GET download, DELETE, GET streaming for
+  the reader, and percent-encoded object keys so filenames with spaces
+  survive the URL.
+- Config simplified to three variables: `OBJECT_STORAGE_ENDPOINT` (project
+  URL; also accepts `/storage/v1` or the old `/storage/v1/s3` form),
+  `OBJECT_STORAGE_API_KEY` (service_role secret), `OBJECT_STORAGE_BUCKET`.
+  Region and S3 access/secret key variables removed.
+- Failures are now explicit: every storage HTTP error raises `StorageError`
+  with the status code and the server's response body, replacing botocore's
+  empty error.
+- Removed `boto3` from requirements.
+- Verification: 9/9 checks in `backend/qa_storage_rest.py` (fake Storage
+  server over real HTTP: streamed upload byte-exactness, Bearer + apikey
+  headers, download round-trip, stream reassembly, delete, 404 mapping,
+  missing-key error, `/s3` endpoint normalization, space-containing keys);
+  6/6 `qa_smoke.py` against a fresh database booted from the updated
+  requirements; `compileall` clean.
+
+## 2026-09-15 — Hardened Supabase S3 request compatibility
+
+- Normalized a pooler hostname accidentally supplied as the storage region so
+  signing uses the embedded AWS region instead.
+- Added explicit upload length and disabled payload signing for Supabase's S3
+  gateway while retaining SigV4 and path-style requests.
+- Verification: backend compilation, region normalization checks, and
+  `git diff --check` passed.
+
+## 2026-09-15 — Use direct S3 PutObject for Supabase uploads
+
+- Replaced boto3's high-level transfer manager with a direct `PutObject`
+  request for document uploads.
+- Kept path-style addressing, SigV4 signing, and optional checksum behavior
+  disabled for compatibility with Supabase Storage's S3 endpoint.
+- This removes the multipart/transfer wrapper from the failing upload path,
+  while preserving content type metadata and the existing storage interface.
+
+## 2026-09-15 — Disabled unsupported S3 upload checksums
+
+- Configured boto3 to calculate request and validate response checksums only
+  when the S3 operation requires them.
+- This avoids checksum headers that Supabase Storage rejects during `PutObject`
+  while preserving path-style addressing and checksum behavior for AWS APIs
+  that explicitly require it.
+- Verification: storage module compilation, boto3 `Config` construction, and
+  `git diff --check` passed.
+
 ## 2026-09-15 — Fixed Supabase S3 upload addressing
 
 - Configured boto3 to use path-style S3 addressing, which is required for

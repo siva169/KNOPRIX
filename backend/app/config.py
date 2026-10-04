@@ -49,15 +49,12 @@ class Config:
 
     OBJECT_STORAGE_BUCKET = os.getenv("OBJECT_STORAGE_BUCKET", "")
     OBJECT_STORAGE_ENDPOINT = os.getenv("OBJECT_STORAGE_ENDPOINT", "")
-    OBJECT_STORAGE_ACCESS_KEY = os.getenv("OBJECT_STORAGE_ACCESS_KEY", "")
-    OBJECT_STORAGE_SECRET_KEY = os.getenv("OBJECT_STORAGE_SECRET_KEY", "")
-    OBJECT_STORAGE_REGION = os.getenv("OBJECT_STORAGE_REGION", "auto")
+    OBJECT_STORAGE_API_KEY = os.getenv("OBJECT_STORAGE_API_KEY", "")
     OBJECT_STORAGE_ENABLED = all(
         (
             OBJECT_STORAGE_BUCKET,
             OBJECT_STORAGE_ENDPOINT,
-            OBJECT_STORAGE_ACCESS_KEY,
-            OBJECT_STORAGE_SECRET_KEY,
+            OBJECT_STORAGE_API_KEY,
         )
     )
 
@@ -72,8 +69,7 @@ cfg = Config()
 _storage_values = (
     cfg.OBJECT_STORAGE_BUCKET,
     cfg.OBJECT_STORAGE_ENDPOINT,
-    cfg.OBJECT_STORAGE_ACCESS_KEY,
-    cfg.OBJECT_STORAGE_SECRET_KEY,
+    cfg.OBJECT_STORAGE_API_KEY,
 )
 if any(_storage_values) and not cfg.OBJECT_STORAGE_ENABLED:
     raise RuntimeError(

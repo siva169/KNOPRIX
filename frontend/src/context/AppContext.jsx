@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import api from '../api';
 
 const AppContext = createContext(null);
@@ -15,6 +15,8 @@ export function AppProvider({ children }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [highlightSnippet, setHighlightSnippet] = useState(null);
+  const [locationRequest, setLocationRequest] = useState(null);
+  const locationSequence = useRef(0);
 
   // Theme
   useEffect(() => {
@@ -46,12 +48,14 @@ export function AppProvider({ children }) {
     setDocuments([]);
     setActiveDocument(null);
     setBookmarks([]);
+    setLocationRequest(null);
   }, []);
 
   const selectProject = useCallback(async (projectId) => {
     const proj = projects.find((p) => p.id === projectId);
     setActiveProject(proj || { id: projectId });
     setActiveDocument(null);
+    setLocationRequest(null);
     const { data } = await api.get(`/projects/${projectId}/documents`);
     setDocuments(data.documents);
     const bk = await api.get(`/projects/${projectId}/bookmarks`);
@@ -69,6 +73,7 @@ export function AppProvider({ children }) {
   }, []);
 
   const openDocument = useCallback((doc) => {
+    setLocationRequest(null);
     setActiveDocument(doc);
     setCurrentPage(1);
   }, []);
@@ -93,12 +98,24 @@ export function AppProvider({ children }) {
     );
   }, []);
 
-  const navigateToLocation = useCallback((documentId, pageNumber, snippet) => {
+  const navigateToLocation = useCallback((documentId, pageNumber, snippet, anchor = null) => {
     const doc = documents.find((d) => d.id === documentId);
     if (doc) setActiveDocument(doc);
-    if (pageNumber) setCurrentPage(pageNumber);
+    const requestedPage = Math.max(1, Number(pageNumber) || 1);
+    const targetPage = doc?.page_count
+      ? Math.min(requestedPage, doc.page_count)
+      : requestedPage;
+    setCurrentPage(targetPage);
+    setLocationRequest({
+      id: ++locationSequence.current,
+      documentId,
+      pageNumber: targetPage,
+      anchorStart: anchor?.start ?? null,
+      anchorEnd: anchor?.end ?? null,
+      snippet: snippet || '',
+    });
     if (snippet) {
-      setHighlightSnippet(snippet);
+      setHighlightSnippet(snippet.slice(0, 40));
       setTimeout(() => setHighlightSnippet(null), 4000);
     }
   }, [documents]);
@@ -115,7 +132,7 @@ export function AppProvider({ children }) {
         toast, notify,
         currentPage, setCurrentPage,
         zoomLevel, setZoomLevel,
-        highlightSnippet, setHighlightSnippet,
+        highlightSnippet, setHighlightSnippet, locationRequest,
       }}
     >
       {children}

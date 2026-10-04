@@ -20,18 +20,17 @@ Create or verify:
 
 - A Supabase PostgreSQL project.
 - A private Storage bucket named `knoprix-documents`.
-- Supabase Storage S3 credentials generated under **Storage → Settings → S3
-  Connection**.
+- The `service_role` API secret from **Project Settings → API**.
 
-Use the project-region value shown by Supabase. For the current Tokyo project,
-that is `ap-northeast-1`. The S3 endpoint uses this shape:
+The backend uses Supabase's **native Storage REST API** (`/storage/v1/object/...`)
+with the project URL:
 
 ```text
-https://<project-ref>.storage.supabase.co/storage/v1/s3
+https://<project-ref>.supabase.co
 ```
 
-S3 credentials bypass Storage RLS and must remain server-only. Do not place
-them in Vercel or frontend code.
+The `service_role` secret bypasses Storage RLS and must remain server-only.
+Do not place it in Vercel or frontend code.
 
 ## 2. Create the Render service
 
@@ -54,10 +53,8 @@ In **Render → Environment**, add:
 |---|---|
 | `DATABASE_URL` | Supabase PostgreSQL URL with `sslmode=require` |
 | `OBJECT_STORAGE_BUCKET` | `knoprix-documents` |
-| `OBJECT_STORAGE_ENDPOINT` | Supabase S3 endpoint |
-| `OBJECT_STORAGE_ACCESS_KEY` | Supabase S3 Access Key ID |
-| `OBJECT_STORAGE_SECRET_KEY` | Supabase S3 Secret Access Key |
-| `OBJECT_STORAGE_REGION` | `ap-northeast-1` |
+| `OBJECT_STORAGE_ENDPOINT` | Supabase project URL (`https://<ref>.supabase.co`) |
+| `OBJECT_STORAGE_API_KEY` | Supabase `service_role` secret |
 | `CORS_ORIGINS` | Final Vercel origin, without a trailing slash |
 
 Render generates `JWT_SECRET` and `JWT_REFRESH_SECRET` from the blueprint.

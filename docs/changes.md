@@ -1,5 +1,39 @@
 # 📝 Knoprix — Mid Review Build · Change Log
 
+## Oct 03, 2026 — Named bookmark search and exact passage navigation
+
+### What changed
+
+- Added optional names for text and page bookmarks, project-scoped
+  case-insensitive search across names, passages, and notes, and an additive
+  migration for bookmark names and passage offsets.
+- Added passage-anchor capture and navigation, with quote fallback for older
+  bookmarks; scoped text-reader offsets to document content so interface
+  changes cannot shift saved passage positions.
+- Added the approved shared naming dialog, searchable drawer states, and
+  responsive/interaction regression coverage with separate accessible open
+  and delete buttons. The existing hash-table and doubly linked-list collection
+  remains unchanged.
+
+### Verification
+
+- `backend/.venv/bin/python qa_bookmarks.py` — 4/4 focused bookmark tests.
+- `backend/.venv/bin/python qa_smoke.py` — 9/9 core API smoke checks against an
+  isolated local SQLite database; upload seeding was disabled.
+- `node frontend/qa-bookmarks.mjs` — 30/30 browser checks, including exact
+  repeated-passage navigation and 390/425/768/1024px responsive checks.
+- `npm run build`, Python compilation, and `git diff --check` passed. The build
+  reports the existing PDF.js `eval` warning.
+
+### Local setup and safety
+
+- Checked the declared backend requirements in the project-local
+  `backend/.venv`; no global environment or package manifest was changed.
+- No Render, Supabase, Vercel, production database, or deployment was accessed.
+- The pre-existing untracked `backend/uploads/` directory was left untouched.
+
+---
+
 ## Sep 09, 2026 — Replaced bookmark Stack with Hash Table + Doubly Linked List
 
 ### What changed

@@ -68,11 +68,14 @@ CREATE TABLE IF NOT EXISTS bookmarks (
     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     page_number INTEGER DEFAULT 1,
+    name TEXT NOT NULL DEFAULT '',
     highlighted_text TEXT DEFAULT '',
     notes TEXT DEFAULT '',
     color_tag TEXT DEFAULT 'yellow',
     bookmark_type TEXT DEFAULT 'text',
     tags_json TEXT DEFAULT '[]',
+    anchor_start INTEGER,
+    anchor_end INTEGER,
     created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -138,6 +141,19 @@ class _EmptyResult:
         return []
 
 
+def _scrub_params(params):
+    """Postgres TEXT cannot contain NUL (0x00) — psycopg2 raises
+    'ValueError: A string literal cannot contain NUL (0x00) characters.'
+    pypdf extraction can emit NULs from malformed font/encoding tables in
+    real-world PDFs, so scrub them from every string parameter before it
+    reaches the driver. SQLite tolerates NULs, which is why this only
+    bites in production.
+    """
+    if isinstance(params, (tuple, list)):
+        return tuple(p.replace("\x00", "") if isinstance(p, str) else p for p in params)
+    return params
+
+
 class PgConnection:
     """psycopg2 connection exposing the sqlite3-style API the app uses."""
 
@@ -155,7 +171,7 @@ class PgConnection:
             except Exception:
                 pass
         cur = self._conn.cursor()
-        cur.execute(translated, params if params is not None else ())
+        cur.execute(translated, _scrub_params(params) if params is not None else ())
         self._cur = cur
         return cur
 
@@ -204,11 +220,25 @@ def init_db():
                 "WHERE table_name = 'highlights'"
             ).fetchall()
             cols = [r["column_name"] for r in rows]
+            bookmark_rows = conn.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'bookmarks'"
+            ).fetchall()
+            bookmark_cols = [r["column_name"] for r in bookmark_rows]
         else:
             cols = [c[1] for c in conn.execute("PRAGMA table_info(highlights)").fetchall()]
+            bookmark_cols = [
+                c[1] for c in conn.execute("PRAGMA table_info(bookmarks)").fetchall()
+            ]
         # Migration for DBs created before the match_all column existed.
         if "match_all" not in cols:
             conn.execute("ALTER TABLE highlights ADD COLUMN match_all INTEGER NOT NULL DEFAULT 0")
+        if "name" not in bookmark_cols:
+            conn.execute("ALTER TABLE bookmarks ADD COLUMN name TEXT NOT NULL DEFAULT ''")
+        if "anchor_start" not in bookmark_cols:
+            conn.execute("ALTER TABLE bookmarks ADD COLUMN anchor_start INTEGER")
+        if "anchor_end" not in bookmark_cols:
+            conn.execute("ALTER TABLE bookmarks ADD COLUMN anchor_end INTEGER")
         conn.commit()
     finally:
         conn.close()

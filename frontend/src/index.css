@@ -102,6 +102,14 @@ html.light .bg-primary\/10 { background-color: rgba(201, 144, 63, 0.1); }
 .pdf-text-layer ::selection {
   background: rgba(232, 190, 106, 0.45);
 }
+.bookmark-jump-active ::selection {
+  background: rgba(232, 190, 106, 0.72);
+  color: #1b1408;
+}
+.pdf-text-layer.bookmark-jump-active ::selection {
+  background: rgba(232, 190, 106, 0.72);
+  color: transparent;
+}
 
 /* Highlight marks in PDF text layer — translucent colored wash over canvas text */
 .pdf-text-layer mark.kn-hl {

@@ -3,7 +3,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from ..database import get_db
@@ -17,30 +17,53 @@ class BookmarkBody(BaseModel):
     projectId: str
     documentId: str
     pageNumber: int = Field(ge=1)
+    name: str = Field(default="", max_length=120)
     highlightedText: str = Field(default="", max_length=2000)
     notes: str = Field(default="", max_length=1000)
     colorTag: str = Field(default="yellow", max_length=30)
     bookmarkType: str = Field(default="text", pattern="^(text|page)$")
     tags: list[str] = Field(default_factory=list)
+    selectionStart: int | None = Field(default=None, ge=0)
+    selectionEnd: int | None = Field(default=None, ge=0)
 
 
-def _load_bookmarks(db, project_id: str, user_id: str) -> BookmarkCollection:
+def _load_bookmarks(
+    db, project_id: str, user_id: str, query: str = ""
+) -> BookmarkCollection:
     """Load persisted rows oldest-first, then insert each at the collection head."""
-    rows = db.execute(
-        """
+    sql = """
         SELECT * FROM bookmarks
         WHERE project_id = ? AND user_id = ?
-        ORDER BY created_at ASC, id ASC
-        """,
-        (project_id, user_id),
+    """
+    params = [project_id, user_id]
+    if query:
+        escaped_query = query.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+        pattern = f"%{escaped_query}%"
+        sql += """
+            AND (
+                LOWER(name) LIKE LOWER(?) ESCAPE '!'
+                OR LOWER(highlighted_text) LIKE LOWER(?) ESCAPE '!'
+                OR LOWER(notes) LIKE LOWER(?) ESCAPE '!'
+            )
+        """
+        params.extend((pattern, pattern, pattern))
+    sql += " ORDER BY created_at ASC, id ASC"
+    rows = db.execute(
+        sql,
+        tuple(params),
     ).fetchall()
     return BookmarkCollection([dict(r) for r in rows])
 
 
 @router.get("/projects/{project_id}/bookmarks")
-def list_bookmarks(project_id: str, user=Depends(get_current_user), db=Depends(get_db)):
+def list_bookmarks(
+    project_id: str,
+    q: str = Query(default="", max_length=200),
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+):
     get_owned_project(db, user["id"], project_id)
-    collection = _load_bookmarks(db, project_id, user["id"])
+    collection = _load_bookmarks(db, project_id, user["id"], q.strip())
     bookmarks = []
     for b in collection.items_newest_first():
         b["tags"] = json.loads(b.pop("tags_json") or "[]")
@@ -65,13 +88,14 @@ def create_bookmark(body: BookmarkBody, user=Depends(get_current_user), db=Depen
         """
         INSERT INTO bookmarks (id, user_id, project_id, document_id, page_number,
                                highlighted_text, notes, color_tag, bookmark_type,
-                               tags_json, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               tags_json, created_at, name, anchor_start, anchor_end)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (bookmark_id, user["id"], body.projectId, body.documentId,
          body.pageNumber, body.highlightedText.strip(), body.notes.strip(),
          body.colorTag, body.bookmarkType, json.dumps(body.tags),
-         datetime.now(timezone.utc).isoformat(timespec="microseconds")),
+         datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+         body.name.strip(), body.selectionStart, body.selectionEnd),
     )
     return {"id": bookmark_id}
 

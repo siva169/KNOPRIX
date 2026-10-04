@@ -5,9 +5,15 @@ import { FileText, Bookmark, Copy, BookmarkCheck, Sparkles, Highlighter, Eraser,
 import { useApp } from '../context/AppContext.jsx';
 import PDFToolbar from './PDFToolbar.jsx';
 import SlideViewer from './SlideViewer.jsx';
+import BookmarkNameDialog from './BookmarkNameDialog.jsx';
 import api, { ACCESS_KEY } from '../api';
 import { API_BASE } from '../config';
 import { HIGHLIGHT_COLORS, colorById } from '../highlights';
+import {
+  emphasizeBookmarkRange,
+  findBookmarkRange,
+  getSelectionOffsets,
+} from '../bookmarkAnchors';
 
 // Worker served locally (frontend/public/) — no CDN dependency, works offline
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
@@ -67,11 +73,12 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   const {
     activeDocument, currentPage, setCurrentPage, zoomLevel,
     highlightSnippet, notify, activeProject, fetchBookmarks,
-    getReadingProgress, saveReadingProgress,
+    getReadingProgress, saveReadingProgress, locationRequest,
   } = useApp();
 
   const [numPages, setNumPages] = useState(0);
   const [pdfDoc, setPdfDoc] = useState(null);
+  const [pdfDocumentId, setPdfDocumentId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState('continuous');
@@ -79,6 +86,8 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   const [annotationTool, setAnnotationTool] = useState('yellow');
   const [thumbnailsOpen, setThumbnailsOpen] = useState(false);
   const [selection, setSelection] = useState(null); // {text, x, y, page}
+  const [bookmarkDraft, setBookmarkDraft] = useState(null);
+  const [bookmarkSaving, setBookmarkSaving] = useState(false);
   const [savedPages, setSavedPages] = useState(new Set());
   const [highlights, setHighlights] = useState([]);
   const [colorMenuOpen, setColorMenuOpen] = useState(false);
@@ -89,6 +98,10 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   const [markMenu, setMarkMenu] = useState(null); // {id, x, y}
   const highlightsRef = useRef([]);
   const restoredDocumentRef = useRef(null);
+  const locationRequestRef = useRef(locationRequest);
+  const appliedLocationRef = useRef(null);
+  const bookmarkDraftSequence = useRef(0);
+  locationRequestRef.current = locationRequest;
 
   useEffect(() => {
     localStorage.setItem(HIGHLIGHT_ALL_KEY, String(matchAllMode));
@@ -103,18 +116,25 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   const pageCanvasRefs = useRef({});
   const pageTextLayerRefs = useRef({});
   const containerRef = useRef(null);
+  const viewerRootRef = useRef(null);
 
   useEffect(() => {
     if (!activeDocument) {
       restoredDocumentRef.current = null;
       return;
     }
-    const saved = getReadingProgress(activeDocument.id);
+    const requested = locationRequest?.documentId === activeDocument.id
+      ? locationRequest
+      : null;
+    const saved = requested ? null : getReadingProgress(activeDocument.id);
     const totalPages = activeDocument.page_count || 1;
-    const page = Math.min(Math.max(Number(saved?.page) || 1, 1), totalPages);
+    const page = Math.min(
+      Math.max(Number(requested?.pageNumber || saved?.page) || 1, 1),
+      totalPages,
+    );
     restoredDocumentRef.current = activeDocument.id;
     setCurrentPage(page);
-  }, [activeDocument, getReadingProgress, setCurrentPage]);
+  }, [activeDocument, getReadingProgress, setCurrentPage, locationRequest]);
 
   useEffect(() => {
     const totalPages = numPages || activeDocument?.page_count || 0;
@@ -180,6 +200,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   useEffect(() => {
     if (!activeDocument) {
       setPdfDoc(null);
+      setPdfDocumentId(null);
       setNumPages(0);
       setError(null);
       return;
@@ -187,6 +208,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     const fileType = (activeDocument.file_type || '').toLowerCase();
     if (fileType !== 'pdf') {
       setPdfDoc(null);
+      setPdfDocumentId(null);
       setError(null);
       // Reset the page count so the toolbar never shows the previous
       // document's "of N" (slides re-set it via onSlidesLoaded after parsing).
@@ -197,6 +219,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     setLoading(true);
     setError(null);
     setPdfDoc(null);
+    setPdfDocumentId(null);
 
     const token = localStorage.getItem(ACCESS_KEY);
     pdfjsLib
@@ -207,8 +230,12 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       .promise.then((doc) => {
         if (cancelled) return;
         setPdfDoc(doc);
+        setPdfDocumentId(activeDocument.id);
         setNumPages(doc.numPages);
-        setCurrentPage(1);
+        const requested = locationRequestRef.current?.documentId === activeDocument.id
+          ? locationRequestRef.current.pageNumber
+          : 1;
+        setCurrentPage(Math.min(Math.max(Number(requested) || 1, 1), doc.numPages));
         setLoading(false);
       })
       .catch(() => {
@@ -306,6 +333,56 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     if (pageEl) pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [currentPage, activeDocument]);
 
+  useEffect(() => {
+    if (
+      !locationRequest ||
+      locationRequest.documentId !== activeDocument?.id ||
+      appliedLocationRef.current === locationRequest.id
+    ) return undefined;
+
+    const fileType = (activeDocument.file_type || '').toLowerCase();
+    if (fileType === 'pptx' || fileType === 'ppt') return undefined;
+    if (fileType === 'pdf' && (
+      !pdfDoc || pdfDocumentId !== activeDocument.id
+    )) return undefined;
+
+    let cancelled = false;
+    let timeout;
+    let attempts = 0;
+    let clearEmphasis = () => {};
+
+    const locate = () => {
+      if (cancelled) return;
+      const root = fileType === 'pdf'
+        ? pageTextLayerRefs.current[locationRequest.pageNumber]
+        : containerRef.current?.querySelector(`[data-page="${locationRequest.pageNumber}"]`)
+          || containerRef.current;
+
+      if (!root || (fileType === 'pdf' && !root.textContent)) {
+        attempts += 1;
+        if (attempts < 100) timeout = setTimeout(locate, 50);
+        else appliedLocationRef.current = locationRequest.id;
+        return;
+      }
+
+      const range = findBookmarkRange(
+        root,
+        locationRequest.anchorStart,
+        locationRequest.anchorEnd,
+        locationRequest.snippet,
+      );
+      if (range) clearEmphasis = emphasizeBookmarkRange(range);
+      appliedLocationRef.current = locationRequest.id;
+    };
+
+    timeout = setTimeout(locate, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+      clearEmphasis();
+    };
+  }, [activeDocument, currentPage, locationRequest, pdfDoc, pdfDocumentId]);
+
   // ── Per-page bookmarking ──────────────────────────────────────────────────
   const bookmarkPage = async (pageNum) => {
     if (!activeProject || !activeDocument) return;
@@ -321,30 +398,31 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
           notify(`Removed page ${pageNum} bookmark`, 'info');
         }
       } else {
-        await api.post('/bookmarks', {
-          projectId: activeProject.id,
-          documentId: activeDocument.id,
+        setBookmarkDraft({
+          id: ++bookmarkDraftSequence.current,
           pageNumber: pageNum,
           highlightedText: '',
-          bookmarkType: 'page'
+          bookmarkType: 'page',
         });
-        notify(`Bookmarked page ${pageNum}`, 'success');
+        return;
       }
     } catch {
       notify('Could not update page bookmark', 'error');
     }
-    refreshSavedPages();
-    fetchBookmarks(activeProject.id);
+    void refreshSavedPages();
+    void fetchBookmarks(activeProject.id).catch(() => {
+      notify('Could not refresh the bookmark collection', 'error');
+    });
   };
 
-  const PageBookmarkButton = ({ pageNum }) => {
+  const renderPageBookmarkButton = (pageNum) => {
     const saved = savedPages.has(pageNum);
     return (
       <button
         onClick={() => bookmarkPage(pageNum)}
         title={saved ? `Remove bookmark from page ${pageNum}` : `Bookmark page ${pageNum}`}
         aria-label={saved ? `Remove bookmark from page ${pageNum}` : `Bookmark page ${pageNum}`}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition shadow-lg ${
+        className={`flex min-h-11 min-w-[44px] items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition shadow-lg ${
           saved
             ? 'bg-primary/20 text-secondary border-primary/60 shadow-primary/20'
             : 'bg-midnight/80 text-ivory/80 border-white/15 hover:border-primary/60 hover:text-secondary'
@@ -359,6 +437,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   // ── Selection → action popover ─────────────────────────────────────────────
   const handleMouseUp = (e) => {
     if (browseMode) return;
+    if (e?.target?.closest?.('button, a, input, textarea, select, [role="button"]')) return;
     // Clicking an existing highlight marker opens the remove menu instead of
     // the selection popover.
     if (e?.target?.closest?.('mark[data-hlid]')) {
@@ -366,11 +445,16 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       return;
     }
     const sel = window.getSelection();
-    const text = sel?.toString().trim();
+    const rawText = sel?.toString() || '';
+    const text = rawText.trim();
     if (text && text.length > 0) {
       const range = sel.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       const pageEl = range.startContainer?.parentElement?.closest?.('[data-page]');
+      const selectionRoot = pageEl || containerRef.current;
+      const offsets = getSelectionOffsets(selectionRoot, range);
+      const leadingWhitespace = rawText.length - rawText.trimStart().length;
+      const trailingWhitespace = rawText.length - rawText.trimEnd().length;
       const page = pageEl ? Number(pageEl.dataset.page) : currentPage;
       // Clamp so the popover never renders off-screen (mobile / edge selections).
       // Half-width follows the viewport: 4 buttons need ~185px each side on
@@ -381,7 +465,18 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         window.innerWidth - half - 8,
       );
       const y = Math.min(Math.max(rect.top - 8, 8), window.innerHeight - 170);
-      setSelection({ text, x, y, page });
+      setSelection({
+        text,
+        x,
+        y,
+        page,
+        selectionStart: offsets
+          ? offsets.start + leadingWhitespace
+          : null,
+        selectionEnd: offsets
+          ? offsets.end - trailingWhitespace
+          : null,
+      });
       setColorMenuOpen(false);
       setMarkMenu(null);
     } else {
@@ -389,24 +484,53 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     }
   };
 
-  const saveBookmark = async (sel) => {
+  const saveBookmark = (sel) => {
     if (!activeProject || !activeDocument) return;
+    setBookmarkDraft({
+      id: ++bookmarkDraftSequence.current,
+      pageNumber: sel.page || currentPage,
+      highlightedText: sel.text,
+      bookmarkType: 'text',
+      selectionStart: sel.selectionStart,
+      selectionEnd: sel.selectionEnd,
+    });
+  };
+
+  const saveBookmarkDraft = async (name) => {
+    if (!activeProject || !activeDocument || !bookmarkDraft) return false;
+    setBookmarkSaving(true);
     try {
       await api.post('/bookmarks', {
         projectId: activeProject.id,
         documentId: activeDocument.id,
-        pageNumber: sel.page || currentPage,
-        highlightedText: sel.text,
+        pageNumber: bookmarkDraft.pageNumber,
+        name,
+        highlightedText: bookmarkDraft.highlightedText,
         notes: '',
         colorTag: 'yellow',
-        bookmarkType: 'text',
-        tags: ['selected']
+        bookmarkType: bookmarkDraft.bookmarkType,
+        tags: bookmarkDraft.bookmarkType === 'text' ? ['selected'] : [],
+        selectionStart: bookmarkDraft.selectionStart,
+        selectionEnd: bookmarkDraft.selectionEnd,
       });
-      notify('Bookmark added to your collection', 'success');
+      notify(
+        name
+          ? 'Named bookmark added to your collection'
+          : 'Bookmark added to your collection',
+        'success',
+      );
+      setBookmarkDraft(null);
       setSelection(null);
-      fetchBookmarks(activeProject.id);
+      if (bookmarkDraft.bookmarkType === 'page') void refreshSavedPages();
+      void fetchBookmarks(activeProject.id).catch(() => {
+        notify('Bookmark saved, but the collection could not be refreshed', 'error');
+      });
+      return true;
     } catch {
       notify('Could not save bookmark', 'error');
+      return false;
+    } finally {
+      setBookmarkSaving(false);
     }
   };
 
@@ -774,10 +898,10 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
           <span className="font-semibold text-ivory">{activeDocument.file_name}</span>
           <span className="flex items-center gap-3">
             <span>Page {currentPage} of {activeDocument.page_count || 1}</span>
-            <PageBookmarkButton pageNum={1} />
+            {renderPageBookmarkButton(1)}
           </span>
         </div>
-        <div className="text-sm leading-relaxed whitespace-pre-wrap" style={{ fontSize: `${zoomLevel}%` }}>
+        <div data-page="1" className="text-sm leading-relaxed whitespace-pre-wrap" style={{ fontSize: `${zoomLevel}%` }}>
           {viewerLines.map((line, i) => {
             const segs = lineMarks(line, i);
             return (
@@ -868,7 +992,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
                 Page {pageNum} / {numPages}
               </div>
               <div className="absolute top-2 left-3 z-10">
-                <PageBookmarkButton pageNum={pageNum} />
+                {renderPageBookmarkButton(pageNum)}
               </div>
               <canvas ref={(el) => { pageCanvasRefs.current[pageNum] = el; }} className="block rounded-xl" />
               {/* data-page lets handleMouseUp attribute a selection to the
@@ -895,7 +1019,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   );
 
   return (
-    <div className="flex-1 flex flex-col h-full relative overflow-hidden w-full">
+    <div ref={viewerRootRef} tabIndex="-1" className="flex-1 flex flex-col h-full relative overflow-hidden w-full">
       <PDFToolbar
         numPages={numPages || activeDocument.page_count || 1}
         viewMode={viewMode}
@@ -930,7 +1054,12 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
             className="fixed z-50 -translate-x-1/2 glass-panel rounded-xl px-1.5 py-1 shadow-2xl flex flex-col gap-0.5 border border-primary/40 max-w-[94vw]"
           >
             <div className="flex items-center gap-0.5 overflow-x-auto">
-              <button onClick={() => saveBookmark(selection)} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-ivory hover:bg-primary/20 hover:text-secondary transition">
+              <button
+                onClick={() => saveBookmark(selection)}
+                aria-label="Bookmark selected passage"
+                title="Bookmark selected passage"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-ivory hover:bg-primary/20 hover:text-secondary transition"
+              >
                 <Bookmark className="w-3.5 h-3.5 text-secondary" /> <span className="hidden sm:inline">Bookmark</span>
               </button>
               <button onClick={() => copyText(selection)} className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-ivory hover:bg-primary/20 hover:text-secondary transition">
@@ -1035,6 +1164,19 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
               );
             })()}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {bookmarkDraft && (
+          <BookmarkNameDialog
+            key={bookmarkDraft.id}
+            draft={bookmarkDraft}
+            saving={bookmarkSaving}
+            fallbackFocusRef={viewerRootRef}
+            onClose={() => setBookmarkDraft(null)}
+            onSave={saveBookmarkDraft}
+          />
         )}
       </AnimatePresence>
     </div>
