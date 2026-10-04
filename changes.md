@@ -1,5 +1,24 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-04 — Created consumer-grade product roadmap and backlog
+
+- Replaced the stale, partially unchecked task list with a dependency-ordered
+  backlog separating inspected current capabilities from proposed work.
+- Added acceptance and verification gates for Google sign-in, CAPTCHA,
+  source-preserving extraction/OCR, permission-safe RAG, Laya's bounded role,
+  Reading Desk / AI Wing, an evidence-linked mind map, optional
+  bookmark/highlight links, Knoprix IDs, contacts, in-app shares, operations,
+  and consumer-beta readiness.
+- Documented material current gaps, including the conflict between PRD and
+  BYOK key-storage policies and extracted text being included in project
+  document-list responses.
+- Updated `tasks/plan.md` with architecture boundaries, dependencies, risks,
+  and release checkpoints. No application code or service configuration was
+  changed.
+- Verification: reviewed the source modules and existing planning/security
+  documents; confirmed the working tree's pre-existing code/QA changes were
+  left out of this planning change.
+
 ## 2026-10-04 — Added smart dashboard upgrades for reading flow
 
 - Added live document search and mode filters on the dashboard so users can switch between all files, recent uploads, and documents with saved reading progress.
