@@ -236,9 +236,12 @@ deployment or public release.
 - Extraction/OCR quality targets and OCR engine/language implementation.
 - Local versus cloud generation, embedding/model choices, and deployment
   constraints beyond the approved hosting direction.
-- Conversation retention, deletion/export, and backups.
-- Contact discovery/privacy, mutual acceptance, share expiry/permissions, and
-  notification preferences.
+- Contact discovery privacy details, notification preferences, and whether
+  Google Contacts/Gmail integration is in scope remain open.
+- Resolved sharing contract: read-only project snapshots; AI on shared
+  documents requires sender opt-in plus recipient grant/consent; pending
+  requests expire after 30 days; accepted shares remain active until revoked
+  or left; contact removal cancels pending shares and revokes accepted shares.
 - Latency/availability targets for the 100–1,000-user planning assumption.
 
 ## Source of truth

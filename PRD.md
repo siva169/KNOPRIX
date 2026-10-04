@@ -120,6 +120,9 @@ your documents.
   or highlight.
 - A recipient sees a share request in Knoprix and must accept before access is
   granted; the sender can revoke it.
+- Shared content is read-only. AI use of a shared document requires sender
+  opt-in, the recipient's own document grant, and provider/model consent before
+  any external transfer.
 - Email can notify users of in-app events, but cannot deliver a private file or
   bypass Knoprix authentication and share acceptance.
 
@@ -133,16 +136,24 @@ persisted AI-grant system. Future API contracts must enforce ownership/share
 access and AI grants before returning content:
 
 ```text
-GET    /api/health
-GET    /api/providers/allowlist
-POST   /api/documents/{document_id}/ai-grants
-DELETE /api/documents/{document_id}/ai-grants/{grant_id}
-POST   /api/chat/ask
+GET    /api/health                         (legacy)
+GET    /api/providers/allowlist            (legacy)
+POST   /api/chat/ask                       (legacy)
+GET    /api/v1/providers/allowlist
+POST   /api/v1/projects/{id}/documents     (async extraction contract)
+POST   /api/v1/documents/{id}/ai-grants
+POST   /api/v1/documents/{id}/summary
+POST   /api/v1/ai/retrieval
+POST   /api/v1/contact-requests
+POST   /api/v1/shares
 ```
 
 No provider-key endpoint is planned under the approved browser-local BYOK
-policy. Exact grant/chat schemas will be specified and approved before
-implementation.
+policy. New contracts use `/api/v1`; existing `/api/...` paths remain
+unchanged. The complete request/response, data, authorization, idempotency,
+pagination, expiry, deletion, and verification rules are in
+`docs/api-data-permission-contract.md`. That document is a target spec, not a
+claim that the behaviors are implemented.
 
 ## 6. UI/UX Contract
 
@@ -184,7 +195,17 @@ Required responsive checks: 390px, 425px, 768px, and 1024px.
   backend.
 - Sharing: mutual contacts; each resource share is separately accepted and
   appears in the recipient's Knoprix inbox. Optional email is notification
-  only.
+  only. V1 shares are read-only snapshots; pending requests expire after 30
+  days, accepted shares remain until revoked/left, and removing a contact
+  cancels pending shares and revokes accepted shares. A project snapshot
+  includes current documents, bookmarks, and highlights; new items require a
+  new share.
+- Shared-document AI: sender explicitly enables AI access; the recipient
+  separately grants document AI access and gives provider/model consent for
+  external transfer.
+- Conversation history: browser-local only in v1; no Knoprix sync.
+- Extraction history: terminal job metadata expires after 30 days; this does
+  not delete the source document.
 - Initial supported formats: PDF, PPTX, DOCX, TXT, MD; English OCR is the
   first target.
 - Retention: content remains until user deletion; encrypted backups may retain

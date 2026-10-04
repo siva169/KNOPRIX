@@ -1,5 +1,24 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-04 — Defined v1 API, data, and permission contracts
+
+- Added `docs/api-data-permission-contract.md` with versioned request/response
+  shapes, relational entity boundaries, ownership/share/AI authorization,
+  idempotency, pagination, expiry, deletion, and failure/retry cases.
+- Recorded the approved browser-local conversation history and read-only
+  snapshot sharing defaults, including the sender's explicit AI-share
+  permission plus the recipient's own grant/provider consent.
+- Recorded 30-day expiry for pending contact/share requests and terminal job
+  metadata, no automatic expiry for accepted shares, and cancellation of
+  pending/revocation of accepted shares when contacts are removed.
+- Kept existing `/api/...` endpoints explicitly legacy and unchanged; this
+  was a documentation-only task with no schema or application-code changes.
+- Updated the PRD, BYOK contract, delivery plan, and task status.
+- Verification: `git diff --check` passed; all 15 fenced JSON examples parsed;
+  the backlog still has 32 tasks with only 0.1 and 0.2 complete; checked
+  request/response coverage against the current route inventory and clearly
+  marked unimplemented v1 behavior.
+
 ## 2026-10-04 — Resolved initial product and privacy decisions
 
 - Recorded the approved Reading Desk / AI Wing names while leaving visual and

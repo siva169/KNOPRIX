@@ -110,28 +110,44 @@ sharing policy is in `PRD.md`. No application code changed.
 `tasks/todo.md`, `changes.md`
 **Estimated scope:** Medium
 
-### [ ] 0.2 Define API, data, and permission contracts
+### [x] 0.2 Define API, data, and permission contracts
 
 **Priority:** P0
 **Description:** Document versioned request/response shapes and entity
 relationships before any schema or UI work.
 
 **Acceptance criteria**
-- [ ] Define contracts for extraction jobs, document blocks, AI grants,
+- [x] Define contracts for extraction jobs, document blocks, AI grants,
   conversation/messages, citations, graph nodes/edges, contact requests,
   resource shares, inbox items, and notifications.
-- [ ] Define one authorization rule: every resource read checks the owner or
+- [x] Define one authorization rule: every resource read checks the owner or
   active accepted share; every AI read also checks an active AI grant and
-  provider consent where applicable.
-- [ ] Define idempotency, pagination, deletion, revocation, and expiry behavior
+  provider consent where applicable, plus sender AI permission for shared
+  documents.
+- [x] Define idempotency, pagination, deletion, revocation, and expiry behavior
   for long-running jobs and share requests.
-- [ ] Keep response schemas explicit; reject unexpected sensitive fields and
+- [x] Keep response schemas explicit; reject unexpected sensitive fields and
   never return provider secrets.
 
-**Verification:** Contract review includes success, validation-error,
-unauthorized, expired/revoked, duplicate-request, and retry cases.
+**Decision record (boss-approved 2026-10-04):**
+- API: new routes use `/api/v1`; existing `/api/...` routes stay unchanged.
+- Conversation history: browser-local only; no server sync in v1.
+- Shares: read-only; project shares are snapshots; pending requests expire
+  after 30 days; accepted access lasts until sender revocation or recipient
+  leaves.
+- Removing a mutual contact cancels pending shares and revokes accepted
+  shares; terminal extraction job metadata expires 30 days after completion.
+- AI on shared documents: sender must explicitly enable it; recipient still
+  needs their own AI grant and provider/model consent.
+- Provider keys remain browser-local and are never part of API payloads.
+**Verification:** `docs/api-data-permission-contract.md` defines request and
+response shapes, relationships, authorization, error, retry, pagination,
+expiry, deletion, and verification cases. Legacy API behavior and the
+implementation boundary are explicitly identified.
 **Dependencies:** 0.1.
-**Files likely touched:** `PRD.md`, `docs/`, `tasks/`
+**Files touched:** `PRD.md`, `docs/api-data-permission-contract.md`,
+`docs/byok-security-contract.md`, `tasks/plan.md`, `tasks/todo.md`,
+`changes.md`
 **Estimated scope:** Medium
 
 ### [ ] 0.3 Add safe, versioned database migrations
@@ -558,27 +574,30 @@ document/page state, rather than two disconnected apps.
 `UI-UX.md`
 **Estimated scope:** Medium
 
-### [ ] 4.4 Persist conversation history with user controls
+### [ ] 4.4 Persist browser-local conversation history with user controls
 
 **Priority:** P1
-**Description:** Add per-user conversation storage only after deciding what
-content is retained and whether chat history is local, server-side, or both.
+**Description:** Persist conversations in browser-local storage only; v1 does
+not synchronize conversation content to Knoprix servers.
 
 **Acceptance criteria**
 - [ ] User can create, rename, resume, delete one conversation, and delete all
-  history; retention policy and sync behavior are explicit.
+  history in the current browser; local-only retention and no-sync behavior
+  are explicit.
+- [ ] Browser-local history is isolated by account and hidden on logout/account
+  switch.
 - [ ] Each conversation stores source IDs and grant context, but a stale
   conversation cannot bypass current authorization or reuse revoked access.
 - [ ] Message streaming/cancel/retry states are safe; failed partial responses
   are not stored as successful answers.
-- [ ] Secrets, full provider keys, and unnecessary extracted text are never
-  persisted in conversation metadata or logs.
+- [ ] Secrets and full provider keys are never persisted in conversations or
+  logs; source excerpts remain citation-linked.
 
-**Verification:** Tests cover ownership, deletion, revoked-source reuse,
-partial generation, pagination, and session isolation.
-**Dependencies:** 0.1–0.3, 3.2, 4.2.
-**Files likely touched:** `backend/app/routers/chat.py`,
-`backend/migrations/`, `frontend/src/components/ChatPanel.jsx`, tests
+**Verification:** Tests cover per-account browser-local isolation, deletion,
+revoked-source reuse, partial generation, and reload/resume behavior.
+**Dependencies:** 0.1, 0.2, 3.2, 4.2.
+**Files likely touched:** `frontend/src/components/ChatPanel.jsx`,
+frontend conversation storage/context modules, tests
 **Estimated scope:** Medium
 
 ### [ ] 4.5 Add flashcards, quizzes, and analogies as cited study artifacts

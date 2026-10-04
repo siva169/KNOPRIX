@@ -43,7 +43,7 @@ this partial implementation as proof that all consent and grant checks exist.
 | Knoprix document processing | Uploaded source files, extracted text, indexes | Stored/processed by Knoprix-controlled backend and storage after upload; disclose this at upload. Derived records must be deleted with their source, subject to the documented backup purge window. |
 | AI access grant | User, document, purpose, state, expiry/revocation | MUST be checked for every AI content read. A frontend checkbox alone is not authorization. |
 | Third-party AI content | Selected document chunks, question, answer | Requires a separate provider/model-specific opt-in and active document grant. MUST contain selected, authorized documents only; MUST NEVER include whole-project or unselected docs. |
-| Chat history | Past Q/A pairs | SHOULD stay browser-local by default. CAN export/delete by user action. |
+| Chat history | Past Q/A pairs | MUST remain browser-local in v1. CAN export/delete by user action; MUST NOT sync to Knoprix servers under the approved v1 policy. |
 | Diagnostics | Error codes, latency, model name | CAN go to backend logs. MUST NEVER include keys or doc text. |
 
 ## 4. Trust boundaries + controls
@@ -72,8 +72,10 @@ this partial implementation as proof that all consent and grant checks exist.
 
 ## 6. Allowlist policy (FREE only)
 
-- MUST: backend publishes `/providers/allowlist` (name, base URL, free-tier
-  note, per-model limits). Client MUST refuse any provider/model not on it.
+- MUST: current backend publishes `GET /api/providers/allowlist`; the v1
+  contract publishes `GET /api/v1/providers/allowlist` (name, base URL,
+  free-tier note, and models). Client MUST refuse any provider/model not on
+  the server allowlist.
 - MUST: server re-validates `model` on every chat-related call (client
   enforcement alone is decoration).
 - Initial candidates (VERIFY each at implementation — free tiers move):
@@ -93,7 +95,8 @@ this partial implementation as proof that all consent and grant checks exist.
 
 - Keys: deleted by the user via "Clear keys" (wipes localStorage entries).
   Uninstalling/clearing site data removes them implicitly — stated in notice.
-- Chat history: user-deletable per chat + "delete all".
+- Chat history: browser-local only in v1; user-deletable per chat + "delete
+  all". The API/data/permission contract defines the local conversation shape.
 - Documents and derived data: retained until user deletion; deleting a source
   must delete its extracted blocks, indexes, embeddings, summaries, and other
   derived content.
