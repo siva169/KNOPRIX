@@ -70,29 +70,44 @@ been implemented and verified; planning or partial wiring does not count.
 
 ## Phase 0 — Product decisions and stable contracts
 
-### [ ] 0.1 Resolve product and privacy decisions
+### [x] 0.1 Resolve product and privacy decisions
 
 **Priority:** P0 — blocks authorization and AI implementation
 **Description:** Confirm the user-visible names, sharing policy, AI processing
 locations, key handling, document-consent meaning, and operational limits.
 
 **Acceptance criteria**
-- [ ] Confirm whether **Reading Desk** is the final reading-mode label; retain
+- [x] Confirm whether **Reading Desk** is the final reading-mode label; retain
   **AI Wing** as the working AI-mode label unless boss changes it.
-- [ ] Specify whether AI approval permits local Knoprix processing, cloud
+- [x] Specify whether AI approval permits Knoprix backend processing, third-party cloud
   provider transfer, or each as a separate consent.
-- [ ] Resolve the conflict between `PRD.md` (encrypted backend provider keys)
+- [x] Resolve the conflict between `PRD.md` (encrypted backend provider keys)
   and `docs/byok-security-contract.md` (keys browser-local, never sent to the
   backend); one canonical policy is reflected everywhere.
-- [ ] Confirm contact requests are mutual, resource shares require separate
-  acceptance, recipients can revoke/lose access, and email only notifies.
-- [ ] Select initial supported file formats, OCR languages, retention rules,
+- [x] Confirm contact requests are mutual, every resource share requires
+  recipient acceptance and can be revoked to remove access, and email only
+  notifies.
+- [x] Select initial supported file formats, OCR languages, retention rules,
   target deployment, and initial product scale.
 
-**Verification:** Boss reviews and approves the decisions recorded in the
-canonical PRD/security contract; no code change is part of this task.
+**Decision record (boss-approved 2026-10-04):**
+- Names: Reading Desk and AI Wing; visuals/interactions remain unapproved.
+- Processing: Knoprix backend processing is separate from third-party AI
+  transfer; provider-specific consent is required before external transfer.
+- Provider keys: browser-local only; never sent to/stored by the backend.
+- Sharing: mutual contacts; each share separately accepted; deliver in Knoprix;
+  optional email is notification only.
+- Initial files: PDF/PPTX/DOCX/TXT/MD; English OCR target.
+- Retention: until user deletes; encrypted backups may retain deleted data up
+  to 30 days.
+- Deployment: Render + Vercel + Supabase; initial planning assumption
+  100–1,000 users.
+**Verification:** Mode names/status are reflected in `UI-UX.md`; processing,
+key, and retention rules are in `PRD.md` and `docs/byok-security-contract.md`;
+sharing policy is in `PRD.md`. No application code changed.
 **Dependencies:** None.
-**Files likely touched:** `PRD.md`, `UI-UX.md`, `docs/byok-security-contract.md`
+**Files touched:** `PRD.md`, `UI-UX.md`, `docs/byok-security-contract.md`,
+`tasks/todo.md`, `changes.md`
 **Estimated scope:** Medium
 
 ### [ ] 0.2 Define API, data, and permission contracts

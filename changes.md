@@ -1,5 +1,24 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-04 — Resolved initial product and privacy decisions
+
+- Recorded the approved Reading Desk / AI Wing names while leaving visual and
+  interaction choices pending boss approval.
+- Resolved BYOK policy in favor of browser-local keys; Knoprix backend
+  processing and third-party AI transfer are separate consent boundaries.
+- Confirmed mutual contacts, separate acceptance for each in-app resource
+  share, optional email notifications only, and revocable access.
+- Set the initial supported-format target to PDF/PPTX/DOCX/TXT/MD with English
+  OCR first; content is retained until user deletion, with a 30-day encrypted
+  backup purge window.
+- Recorded Render + Vercel + Supabase as the deployment direction and
+  100–1,000 users as an initial planning assumption.
+- Updated the PRD, BYOK contract, UI/UX inventory, delivery plan, and task
+  status. No application code, provider account, or deployment configuration
+  changed.
+- Verification: checked the decision statements for consistency across the
+  updated documents; visual design remains explicitly pending.
+
 ## 2026-10-04 — Created consumer-grade product roadmap and backlog
 
 - Replaced the stale, partially unchecked task list with a dependency-ordered

@@ -26,8 +26,11 @@ No visual choice is treated as approved until it is selected here.
 ### A1. `AppShell` — the permanent frame around every screen
 - Used for: page background, navigation regions, content region, and global
   overlays.
+- Product modes: **Reading Desk** (document-first) and **AI Wing** (AI-first).
+  The names are approved; mode-switch placement, layouts, and transitions
+  remain unapproved design decisions.
 - Decisions: single-pane or split-pane, density, background texture, maximum
-  content width, desktop sidebar behavior.
+  content width, desktop sidebar behavior, and how users switch between modes.
 - States: boot loading, signed-out shell, signed-in shell, fatal error.
 - Reference URLs: _add here_
 
@@ -252,7 +255,8 @@ No visual choice is treated as approved until it is selected here.
 - Reference URLs: _add here_
 
 ### F7. `DocumentChatWorkspace` — conversation about selected documents
-- Used for: first AI vertical slice.
+- Used for: AI Wing's conversation workspace and optional AI panel from the
+  Reading Desk.
 - Decisions: chat layout, source panel, streaming treatment, regenerate,
   copy, feedback, conversation history.
 - Reference URLs: _add here_
@@ -326,6 +330,9 @@ Boss choice: [selected option / changes requested]
 
 ## Approval status
 
+- Product mode names: **Reading Desk** and **AI Wing** — approved 2026-10-04.
+- Mode layouts, switch control, navigation, interactions, and responsive
+  behavior: pending boss choices.
 - First surface: `DashboardOverview` — selected for the first UI/UX review
 - Reference URLs: pending boss input
 - Global foundation: Not selected

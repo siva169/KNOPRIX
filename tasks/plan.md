@@ -229,26 +229,23 @@ deployment or public release.
 
 ## Open decisions tracked in `tasks/todo.md`
 
-- Final confirmation of the Reading Desk label and UI decisions for both modes.
-- Whether AI consent distinguishes local processing from cloud transfer.
-- Reconcile browser-local BYOK key policy with the PRD's backend-encryption
-  statement.
+- Visual and interaction decisions for Reading Desk and AI Wing.
 - Google OAuth account/linking policy and provider configuration.
 - CAPTCHA provider, privacy implications, risk thresholds, and accessible
   fallback.
-- Supported file/ OCR languages and quality targets.
+- Extraction/OCR quality targets and OCR engine/language implementation.
 - Local versus cloud generation, embedding/model choices, and deployment
-  constraints.
+  constraints beyond the approved hosting direction.
 - Conversation retention, deletion/export, and backups.
 - Contact discovery/privacy, mutual acceptance, share expiry/permissions, and
   notification preferences.
-- Initial user scale and latency/availability targets.
+- Latency/availability targets for the 100–1,000-user planning assumption.
 
 ## Source of truth
 
 - Product decisions: `PRD.md` and approved sections of `UI-UX.md`
 - Detailed task acceptance/dependency list: `tasks/todo.md`
-- BYOK/data-transfer policy: `docs/byok-security-contract.md` after resolving
-  the existing conflict
+- BYOK/data-transfer policy: `docs/byok-security-contract.md` (approved
+  browser-local key policy and separate Knoprix/provider consent boundaries)
 - Completed work and verification history: `changes.md`
 - Consumer polish/fix gates: `checklists/033-vibecoding-complete-33-checklist.md`

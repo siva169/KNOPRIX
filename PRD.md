@@ -1,7 +1,7 @@
 # PRD: Knoprix Final Project
 
 **Type:** College project / document knowledge platform  
-**Status:** Draft awaiting UI/UX decisions  
+**Status:** Product direction approved; detailed UI/UX decisions remain pending
 **Source baseline:** Current Knoprix mid-review version  
 **Project folder:** `knoprix-final-project/`
 
@@ -30,12 +30,18 @@ your documents.
 - Support document chat first, then summaries, flashcards, quizzes, and
   opt-in web research as separate slices.
 - Show source citations for AI answers whenever document evidence is used.
+- Keep a document-first **Reading Desk** and an AI-first **AI Wing** connected
+  through shared reader state and explicit AI source permissions.
+- Make knowledge-map concepts actionable and traceable to source pages.
+- Allow in-app sharing of approved resources with accepted contacts.
 
 ### Non-goals for the first rebuild
 
-- No local LLM installation.
+- No end-user on-device LLM installation in the initial release.
 - No AI provider key hardcoded in source code.
 - No automatic upload of every document to a provider.
+- No delivery of private documents as email attachments; email may only
+  notify users about in-app requests.
 - No deployment or remote push without explicit approval.
 - No visual implementation before the user approves the UI/UX decisions.
 
@@ -46,14 +52,36 @@ your documents.
 - **Frontend:** Existing React + Vite application copied as a functional
   baseline, then redesigned through approved UI/UX slices.
 - **Persistence:** Existing database layer remains the source of truth.
-- **AI providers:** Z.AI GLM and OpenAI-compatible cloud providers.
-- **BYOK — Bring Your Own Key:** Users connect their own provider credentials.
-- **Encrypted backend storage:** Provider keys are encrypted at rest and
-  masked after saving.
+- **AI providers:** Free-tier providers from the server-published allowlist;
+  verify availability and terms when implementing each provider.
+- **BYOK — Bring Your Own Key:** Provider keys remain in browser-local storage
+  and are sent directly from the browser to the approved provider. Knoprix
+  backend endpoints must reject key material and never store or log it.
 - **Model allowlist:** Knoprix displays only models explicitly approved by
   the application configuration.
-- **Document scope:** A provider key may be used only for documents the user
-  explicitly selects for AI.
+- **Document scope:** Every AI operation uses only explicitly selected,
+  authorized documents with an active per-document AI grant.
+- **Consent boundary:** Routine storage, extraction, and indexing happen on
+  Knoprix-controlled backend/storage after upload and must be disclosed.
+  AI access to a document requires an explicit grant; sending document content
+  to a third-party AI provider requires a separate, provider-specific consent.
+  Current production direction is Render + Vercel + Supabase; this is server
+  processing, not on-device processing.
+- **Sharing:** Accepted shares appear inside the recipient's Knoprix account.
+  Contact acceptance and every resource-share acceptance are separate.
+  Contacts are mutual; each share can be revoked. Email is an optional
+  notification only.
+- **Public identity:** Users may be discoverable by verified email or a
+  randomly generated public Knoprix ID distinct from internal database IDs.
+- **Data lifecycle:** User content and derived data remain until the user
+  deletes them. Encrypted backups may retain deleted data for up to 30 days
+  before purge; actual deletion/export behavior must be implemented and
+  verified before public beta.
+- **Initial file scope:** PDF, PPTX, DOCX, TXT, and MD. English OCR is the
+  initial target; images and other OCR languages require explicit support and
+  quality evidence before being represented as supported.
+- **Initial scale assumption:** Plan initially for 100–1,000 users; this is a
+  planning estimate, not a capacity or availability guarantee.
 
 ## 4. Capability Acceptance Criteria
 
@@ -73,29 +101,48 @@ your documents.
 
 ### AI integration — later slice
 
-- A user can add a supported provider key without exposing it to the browser.
+- A user can add a supported provider key without exposing it to the Knoprix
+  backend.
 - The provider and model are visible before a request is sent.
-- The user selects the document scope explicitly.
+- The user selects the document scope explicitly and grants AI access for
+  those documents.
+- Third-party processing requires a separate consent that names the provider
+  and model before document content is sent.
 - The system returns a grounded answer with document citations.
 - Provider failure, invalid key, rate limit, and unsupported model errors are
   visible and actionable.
 
+### Sharing — later slice
+
+- A user can discover and request a mutual contact relationship using verified
+  email or public Knoprix ID.
+- Contact status alone never grants access to a project, document, bookmark,
+  or highlight.
+- A recipient sees a share request in Knoprix and must accept before access is
+  granted; the sender can revoke it.
+- Email can notify users of in-app events, but cannot deliver a private file or
+  bypass Knoprix authentication and share acceptance.
+
 ## 5. API Contract Direction
 
-The copied baseline API remains the source contract for the first rebuild.
-New AI routes will be added only after their security design is approved:
+The existing API remains the baseline. The current backend exposes
+`GET /api/providers/allowlist` and `POST /api/chat/ask`; the latter currently
+returns a mocked response with citations. The frontend can make browser-direct
+calls to some allowlisted providers. These paths are not yet a complete,
+persisted AI-grant system. Future API contracts must enforce ownership/share
+access and AI grants before returning content:
 
 ```text
 GET    /api/health
-GET    /api/ai/providers
-POST   /api/ai/provider-keys
-DELETE /api/ai/provider-keys/{key_id}
-POST   /api/projects/{project_id}/ai/conversations
-POST   /api/projects/{project_id}/ai/conversations/{conversation_id}/messages
+GET    /api/providers/allowlist
+POST   /api/documents/{document_id}/ai-grants
+DELETE /api/documents/{document_id}/ai-grants/{grant_id}
+POST   /api/chat/ask
 ```
 
-The exact request and response schemas will be written in the AI module
-specification before implementation.
+No provider-key endpoint is planned under the approved browser-local BYOK
+policy. Exact grant/chat schemas will be specified and approved before
+implementation.
 
 ## 6. UI/UX Contract
 
@@ -126,7 +173,26 @@ Required responsive checks: 390px, 425px, 768px, and 1024px.
 - **Never:** commit API keys, expose provider credentials to React, silently
   upload documents, delete user data, or present unverified AI output as fact.
 
-## 9. Success Criteria
+## 9. Product decisions recorded 2026-10-04
+
+- Mode names: **Reading Desk** (document-first) and **AI Wing** (AI-first).
+  Names are approved; their visual layouts and interactions are not.
+- Consent: Knoprix-controlled backend processing is distinct from
+  third-party AI-provider transfer. AI requires selected-document grants;
+  external transfer requires an additional provider-specific opt-in.
+- Provider keys: browser-local only; do not send them to or store them in the
+  backend.
+- Sharing: mutual contacts; each resource share is separately accepted and
+  appears in the recipient's Knoprix inbox. Optional email is notification
+  only.
+- Initial supported formats: PDF, PPTX, DOCX, TXT, MD; English OCR is the
+  first target.
+- Retention: content remains until user deletion; encrypted backups may retain
+  deleted content for up to 30 days.
+- Deployment direction: Render + Vercel + Supabase.
+- Initial scale planning assumption: 100–1,000 users.
+
+## 10. Success Criteria
 
 - The copied backend starts locally and its health endpoint responds.
 - The frontend starts locally and builds successfully.
@@ -135,7 +201,7 @@ Required responsive checks: 390px, 425px, 768px, and 1024px.
 - AI document chat is optional, provider-controlled, citation-aware, and
   unavailable rather than misleading when configuration is missing.
 
-## 10. Polish and Fixes
+## 11. Polish and Fixes
 
 The project follows the complete checklist at:
 `checklists/033-vibecoding-complete-33-checklist.md`.

@@ -1,10 +1,14 @@
 # BYOK Provider Security Contract — Knoprix Final Project
 
-**Status:** Spec (implements `tasks/todo.md` → "Spec: design BYOK provider
-security contract"). Boss decisions (2026-09-11): FREE providers only ·
-keys BROWSER-LOCAL only · SELECTED documents only.
-**Scope:** This contract covers the future document-chat slice. No keys,
-no provider calls exist yet — this file is the rulebook first, code second.
+**Status:** Approved policy; implementation is partial and does not yet enforce
+persisted per-document AI grants.
+**Decisions (2026-10-04):** free-tier providers only · keys browser-local only
+· selected documents only · Knoprix backend processing and third-party AI
+transfer are separate consent boundaries.
+**Scope:** This contract covers document chat and future AI study tools. The
+current frontend stores keys in browser localStorage and calls some providers
+directly; the backend returns mocked citation-based chat data. Do not treat
+this partial implementation as proof that all consent and grant checks exist.
 
 ## 1. Assumptions (explicit)
 
@@ -15,12 +19,18 @@ no provider calls exist yet — this file is the rulebook first, code second.
 - A3. Free-tier provider terms change fast. The allowlist is re-verified
   at implementation time and every release — a stale free endpoint MUST be
   removed, never grandfathered.
-- A4. Backend NEVER needs the key. Any backend code path that receives,
+- A4. Backend NEVER needs the provider key. Any backend code path that receives,
   logs, or stores a key is a DEFECT, not a feature.
+- A5. Current deployment direction is Render + Vercel + Supabase. "Knoprix
+  processing" means the service's controlled backend/storage, not processing
+  on the user's device.
+- A6. User content remains until the user deletes it. Encrypted backups may
+  retain deleted data for up to 30 days before purge.
 
 ## 2. Out of scope (not promised)
 
-- Paid providers, team/shared keys, server-side key vaults.
+- Paid providers, team/shared keys, server-side key vaults, and on-device LLM
+  execution in the initial release.
 - Protection against malicious browser extensions (impossible client-side).
 - Provider-side data retention (governed by each provider's own policy —
   linked in the privacy notice, not ours to enforce).
@@ -30,26 +40,35 @@ no provider calls exist yet — this file is the rulebook first, code second.
 | Class | Examples | Handling |
 |---|---|---|
 | Provider keys | API keys/tokens | MUST live in browser localStorage ONLY. MUST NEVER be sent to backend, written to logs, or included in error reports. |
-| Chat content | Selected doc text, questions, answers | MUST include selected documents ONLY. MUST NEVER include whole-project or unselected docs. |
+| Knoprix document processing | Uploaded source files, extracted text, indexes | Stored/processed by Knoprix-controlled backend and storage after upload; disclose this at upload. Derived records must be deleted with their source, subject to the documented backup purge window. |
+| AI access grant | User, document, purpose, state, expiry/revocation | MUST be checked for every AI content read. A frontend checkbox alone is not authorization. |
+| Third-party AI content | Selected document chunks, question, answer | Requires a separate provider/model-specific opt-in and active document grant. MUST contain selected, authorized documents only; MUST NEVER include whole-project or unselected docs. |
 | Chat history | Past Q/A pairs | SHOULD stay browser-local by default. CAN export/delete by user action. |
 | Diagnostics | Error codes, latency, model name | CAN go to backend logs. MUST NEVER include keys or doc text. |
 
 ## 4. Trust boundaries + controls
 
-1. **Browser → Provider (direct):** chat calls go straight from the browser
-   to the allowlisted provider. Backend is NOT in this path and MUST NOT
-   proxy keys.
-2. **Browser → Backend:** backend serves the allowlist, model limits, and
-   (later) chat-history sync. Backend MUST reject any request field that
-   looks like a key (fail closed: `400 + "keys stay in browser"`).
-3. **Backend → Provider:** no key-bearing calls exist. Build-time checks
-   (docs, examples) MUST use placeholder keys only.
+1. **Browser → Knoprix backend:** document upload implies storage and routine
+   parsing/indexing by Knoprix services, which must be disclosed. Any AI
+   operation must separately have an active per-document grant. The backend
+   must authorize content reads before returning chunks.
+2. **Browser → Provider (direct BYOK):** only after the user selects the
+   documents and separately consents to sending their content to the named
+   provider/model. The browser sends the user's key directly to that provider;
+   the Knoprix backend MUST NOT proxy or receive the key.
+3. **Browser → Backend chat metadata:** backend may validate provider/model,
+   authorization, scope, and retrieve citation metadata, but MUST reject
+   key-like request fields (fail closed: `400 + "keys stay in browser"`).
+4. **Backend → Provider:** no key-bearing provider calls are permitted under
+   this contract. Build-time checks and examples MUST use placeholder keys.
 
 ## 5. Auth / session policy
 
-- App login stays as-is (current auth behavior unchanged — verified slice).
+- App login is distinct from document access and AI consent.
 - Provider identity = the user's own key, entered once per provider, stored
   browser-local. No Knoprix account linkage to provider identity.
+- `localStorage` is convenience storage, not a secure vault. Browser extensions
+  or anyone with access to the browser profile may read it; state this clearly.
 
 ## 6. Allowlist policy (FREE only)
 
@@ -75,8 +94,12 @@ no provider calls exist yet — this file is the rulebook first, code second.
 - Keys: deleted by the user via "Clear keys" (wipes localStorage entries).
   Uninstalling/clearing site data removes them implicitly — stated in notice.
 - Chat history: user-deletable per chat + "delete all".
-- Backend: retains NO key material by design (nothing to delete — verified
-  by log-scan test in the implementation slice).
+- Documents and derived data: retained until user deletion; deleting a source
+  must delete its extracted blocks, indexes, embeddings, summaries, and other
+  derived content.
+- Backups: encrypted backups may retain deleted data for up to 30 days before
+  purge; this window must be disclosed and purge behavior tested.
+- Backend: retains NO provider key material by design; nothing to delete.
 
 ## 9. Provider errors (contract)
 
@@ -89,10 +112,13 @@ no provider calls exist yet — this file is the rulebook first, code second.
 
 ## 10. Privacy notice (shown BEFORE first key entry — exact promises)
 
-> Your key stays in THIS browser only — it is never sent to Knoprix servers.
-> Only documents YOU select are sent to the provider with each question.
-> Free providers apply their own data policies (linked below). Clear your
-> keys anytime: Settings → Clear keys.
+> Your provider key stays in this browser and is sent directly to the provider,
+> never to Knoprix servers. Knoprix stores and processes uploaded files using
+> its service infrastructure. AI may read only documents you explicitly
+> approve. Before document text is sent to an external AI provider, Knoprix
+> will show you the provider/model and ask for separate consent. Providers
+> apply their own data policies (linked below). Clear browser-stored keys
+> anytime in Settings.
 
 ## 11. Incident mini-runbook
 
@@ -112,3 +138,9 @@ no provider calls exist yet — this file is the rulebook first, code second.
 - [ ] Privacy notice shown before first key entry.
 - [ ] "Clear keys" wipes all stored key material (verified in browser).
 - [ ] Free-tier candidates re-verified at build time (each link checked).
+- [ ] Per-document AI grants are enforced by the backend on every content
+  retrieval.
+- [ ] Third-party provider consent is separate from Knoprix backend processing
+  and is provider/model-specific.
+- [ ] User deletion removes live source and derived data; backup purge is
+  completed within the documented 30-day window.
