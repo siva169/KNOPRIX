@@ -1,5 +1,12 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-04 — Added smart dashboard upgrades for reading flow
+
+- Added live document search and mode filters on the dashboard so users can switch between all files, recent uploads, and documents with saved reading progress.
+- Added compact summary cards for the active project, in-progress reads, and recently added files to make the reading desk feel more like a study command center.
+- Kept the behavior local and reversible: the filters and search are client-side only and do not change any backend APIs or document state.
+- Verification: frontend production build completed successfully with `npm run build`.
+
 ## 2026-09-15 — Fixed Supabase S3 upload addressing
 
 - Configured boto3 to use path-style S3 addressing, which is required for
