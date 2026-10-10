@@ -1,5 +1,19 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-11 — Migrate frontend toolchain to Vite 8 and Tailwind 4
+
+- Upgraded Vite and its React plugin to versions compatible with Vite 8, and
+  moved Tailwind to its Vite plugin with Tailwind 4 CSS imports. Kept the
+  existing JavaScript theme config loaded explicitly and removed the obsolete
+  PostCSS/Autoprefixer setup.
+- Replaced Tailwind 3 `flex-shrink-0` utilities with their Tailwind 4
+  `shrink-0` equivalents.
+- Verification: production build and PDF.js browser smoke pass; theme
+  utilities render in the browser and no horizontal overflow appears at
+  390/425/768/1024px. Full and production dependency audits report zero
+  vulnerabilities. Build still warns that two generated JavaScript chunks
+  exceed 500 kB.
+
 ## 2026-10-11 — Upgrade Vite to patched 6.4.x
 
 - Upgraded Vite from 5.4.21 to 6.4.4, the patched Vite 6 line compatible

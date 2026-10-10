@@ -13,9 +13,8 @@
   font-family: 'Anurati', 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
 }
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
 
 :root {
   --bg: #090a0c;

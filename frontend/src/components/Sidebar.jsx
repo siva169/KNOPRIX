@@ -53,7 +53,7 @@ export default function Sidebar({
           : 'text-ivory/70 hover:bg-white/5'
       }`}
     >
-      <FileText className="w-3.5 h-3.5 text-accent flex-shrink-0" />
+      <FileText className="w-3.5 h-3.5 text-accent shrink-0" />
       <span className="truncate">{doc.file_name}</span>
     </motion.button>
   );
