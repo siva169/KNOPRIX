@@ -1,5 +1,22 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-10 — Set the production Vercel origin in the Render blueprint
+
+- Replaced the placeholder `CORS_ORIGINS` value with the production frontend
+  origin `https://knoprix.vercel.app` and aligned the deployment instructions.
+- The provided Render logs show `OPTIONS /api/auth/register` returning 400;
+  the backend's origin allowlist is Render-managed. No application code or
+  live Render settings were changed.
+- Supabase reports that its project is paused because the account has reached
+  its free active-project limit. Registration cannot be verified end-to-end
+  until the database is resumed and the existing service has the correct
+  environment value.
+- Verification: focused CORS middleware checks passed—production preflight
+  returns 200 with the exact allowed origin, an untrusted origin returns 400,
+  and the Render blueprint contains the production origin; `git diff --check`
+  passed. No remote service or credentials were accessed. Existing unrelated
+  working-tree changes were left untouched.
+
 ## 2026-10-04 — Defined v1 API, data, and permission contracts
 
 - Added `docs/api-data-permission-contract.md` with versioned request/response

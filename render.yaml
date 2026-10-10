@@ -3,8 +3,8 @@
 # How to use:
 #   1. Push this repo to GitHub.
 #   2. https://render.com → New → Blueprint → connect the repo.
-#   3. After first deploy, edit CORS_ORIGINS in Render → Environment to the
-#      exact Vercel origin (https://your-site.vercel.app).
+#   3. If the production frontend domain changes, update CORS_ORIGINS in
+#      Render → Environment to the new exact Vercel origin.
 services:
   - type: web
     name: knoprix-midreview-api
@@ -19,7 +19,7 @@ services:
       - key: JWT_REFRESH_SECRET
         generateValue: true
       - key: CORS_ORIGINS
-        value: https://YOUR-VERCEL-SITE.vercel.app
+        value: https://knoprix.vercel.app
       # Supabase PostgreSQL is required because Render's local filesystem is
       # ephemeral and cannot persist SQLite data between restarts.
       - key: DATABASE_URL

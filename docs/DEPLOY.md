@@ -55,7 +55,7 @@ In **Render → Environment**, add:
 | `OBJECT_STORAGE_BUCKET` | `knoprix-documents` |
 | `OBJECT_STORAGE_ENDPOINT` | Supabase project URL (`https://<ref>.supabase.co`) |
 | `OBJECT_STORAGE_API_KEY` | Supabase `service_role` secret |
-| `CORS_ORIGINS` | Final Vercel origin, without a trailing slash |
+| `CORS_ORIGINS` | `https://knoprix.vercel.app` (no trailing slash) |
 
 Render generates `JWT_SECRET` and `JWT_REFRESH_SECRET` from the blueprint.
 Never paste secret values into `render.yaml` or Git.
@@ -79,8 +79,8 @@ Add this frontend environment variable:
 VITE_API_URL=https://<render-service>.onrender.com
 ```
 
-After Vercel provides the final domain, update Render's `CORS_ORIGINS` to that
-exact origin and redeploy the API.
+If the production Vercel domain changes, update Render's `CORS_ORIGINS` to the
+new exact origin (without a trailing slash) and redeploy the API.
 
 ## 4. Verification checklist
 
