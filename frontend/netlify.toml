@@ -1,7 +1,6 @@
 # Netlify build config for the Knoprix mid-review frontend.
 #
-# Drag-drop deploy: drag the CONTENTS of frontend/dist (index.html, assets/,
-# pdf.worker.min.js) — no config needed.
+# Drag-drop deploy: upload the contents of dist/ (index.html and assets/).
 #
 # Git-based deploy: connect this folder as the root and Netlify will run
 #   npm run build  ->  publish dist/

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Bookmark, Copy, BookmarkCheck, Sparkles, Highlighter, Eraser, Volume2, Square } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
@@ -15,8 +16,7 @@ import {
   getSelectionOffsets,
 } from '../bookmarkAnchors';
 
-// Worker served locally (frontend/public/) — no CDN dependency, works offline
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 const HIGHLIGHT_ALL_KEY = 'knoprix_highlight_all_matches';
 
 function ThumbnailRail({ pdfDoc, numPages, currentPage, onSelectPage }) {
@@ -291,17 +291,16 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
           textLayer.style.top = '0';
           textLayer.style.left = '0';
           textLayer.style.transform = `scale(${1 / dpr})`;
-          // Must match the viewport scale passed to renderTextLayer (pdfjs
-          // warns otherwise).
+          // Keep the CSS scale factor aligned with the TextLayer viewport.
           textLayer.style.setProperty('--scale-factor', String(zoom));
           try {
             const textContent = await page.getTextContent();
-            await pdfjsLib.renderTextLayer({
+            const textLayerRenderer = new pdfjsLib.TextLayer({
               textContentSource: textContent,
               container: textLayer,
               viewport: displayViewport,
-              textDivs: [],
-            }).promise;
+            });
+            await textLayerRenderer.render();
           } catch {
             /* text layer is best-effort */
           }

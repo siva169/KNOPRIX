@@ -1,5 +1,19 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-11 — Migrate PDF viewing to patched PDF.js 6
+
+- Upgraded `pdfjs-dist` from 3.11.174 to 6.4.299 and migrated text rendering
+  from the removed `renderTextLayer` function to the `TextLayer` class.
+- Bundle the matching `.mjs` worker with Vite and remove the checked-in 3.x
+  worker so the app cannot load a mismatched PDF.js worker. Require Node.js
+  22.13 or later for frontend builds.
+- Added a browser smoke test that loads a generated PDF, renders its page,
+  and verifies selectable text.
+- Verification: PDF.js browser smoke test and frontend production build pass;
+  `npm audit --omit=dev` reports zero production vulnerabilities. Full audit
+  still reports 10 development-tool advisories; the recommended Tailwind 4
+  and Vite 8 upgrades are separate major migrations.
+
 ## 2026-10-11 — Upgrade Axios to resolve production advisories
 
 - Updated Axios from 1.19.0 to 1.20.0 after reviewing the upstream release
