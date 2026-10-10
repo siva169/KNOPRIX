@@ -79,6 +79,23 @@ Add this frontend environment variable:
 VITE_API_URL=https://<render-service>.onrender.com
 ```
 
+### Firebase email/password authentication
+
+In Firebase project `knoprix-a647`:
+
+1. Enable **Email/Password** under **Authentication → Sign-in method**.
+2. Add `knoprix.vercel.app` under **Authentication → Settings → Authorized domains**.
+3. In Render, set `FIREBASE_PROJECT_ID=knoprix-a647`.
+4. In Vercel, set `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`,
+   `VITE_FIREBASE_PROJECT_ID`, and `VITE_FIREBASE_APP_ID` from the Firebase
+   web app configuration, then redeploy the frontend.
+
+The web app configuration is public client configuration; do not add a
+Firebase service-account key to the frontend. The backend verifies Firebase
+ID tokens against Google's signing keys and requires a verified email.
+Existing Knoprix users are linked by verified email without changing their
+user ID or project records.
+
 If the production Vercel domain changes, update Render's `CORS_ORIGINS` to the
 new exact origin (without a trailing slash) and redeploy the API.
 

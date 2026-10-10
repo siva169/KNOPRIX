@@ -5,24 +5,54 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import GoldOrbs from '../GoldOrbs.jsx';
 
 export default function RegisterPage({ onSwitch }) {
-  const { register } = useAuth();
+  const { register, resendVerification } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [resendStatus, setResendStatus] = useState('');
+  const [resending, setResending] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
     setError('');
+    setVerificationEmail('');
+    setResendStatus('');
     setBusy(true);
     try {
-      await register(fullName.trim(), email.trim(), password);
+      const result = await register(fullName.trim(), email.trim(), password);
+      setVerificationEmail(result.email);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Registration failed.');
+      if (err.message?.startsWith('Firebase is not configured')) setError(err.message);
+      else if (err.code === 'auth/email-already-in-use') {
+        setError('An account already uses this email. Sign in after verifying it to connect your existing Knoprix data.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('Choose a password with at least 8 characters.');
+      } else if (err.code === 'auth/network-request-failed') {
+        setError("Can't reach Firebase Authentication. Check your internet connection.");
+      } else if (err.code === 'auth/invalid-email') {
+        setError('Enter a valid email address.');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Too many attempts. Wait a few minutes, then try again.');
+      } else setError(err.response?.data?.detail || err.message || 'Registration failed.');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const resend = async () => {
+    setResending(true);
+    setResendStatus('');
+    try {
+      await resendVerification();
+      setResendStatus('Verification email sent again.');
+    } catch (err) {
+      setResendStatus(err.message || 'Could not resend the verification email.');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -69,6 +99,7 @@ export default function RegisterPage({ onSwitch }) {
                 <input
                   id="register-name"
                   required
+                  maxLength={100}
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Your name"
@@ -87,6 +118,7 @@ export default function RegisterPage({ onSwitch }) {
                   id="register-email"
                   type="email"
                   required
+                  maxLength={254}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
@@ -106,6 +138,7 @@ export default function RegisterPage({ onSwitch }) {
                   type={showPw ? 'text' : 'password'}
                   required
                   minLength={8}
+                  maxLength={128}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Password (min 8 chars)"
@@ -118,7 +151,8 @@ export default function RegisterPage({ onSwitch }) {
                   type="button"
                   onClick={() => setShowPw((v) => !v)}
                   title={showPw ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ivory/40 hover:text-[#e8be6a] transition"
+                  aria-label={showPw ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 min-w-11 min-h-11 flex items-center justify-center text-ivory/40 hover:text-[#e8be6a] transition"
                 >
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -129,16 +163,32 @@ export default function RegisterPage({ onSwitch }) {
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
+                role="alert"
                 className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/25 rounded-xl px-3 py-2"
               >
                 {error}
               </motion.p>
             )}
 
+            {verificationEmail && (
+              <div role="status" aria-live="polite" className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-3 text-xs text-emerald-100">
+                <p>Check {verificationEmail} for the verification link. Verify it, then sign in to connect your Knoprix account.</p>
+                <button
+                  type="button"
+                  onClick={resend}
+                  disabled={resending}
+                  className="mt-2 font-semibold text-[#e8be6a] underline disabled:opacity-50"
+                >
+                  {resending ? 'Sending…' : 'Resend verification email'}
+                </button>
+                {resendStatus && <p className="mt-2 text-ivory/70">{resendStatus}</p>}
+              </div>
+            )}
+
             <motion.button
               whileHover={{ y: -1 }}
               whileTap={{ scale: 0.98 }}
-              disabled={busy}
+              disabled={busy || Boolean(verificationEmail)}
               className="w-full py-3 rounded-full font-bold text-sm tracking-[0.18em] disabled:opacity-50 transition"
               style={{
                 background: 'linear-gradient(140deg, #f4d696, #d4943a)',

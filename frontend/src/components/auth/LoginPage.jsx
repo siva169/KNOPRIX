@@ -5,22 +5,40 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import BlackMirror from '../BlackMirror.jsx';
 
 export default function LoginPage({ onSwitch }) {
-  const { login } = useAuth();
+  const { login, authError, resendVerification } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
+  const [verificationRequired, setVerificationRequired] = useState(false);
+  const [resendStatus, setResendStatus] = useState('');
+  const [resending, setResending] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
     setError('');
+    setVerificationRequired(false);
+    setResendStatus('');
     setBusy(true);
     try {
       await login(email.trim(), password);
     } catch (err) {
       const data = err.response?.data;
-      if (!err.response || typeof data === 'string') {
+      if (err.code === 'auth/email-not-verified') {
+        setVerificationRequired(true);
+        setError('Verify your email from the link we sent before signing in.');
+      } else if (err.message?.startsWith('Firebase is not configured')) {
+        setError(err.message);
+      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+        setError('Email or password is incorrect.');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Too many attempts. Wait a few minutes, then try again.');
+      } else if (err.code === 'auth/network-request-failed') {
+        setError("Can't reach Firebase Authentication. Check your internet connection.");
+      } else if (err.code === 'auth/invalid-email') {
+        setError('Enter a valid email address.');
+      } else if (!err.response || typeof data === 'string') {
         // No backend at all (connection refused), or a proxy/gateway HTML
         // error page — e.g. the Vite dev proxy answers 500 with HTML text
         // when :8000 is down, so there is no JSON detail to show.
@@ -30,6 +48,19 @@ export default function LoginPage({ onSwitch }) {
       }
     } finally {
       setBusy(false);
+    }
+  };
+
+  const resend = async () => {
+    setResending(true);
+    setResendStatus('');
+    try {
+      await resendVerification();
+      setResendStatus('Verification email sent again.');
+    } catch (err) {
+      setResendStatus(err.message || 'Could not resend the verification email.');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -99,21 +130,37 @@ export default function LoginPage({ onSwitch }) {
                     type="button"
                     onClick={() => setShowPw((v) => !v)}
                     title={showPw ? 'Hide password' : 'Show password'}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ivory/35 hover:text-[#e8be6a] transition"
+                    aria-label={showPw ? 'Hide password' : 'Show password'}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 min-w-11 min-h-11 flex items-center justify-center text-ivory/35 hover:text-[#e8be6a] transition"
                   >
                     {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
-              {error && (
+              {(error || authError) && (
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
+                  role="alert"
                   className="text-xs text-rose-300 bg-rose-500/10 border border-rose-500/25 rounded-lg px-3 py-2"
                 >
-                  {error}
+                  {error || authError}
                 </motion.p>
+              )}
+
+              {verificationRequired && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={resend}
+                    disabled={resending}
+                    className="text-xs font-semibold text-[#e8be6a] underline disabled:opacity-50"
+                  >
+                    {resending ? 'Sending…' : 'Resend verification email'}
+                  </button>
+                  {resendStatus && <p role="status" className="mt-2 text-xs text-ivory/70">{resendStatus}</p>}
+                </div>
               )}
 
               <div className="pt-1">
@@ -121,7 +168,7 @@ export default function LoginPage({ onSwitch }) {
                   whileHover={{ y: -1 }}
                   whileTap={{ scale: 0.98 }}
                   disabled={busy}
-                  className="px-8 py-2.5 rounded-full font-bold text-xs tracking-[0.18em] disabled:opacity-50 transition"
+                  className="min-h-11 px-8 py-2.5 rounded-full font-bold text-xs tracking-[0.18em] disabled:opacity-50 transition"
                   style={{
                     background: 'linear-gradient(140deg, #f4d696, #d4943a)',
                     color: '#241503',

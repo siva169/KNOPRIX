@@ -13,11 +13,17 @@ import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
 
 from .config import cfg
 from .database import get_db
 
 _bearer = HTTPBearer(auto_error=False)
+_firebase_jwks = jwt.PyJWKClient(
+    "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com",
+    timeout=5,
+    cache_keys=True,
+)
 
 
 # ── Passwords ────────────────────────────────────────────────────────────────
@@ -63,6 +69,48 @@ def decode_token(token: str, secret: str) -> str:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
 
 
+def verify_firebase_id_token(token: str) -> dict:
+    """Verify a Firebase ID token and require a verified email."""
+    if not cfg.FIREBASE_PROJECT_ID:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Firebase auth is not configured")
+    try:
+        header = jwt.get_unverified_header(token)
+        if header.get("alg") != "RS256" or not header.get("kid"):
+            raise jwt.InvalidTokenError("Unexpected Firebase token header")
+        signing_key = _firebase_jwks.get_signing_key_from_jwt(token).key
+        claims = jwt.decode(
+            token,
+            signing_key,
+            algorithms=["RS256"],
+            audience=cfg.FIREBASE_PROJECT_ID,
+            issuer=f"https://securetoken.google.com/{cfg.FIREBASE_PROJECT_ID}",
+            options={"require": ["exp", "iat", "sub", "aud", "iss", "auth_time"]},
+        )
+    except PyJWKClientConnectionError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Firebase token verification is temporarily unavailable",
+        ) from exc
+    except (jwt.InvalidTokenError, PyJWKClientError) as exc:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Firebase ID token") from exc
+
+    if claims.get("email_verified") is not True:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Verify your email before signing in")
+    if not isinstance(claims.get("sub"), str) or not claims["sub"]:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Firebase token has no valid user ID")
+    auth_time = claims["auth_time"]
+    if (
+        isinstance(auth_time, bool)
+        or not isinstance(auth_time, (int, float))
+        or auth_time > time.time()
+    ):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Firebase authentication time")
+    email = claims.get("email")
+    if not isinstance(email, str) or "@" not in email:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Firebase token has no valid email")
+    return claims
+
+
 # ── Current-user dependency ──────────────────────────────────────────────────
 def get_current_user(
     cred: HTTPAuthorizationCredentials | None = Depends(_bearer),
@@ -70,12 +118,40 @@ def get_current_user(
 ):
     if cred is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
-    user_id = decode_token(cred.credentials, cfg.JWT_SECRET)
-    row = db.execute("SELECT id, email, full_name FROM users WHERE id = ?",
-                     (user_id,)).fetchone()
+    token = cred.credentials
+    try:
+        is_firebase_token = jwt.get_unverified_header(token).get("alg") == "RS256"
+    except jwt.InvalidTokenError:
+        is_firebase_token = False
+
+    if is_firebase_token:
+        claims = verify_firebase_id_token(token)
+        row = db.execute(
+            "SELECT id, email, full_name FROM users WHERE firebase_uid = ?",
+            (claims["sub"],),
+        ).fetchone()
+    else:
+        user_id = decode_token(token, cfg.JWT_SECRET)
+        row = db.execute(
+            "SELECT id, email, full_name, firebase_uid FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if row is not None and row["firebase_uid"]:
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                "Use Firebase to access this account",
+            )
     if row is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User no longer exists")
     return dict(row)
+
+
+def get_verified_firebase_claims(
+    cred: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> dict:
+    if cred is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
+    return verify_firebase_id_token(cred.credentials)
 
 
 # ── Login rate limiting ──────────────────────────────────────────────────────

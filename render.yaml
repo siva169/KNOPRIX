@@ -20,6 +20,8 @@ services:
         generateValue: true
       - key: CORS_ORIGINS
         value: https://knoprix.vercel.app
+      - key: FIREBASE_PROJECT_ID
+        value: knoprix-a647
       # Supabase PostgreSQL is required because Render's local filesystem is
       # ephemeral and cannot persist SQLite data between restarts.
       - key: DATABASE_URL

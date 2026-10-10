@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     full_name TEXT NOT NULL,
+    firebase_uid TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -215,6 +216,11 @@ def init_db():
     try:
         conn.executescript(SCHEMA)
         if DATABASE_URL:
+            user_rows = conn.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'users'"
+            ).fetchall()
+            user_cols = [r["column_name"] for r in user_rows]
             rows = conn.execute(
                 "SELECT column_name FROM information_schema.columns "
                 "WHERE table_name = 'highlights'"
@@ -230,6 +236,15 @@ def init_db():
             bookmark_cols = [
                 c[1] for c in conn.execute("PRAGMA table_info(bookmarks)").fetchall()
             ]
+            user_cols = [
+                c[1] for c in conn.execute("PRAGMA table_info(users)").fetchall()
+            ]
+        if "firebase_uid" not in user_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN firebase_uid TEXT")
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_firebase_uid "
+            "ON users(firebase_uid)"
+        )
         # Migration for DBs created before the match_all column existed.
         if "match_all" not in cols:
             conn.execute("ALTER TABLE highlights ADD COLUMN match_all INTEGER NOT NULL DEFAULT 0")

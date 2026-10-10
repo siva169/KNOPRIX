@@ -23,6 +23,7 @@ _load_dotenv()
 
 class Config:
     PORT = int(os.getenv("PORT", "8000"))
+    FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "").strip()
 
     JWT_SECRET = os.getenv("JWT_SECRET", "change-me")
     JWT_REFRESH_SECRET = os.getenv("JWT_REFRESH_SECRET", "change-me-refresh")

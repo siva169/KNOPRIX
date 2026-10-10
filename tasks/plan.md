@@ -63,9 +63,11 @@ Target additions
 
 ### Confirmed by inspected source
 
-- Auth currently uses password registration/login, bcrypt, JWT access and
-  refresh tokens, with in-process rate limiters. Google OAuth, email
-  verification/recovery, and CAPTCHA were not found in the inspected code.
+- Auth retains legacy password/JWT sessions for unlinked accounts. When
+  configured, Firebase email/password sign-in requires verified email and
+  links existing accounts by verified email without changing their Knoprix
+  IDs or project ownership. Google OAuth, password recovery, and CAPTCHA were
+  not found in the inspected code.
 - Upload checks allowed extensions and size; extraction supports PDF, PPTX,
   DOCX paragraphs/tables, and plain text. OCR and robust image extraction are
   not implemented; legacy `.ppt` is accepted but the parser uses the PPTX

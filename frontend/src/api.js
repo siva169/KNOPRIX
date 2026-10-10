@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE } from './config';
+import { firebaseAuth } from './firebase';
 
 const api = axios.create({ baseURL: API_BASE });
 
@@ -10,8 +11,14 @@ const REFRESH_KEY = 'knoprix_mr_refresh_token';
 
 export { ACCESS_KEY, REFRESH_KEY };
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem(ACCESS_KEY);
+export async function getAccessToken(forceRefresh = false) {
+  const firebaseUser = firebaseAuth?.currentUser;
+  if (firebaseUser) return firebaseUser.getIdToken(forceRefresh);
+  return localStorage.getItem(ACCESS_KEY);
+}
+
+api.interceptors.request.use(async (config) => {
+  const token = await getAccessToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -20,8 +27,23 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
+    if (
+      error.response?.status === 401 &&
+      original &&
+      !original._retry &&
+      firebaseAuth?.currentUser
+    ) {
+      original._retry = true;
+      try {
+        const token = await getAccessToken(true);
+        original.headers.Authorization = `Bearer ${token}`;
+        return api(original);
+      } catch {
+        window.dispatchEvent(new Event('auth:logout'));
+      }
+    }
     const refreshToken = localStorage.getItem(REFRESH_KEY);
-    if (error.response?.status === 401 && !original?._retry && refreshToken) {
+    if (error.response?.status === 401 && original && !original._retry && refreshToken) {
       original._retry = true;
       try {
         const { data } = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken });

@@ -9,6 +9,28 @@ notification APIs. This document specifies behavior, not UI layout.
 
 - New endpoints use `/api/v1`. Existing `/api/...` endpoints remain legacy
   routes and are not silently changed by this contract.
+- **Authentication migration exception:** `POST /api/auth/firebase/session`
+  remains under the existing legacy auth prefix so the current frontend can
+  exchange a verified Firebase identity for its existing Knoprix account.
+  This endpoint does not mint a second Knoprix token; subsequent API requests
+  use the Firebase ID token.
+- `POST /api/auth/firebase/session` requires
+  `Authorization: Bearer <Firebase ID token>` and accepts
+  `{"fullName": "Reader One"}` (`fullName` may be omitted or `null`).
+  It returns the existing legacy user shape:
+  `{"id": "user-id", "email": "reader@example.com", "full_name": "Reader One"}`.
+  The backend verifies the configured Firebase project, token signature,
+  expiry, issuer, audience, and verified email; identity and email are read
+  from the verified token, never trusted from the request body.
+- A verified email matching an existing Knoprix user links that Firebase UID
+  to the existing row without changing its ID or owned records. Repeated
+  session syncs return the same user. A UID/email conflict returns `409`;
+  invalid tokens return `401`, unverified email returns `403`, and unavailable
+  verification keys return `503`.
+- When `FIREBASE_PROJECT_ID` is configured, legacy
+  `POST /api/auth/register` returns `410`. Existing unlinked users may continue
+  using legacy login/refresh; after linking, legacy login/refresh are rejected
+  and the Firebase ID token is required.
 - The current backend has owner-scoped JWT routes, synchronous document
   extraction, a mocked `/api/chat/ask`, and no persisted AI grants,
   conversations, contacts, or shares. It does not yet enforce this contract.

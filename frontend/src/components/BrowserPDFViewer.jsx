@@ -6,7 +6,7 @@ import { useApp } from '../context/AppContext.jsx';
 import PDFToolbar from './PDFToolbar.jsx';
 import SlideViewer from './SlideViewer.jsx';
 import BookmarkNameDialog from './BookmarkNameDialog.jsx';
-import api, { ACCESS_KEY } from '../api';
+import api, { getAccessToken } from '../api';
 import { API_BASE } from '../config';
 import { HIGHLIGHT_COLORS, colorById } from '../highlights';
 import {
@@ -221,13 +221,16 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     setPdfDoc(null);
     setPdfDocumentId(null);
 
-    const token = localStorage.getItem(ACCESS_KEY);
-    pdfjsLib
-      .getDocument({
-        url: `${API_BASE}/documents/${activeDocument.id}/stream`,
-        httpHeaders: token ? { Authorization: `Bearer ${token}` } : {},
+    getAccessToken()
+      .then((token) => {
+        if (cancelled) return null;
+        return pdfjsLib.getDocument({
+          url: `${API_BASE}/documents/${activeDocument.id}/stream`,
+          httpHeaders: token ? { Authorization: `Bearer ${token}` } : {},
+        }).promise;
       })
-      .promise.then((doc) => {
+      .then((doc) => {
+        if (!doc) return;
         if (cancelled) return;
         setPdfDoc(doc);
         setPdfDocumentId(activeDocument.id);

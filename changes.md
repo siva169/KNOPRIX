@@ -1,5 +1,29 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-10 — Add Firebase email/password authentication
+
+- Added Firebase client authentication with email verification, resend
+  verification, and clear sign-in/registration errors. The frontend reads its
+  Firebase web-app values from `VITE_FIREBASE_*` variables.
+- Added backend Firebase ID-token verification for the configured project and
+  an additive `firebase_uid` migration. Verified-email linking preserves
+  existing Knoprix user IDs and project ownership; linked accounts must use
+  Firebase bearer tokens.
+- Documented the legacy auth migration endpoint, its request/response and
+  compatibility behavior, plus Firebase Console, Render, and Vercel setup.
+- Verification: backend Firebase auth tests passed (18/18), changed backend
+  modules compiled, frontend production build passed, and browser smoke checks
+  found no horizontal overflow at 390/425/768/1024px for login and register.
+  Missing-Firebase configuration errors rendered as expected. No real
+  Firebase account or deployed service was accessed.
+- `npm audit --omit=dev` still reports 5 high and 1 critical production
+  dependency advisories; the existing PDF.js build and chunk-size warnings
+  remain. They were not broadly upgraded as part of this auth change.
+- Remaining release setup: enable Firebase Email/Password, authorize the
+  deployed domain, add the Firebase web-app variables in Vercel, and set
+  `FIREBASE_PROJECT_ID` in Render. The project-wide 33-item polish checklist
+  remains 0/33 and is not represented as complete by this auth slice.
+
 ## 2026-10-10 — Set the production Vercel origin in the Render blueprint
 
 - Replaced the placeholder `CORS_ORIGINS` value with the production frontend
