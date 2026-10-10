@@ -1,5 +1,12 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-11 — Upgrade Axios to resolve production advisories
+
+- Updated Axios from 1.19.0 to 1.20.0 after reviewing the upstream release
+  notes; the security fixes are compatible with the current API usage.
+- Verified the production frontend build. The production audit now reports
+  five remaining vulnerable packages (four high, one critical).
+
 ## 2026-10-11 — Harden demo seeding and align document processing
 
 - Disabled automatic demo account creation by default. The optional seed now
