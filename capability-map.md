@@ -29,6 +29,8 @@ The first AI provider boundary supports:
 The first AI slice is document chat. Summaries, flashcards, quizzes, and
 opt-in web research follow as separate vertical slices.
 
-API keys are user-owned credentials. They are never placed in frontend code,
-never committed, and never displayed after saving. The backend stores them
-encrypted and uses them only for documents the user explicitly selects.
+API keys are user-owned credentials. They remain in browser `localStorage`
+and are sent directly to providers; the backend must never receive or store
+them. Current chat is only partially implemented: the backend returns mocked
+responses, and persisted per-document AI grants are not enforced yet. Do not
+describe this as a complete secure AI integration.

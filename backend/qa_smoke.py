@@ -1,8 +1,13 @@
 """Smoke tests for the core backend routes (foundation-shell slice QA)."""
 import json
+import os
 import urllib.request
 
 BASE = "http://127.0.0.1:8011/api"
+QA_EMAIL = os.getenv("KNOPRIX_QA_EMAIL", "demo@knoprix.io")
+QA_PASSWORD = os.getenv("KNOPRIX_QA_PASSWORD", "")
+if not QA_PASSWORD:
+    raise SystemExit("Set KNOPRIX_QA_PASSWORD to run the local API smoke test.")
 results = []
 
 
@@ -32,7 +37,7 @@ s, d = call("GET", "/health")
 check("GET /health", s == 200 and d.get("status") == "ok", str(d))
 
 # 2. Demo login
-s, d = call("POST", "/auth/login", {"email": "demo@knoprix.io", "password": "Password123!"})
+s, d = call("POST", "/auth/login", {"email": QA_EMAIL, "password": QA_PASSWORD})
 token = d.get("tokens", {}).get("accessToken", "")
 check("POST /auth/login (demo)", s == 200 and bool(token), f"HTTP {s}")
 

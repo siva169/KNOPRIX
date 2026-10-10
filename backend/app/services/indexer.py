@@ -194,11 +194,19 @@ def search_project(db, project_id: str, query: str, limit: int = 6) -> list[dict
     matches = indices["inverted"].search(words)
     page_map = _project_page_map(db, project_id)
     results = []
-    for m in matches[:limit]:
-        doc = db.execute(
-            "SELECT id, file_name, file_type, extracted_text, page_count FROM documents WHERE id = ?",
-            (m["doc_id"],),
-        ).fetchone()
+    ranked_matches = matches[:limit]
+    if not ranked_matches:
+        return []
+    doc_ids = [match["doc_id"] for match in ranked_matches]
+    placeholders = ", ".join("?" for _ in doc_ids)
+    rows = db.execute(
+        "SELECT id, file_name, file_type, extracted_text, page_count "
+        f"FROM documents WHERE id IN ({placeholders})",
+        doc_ids,
+    ).fetchall()
+    documents = {row["id"]: row for row in rows}
+    for m in ranked_matches:
+        doc = documents.get(m["doc_id"])
         if doc is None:
             continue
         pages = sorted({p for w in words for p in _word_pages(page_map, doc["id"], w)})

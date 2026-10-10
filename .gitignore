@@ -1,15 +1,24 @@
 # Secrets — never commit
-backend/.env
+backend/.env*
+!backend/.env.example
+frontend/.env*
+!frontend/.env.example
 
 # Python
 backend/.venv/
+backend/uploads/
 __pycache__/
 *.pyc
+backend/.pytest_cache/
+backend/.mypy_cache/
 
 # Node
 frontend/node_modules/
 frontend/dist/
 frontend/node_modules/.vite/
+frontend/.playwright-cli/
+frontend/coverage/
+frontend/test-results/
 
 # Databases
 backend/*.db
@@ -17,6 +26,14 @@ backend/*.sqlite*
 
 # Logs
 *.log
+*.tmp
+*.temp
+*.swp
+
+# Operating system
+.DS_Store
+Thumbs.db
+desktop.ini
 
 # QA evidence (screenshots, dumps) — reproducible, not source
 qa-artifacts/

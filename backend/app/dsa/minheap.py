@@ -9,7 +9,7 @@ O(k). The smallest kept score always sits at the top (peek).
 
 Pure-Python, array-backed binary heap so it is easy to explain during the
 review. (Python's heapq exists — this file exists so the review can point
-at OUR structure, matching trie.py / inverted_index.py / stack.py.)
+at OUR structure, matching trie.py / inverted_index.py / bookmark_collection.py.)
 """
 from __future__ import annotations
 

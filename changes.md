@@ -1,5 +1,36 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-11 — Harden demo seeding and align document processing
+
+- Disabled automatic demo account creation by default. The optional seed now
+  requires explicit local opt-in, a private password, SQLite, and no Firebase
+  configuration. Legacy demo-password login and tokens are rejected by
+  default; verified Firebase email linking remains available to preserve
+  existing account ownership and data.
+- Limited uploads to formats the parser actually supports (PDF, PPTX, DOCX,
+  TXT, and MD), removed the unused Stack implementation, and removed an unused
+  slide-walker parameter and QA constant.
+- Batched search-result document loading into one database query and streamed
+  object-storage downloads to disk. Partial temporary downloads are cleaned
+  up on failure.
+- Ignored local uploads and Playwright artifacts without deleting them.
+  Corrected setup and BYOK documentation, replaced a credential-like value in
+  environment examples, documented the Firebase frontend example, moved QA
+  login values to environment variables, and removed the published demo
+  password from current source and documentation.
+- Verification: Firebase/auth QA (25/25), search-batching regression (1/1),
+  upload-format regression (1/1), bookmark QA (4/4), storage REST QA (9/9),
+  Python compilation, Node syntax checks, frontend production build, and
+  `git diff --check` passed. The build still reports PDF.js `eval` and
+  chunk-size warnings.
+- `npm audit --omit=dev` reports 6 production vulnerabilities (5 high, 1
+  critical); dependency upgrades were not applied because the PDF.js fix is a
+  breaking major-version change and requires approval.
+- Updated the presentation generator to reflect the current Vercel, Render,
+  Supabase, and Firebase setup and removed its outdated demo login.
+- Previously shared Supabase service-role/database credentials were not used
+  in this audit; rotate them before reuse.
+
 ## 2026-10-10 — Add Firebase email/password authentication
 
 - Added Firebase client authentication with email verification, resend
@@ -427,9 +458,9 @@ record: that service is not a ghost.
   email or password") still show truthfully.
 - Verified in a real browser: wrong-password path shows the 401 text, killed-
   backend path shows the unreachable text, full `qa-goldauth.mjs` still
-  45/45, `npm run build` pass. Backend restarted (SQLite, seed ran) and left
-  running on :8000 — boss can log in now with demo@knoprix.io /
-  Password123! (type by hand; no shortcut, per boss).
+  45/45, `npm run build` pass. Backend restarted with SQLite and demo seeding
+  enabled for that local session. The previously published demo password has
+  since been removed and must not be reused.
 
 ## 2026-09-12 — Black Mirror login (boss image ref 04, Anurati headline) (Bruce)
 

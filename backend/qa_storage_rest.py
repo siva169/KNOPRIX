@@ -16,7 +16,6 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-PORT_PLACEHOLDER = None  # bound at runtime in main()
 FAKE = {}  # quoted request path -> bytes
 CAPTURED = {}  # last request's headers + content-length
 

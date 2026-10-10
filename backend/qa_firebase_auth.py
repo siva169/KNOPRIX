@@ -1,4 +1,5 @@
 """Focused tests for Firebase token verification and Knoprix account linking."""
+import asyncio
 import sqlite3
 import tempfile
 import time
@@ -85,6 +86,182 @@ class FirebaseAuthTests(unittest.TestCase):
                     db=None,
                 )
         self.assertEqual(raised.exception.status_code, 410)
+
+    def test_startup_does_not_create_demo_account_without_explicit_opt_in(self):
+        from app import main
+
+        async def start_app():
+            async with main.lifespan(None):
+                pass
+
+        with (
+            patch.object(main, "init_db"),
+            patch.object(main, "seed") as seed_demo,
+            patch.object(main.cfg, "ENABLE_DEMO_SEED", False, create=True),
+        ):
+            asyncio.run(start_app())
+        seed_demo.assert_not_called()
+
+    def test_seed_refuses_to_run_without_local_opt_in(self):
+        from app import seed as demo_seed
+
+        with (
+            patch.object(
+                demo_seed,
+                "cfg",
+                SimpleNamespace(ENABLE_DEMO_SEED=False),
+                create=True,
+            ),
+            patch.object(demo_seed, "connect", side_effect=RuntimeError) as connect,
+        ):
+            with self.assertRaises(RuntimeError):
+                demo_seed.seed()
+        connect.assert_not_called()
+
+    def test_seed_refuses_firebase_or_postgres_configuration(self):
+        from app import seed as demo_seed
+
+        with (
+            patch.object(
+                demo_seed,
+                "cfg",
+                SimpleNamespace(
+                    ENABLE_DEMO_SEED=True,
+                    FIREBASE_PROJECT_ID=PROJECT_ID,
+                    DEMO_PASSWORD="private-local-password",
+                ),
+                create=True,
+            ),
+            patch.object(demo_seed, "DATABASE_URL", ""),
+            patch.object(demo_seed, "connect") as connect,
+        ):
+            with self.assertRaises(RuntimeError):
+                demo_seed.seed()
+        connect.assert_not_called()
+
+    def test_seed_replaces_any_existing_demo_password_with_local_secret(self):
+        from app import seed as demo_seed
+
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "demo.db"
+            upload_dir = Path(directory) / "uploads"
+            upload_dir.mkdir()
+            conn = sqlite3.connect(database_path)
+            conn.row_factory = sqlite3.Row
+            conn.executescript(database.SCHEMA)
+            conn.commit()
+            conn.close()
+
+            config = SimpleNamespace(
+                ENABLE_DEMO_SEED=True,
+                FIREBASE_PROJECT_ID="",
+                DEMO_PASSWORD="first-private-password",
+                DEMO_ACCOUNT_EMAIL="demo@knoprix.io",
+            )
+
+            def connect_local_db():
+                local = sqlite3.connect(database_path)
+                local.row_factory = sqlite3.Row
+                return local
+
+            with (
+                patch.object(demo_seed, "cfg", config),
+                patch.object(demo_seed, "DATABASE_URL", ""),
+                patch.object(demo_seed, "UPLOAD_DIR", upload_dir),
+                patch.object(demo_seed, "connect", side_effect=connect_local_db),
+                patch.object(demo_seed, "rebuild_project_indices"),
+            ):
+                demo_seed.seed()
+                config.DEMO_PASSWORD = "second-private-password"
+                demo_seed.seed()
+
+            conn = sqlite3.connect(database_path)
+            password_hash = conn.execute(
+                "SELECT password_hash FROM users WHERE email = ?",
+                ("demo@knoprix.io",),
+            ).fetchone()[0]
+            conn.close()
+        self.assertFalse(
+            security.verify_password("legacy-public-demo-password", password_hash)
+        )
+        self.assertTrue(
+            security.verify_password("second-private-password", password_hash)
+        )
+
+    def test_demo_account_cannot_use_legacy_password_login(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            "CREATE TABLE users (id TEXT, email TEXT, password_hash TEXT, full_name TEXT, firebase_uid TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO users VALUES (?, ?, ?, ?, NULL)",
+            (
+                "user-demo-1",
+                "demo@knoprix.io",
+                security.hash_password("legacy-public-demo-password"),
+                "Demo User",
+            ),
+        )
+        with (
+            patch.object(auth.cfg, "ENABLE_DEMO_SEED", False, create=True),
+            self.assertRaises(HTTPException) as raised,
+        ):
+            auth.login(
+                auth.LoginBody(
+                    email="demo@knoprix.io", password="legacy-public-demo-password"
+                ),
+                SimpleNamespace(client=None),
+                conn,
+            )
+        self.assertEqual(raised.exception.status_code, 401)
+        conn.close()
+
+    def test_demo_account_legacy_tokens_are_rejected(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            "CREATE TABLE users (id TEXT, email TEXT, full_name TEXT, firebase_uid TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO users VALUES (?, ?, ?, NULL)",
+            ("user-demo-1", "demo@knoprix.io", "Demo User"),
+        )
+        credentials = HTTPAuthorizationCredentials(
+            scheme="Bearer", credentials=security.create_access_token("user-demo-1")
+        )
+        with (
+            patch.object(security.cfg, "ENABLE_DEMO_SEED", False, create=True),
+            self.assertRaises(HTTPException) as raised,
+        ):
+            security.get_current_user(credentials, conn)
+        self.assertEqual(raised.exception.status_code, 401)
+        conn.close()
+
+    def test_demo_account_remains_available_to_verified_firebase_owner(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            "CREATE TABLE users (id TEXT, email TEXT, full_name TEXT, firebase_uid TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO users VALUES (?, ?, ?, ?)",
+            ("user-demo-1", "demo@knoprix.io", "Demo User", "firebase-user-1"),
+        )
+        credentials = HTTPAuthorizationCredentials(
+            scheme="Bearer", credentials=self.token(email="demo@knoprix.io")
+        )
+        jwks = SimpleNamespace(
+            get_signing_key_from_jwt=lambda _: SimpleNamespace(key=self.public_key)
+        )
+        with (
+            patch.object(security.cfg, "FIREBASE_PROJECT_ID", PROJECT_ID),
+            patch.object(security.cfg, "ENABLE_DEMO_SEED", False, create=True),
+            patch.object(security, "_firebase_jwks", jwks),
+        ):
+            user = security.get_current_user(credentials, conn)
+        self.assertEqual(user["id"], "user-demo-1")
+        conn.close()
 
     def test_rejects_wrong_project_audience(self):
         with self.assertRaises(HTTPException) as raised:

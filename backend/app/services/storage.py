@@ -8,6 +8,7 @@ Objects are addressed by an opaque key like "documents/<doc-id>/<name>".
 Database rows store "s3://<key>"; the prefix is historical and acts purely as
 a marker that the file lives in object storage.
 """
+import shutil
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -96,8 +97,13 @@ def upload(path: Path, key: str, content_type: str | None = None) -> None:
 
 def download(key: str, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    data = _read("GET", f"object/{cfg.OBJECT_STORAGE_BUCKET}/{key}")
-    destination.write_bytes(data)
+    try:
+        with _open("GET", f"object/{cfg.OBJECT_STORAGE_BUCKET}/{key}") as response:
+            with destination.open("wb") as output:
+                shutil.copyfileobj(response, output, length=256 * 1024)
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
 
 
 def delete(key: str) -> None:

@@ -1,6 +1,10 @@
 /* Summary UI QA: chat panel -> Summarize -> quoted key lines (390 + 1280). */
 import { chromium } from 'playwright';
 
+const QA_EMAIL = process.env.KNOPRIX_QA_EMAIL || '';
+const QA_PASSWORD = process.env.KNOPRIX_QA_PASSWORD || '';
+if (!QA_EMAIL || !QA_PASSWORD) throw new Error('Set KNOPRIX_QA_EMAIL and KNOPRIX_QA_PASSWORD.');
+
 const results = [];
 const check = (n, c, d = '') => { results.push([n, !!c]); console.log(`${c ? 'PASS' : 'FAIL'}  ${n}${d ? ' — ' + d : ''}`); };
 
@@ -9,9 +13,9 @@ for (const [tag, vp] of [['390', { width: 390, height: 844 }], ['1280', { width:
   const page = await browser.newPage({ viewport: vp });
   try {
     await page.goto('http://127.0.0.1:5173/', { waitUntil: 'domcontentloaded' });
-    await page.getByPlaceholder('Email address').fill('demo@knoprix.io');
-    await page.getByPlaceholder('Password').fill('Password123!');
-    await page.locator('form').getByRole('button').first().click();
+    await page.getByLabel('Email address').fill(QA_EMAIL);
+    await page.getByLabel('Password').fill(QA_PASSWORD);
+    await page.getByRole('button', { name: /SIGN IN/ }).click();
     await page.getByRole('button', { name: /Chat QA signals/ }).first().click({ timeout: 15000 });
     const docName = page.getByText('chatqa.txt');
     for (let i = 0; i < await docName.count(); i++) {

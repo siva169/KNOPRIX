@@ -15,27 +15,26 @@ Analogy that carries through the whole app:
 
 ## 1. Login & accounts
 
-**What happens:** you enter email + password → the app checks them → you get in.
+With Firebase configured, the browser signs users up or in with Firebase
+email/password authentication. New accounts must verify their email.
 
-**Workflow (backend):**
-1. `POST /api/auth/login` receives email + password.
-2. It looks up the email in the `users` table. If found, it re-hashes the typed
-   password with **bcrypt** and compares to the stored hash. bcrypt is a
-   one-way hash: the real password is never stored, only a fingerprint.
-3. If it matches, the server mints a **JWT** (a signed digital pass) that
-   contains your user id + expiry time. The frontend sends this pass on every
-   request so you don't retype the password.
-4. Register (`POST /api/auth/register`) does the same but first checks the
-   email is free, hashes the password, inserts the row, and logs you in.
+1. The frontend sends the Firebase ID token to `POST /api/auth/firebase/session`.
+2. The backend verifies its signature, project, expiry, and verified email
+   using Firebase's signing keys.
+3. A verified email links to its existing Knoprix user row, preserving project
+   ownership, or creates a new row.
+4. Subsequent API requests use the Firebase ID token; the backend resolves it
+   to the linked Knoprix user.
 
-**Why passwords are safe:** the DB stores only bcrypt hashes; if someone
-stole the database they still can't read passwords. JWTs expire (60 min
-access + 7 day refresh) and are signed with a secret.
+Legacy password login remains for older, unlinked accounts. Registration via
+the legacy API is disabled when `FIREBASE_PROJECT_ID` is configured. The old
+public demo password is no longer accepted by default; an existing owner can
+recover that account only by verifying its email through Firebase.
 
-**The login bug we fixed:** the app used to store users in a local SQLite file
-on the free hosting server. That server's disk is *wiped on every restart*, so
-new accounts vanished → "invalid email or password". Now accounts live in a
-persistent **Postgres (Neon)** database and survive restarts.
+Deployed accounts and documents use Supabase PostgreSQL and private Supabase
+Storage. Local development uses SQLite and disk storage by default. The
+optional demo seed is disabled by default and refuses Firebase or PostgreSQL
+configurations.
 
 ---
 
@@ -59,7 +58,7 @@ project → its files appear in the tree. Click a file → the viewer opens it.
 - PDF → `pypdf` extracts text per page (scanned image PDFs have no text layer)
 - PPTX → `python-pptx` reads each slide's text boxes
 - DOCX → `python-docx` reads paragraphs + tables
-- TXT → read as plain text
+- TXT / MD → read as plain text
 
 ---
 
@@ -167,7 +166,8 @@ bookmarks endpoint (ordered bookmark collection).
 
 ## 8. How the three data structures are built (item 9)
 
-On upload (and on server start via `seed.py`), `services/indexer.py` runs:
+On upload, `services/indexer.py` runs. Local demo seeding can also rebuild
+indices, but is disabled by default:
 
 1. `tokenize(text)` → splits every document into lowercase words, drops
    stopwords ("the", "and"…) and 1-letter words.

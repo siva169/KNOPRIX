@@ -1,82 +1,90 @@
-# 🔶 KNOPRIX — Mid Review Build (50%)
+# Knoprix — Final Project
 
-An academic-grade, **DSA-powered Knowledge Management Platform** built for the
-mid-semester review. This is the **50% milestone** of the project: 3 of the 5
-data structures are live and demo-ready — the remaining ones (and the AI
-agent / read-aloud features) are planned for the final review.
+Knoprix is a document study workspace built with FastAPI, React, and Vite.
+Users can organize, read, search, highlight, and bookmark study documents.
+Its search and bookmark features demonstrate Trie, Inverted Index, Hash Table,
+and Doubly Linked List data structures.
 
-> Built on the completed `knoprix-v2` codebase (FastAPI + React), trimmed and
-> re-themed with a **saffron / Saraswati study palette** — warm orange on deep
-> charcoal, cream ivory text, aurora gradients.
+## Supported documents
 
-## 🧠 Featured data structures (mid review)
+PDF, PPTX, DOCX, TXT, and MD. Image OCR and legacy `.ppt` files are not
+supported.
 
-| # | Structure | Where it lives in the app |
-|---|---|---|
-| 1 | **Hash Table + Doubly Linked List** | Bookmarks — the hash table finds any bookmark by ID, while the doubly linked list keeps newest-first order and supports O(1) average unlinking. |
-| 2 | **Trie** | Navbar search — live prefix **autocomplete** with word frequencies. |
-| 3 | **Inverted Index** | Navbar search — **ranked full-text search** with snippets and scores. |
+## Local development
 
-Coming in the **final review**: Knowledge Graph, Min-Heap, AI document agent,
-read-aloud.
+### Backend
 
-## ✨ What's in this build
-
-- 🔶 **Orange Saraswati theme** — warm saffron/amber on deep charcoal, cream
-  text, aurora gradients, Outfit display font, light/dark themes
-- 📚 **Multi-format reading** — PDF (real canvas pages + selectable text),
-  PPTX, DOCX, TXT/MD, images
-- 🔖 **Ordered bookmark collection** — per-page bookmark buttons on every PDF
-  page + toolbar, text-highlight bookmarks, newest-first drawer, arbitrary ID
-  deletion, and O(1) average collection updates
-- 🔍 **Live search** — Trie autocomplete (single word) + Inverted Index ranked
-  results (phrases) in the navbar
-- 📊 **DSA Index Visualizer** — animated stats for Trie / Inverted Index /
-  bookmark collection + top-keyword cloud
-- 🛡️ **Security** — JWT auth, owner-scoped routes (IDOR-proof), rate-limited
-  login/register
-
-## 🚀 Run it
-
-### Backend (port 8000)
 ```bash
 cd backend
-py -m venv .venv
-.venv/Scripts/python -m pip install -r requirements.txt
-.venv/Scripts/python -m uvicorn app.main:app --port 8000
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
 ```
-Interactive API docs: http://127.0.0.1:8000/docs
 
-### Frontend (port 5173)
+On Windows, activate with `.venv\Scripts\activate` instead. The backend uses
+local SQLite and disk storage unless `DATABASE_URL` and all three
+`OBJECT_STORAGE_*` settings are configured. Add random local JWT secrets and
+`FIREBASE_PROJECT_ID` to `backend/.env` to enable Firebase authentication.
+The Firebase web-app values belong in `frontend/.env.local`; start from
+`frontend/.env.example` and replace its placeholders.
+
+### Configuration
+
+Production requires `JWT_SECRET`, `JWT_REFRESH_SECRET`,
+`FIREBASE_PROJECT_ID`, `DATABASE_URL`, and `CORS_ORIGINS`. Persistent document
+storage also requires `OBJECT_STORAGE_BUCKET`, `OBJECT_STORAGE_ENDPOINT`, and
+`OBJECT_STORAGE_API_KEY` together. The Supabase service key is backend-only.
+The frontend requires the `VITE_FIREBASE_*` values from its Firebase web app;
+`VITE_API_URL` points to the deployed API.
+
+### Frontend
+
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
-App: **http://localhost:5173**
 
-### Demo account
-`demo@knoprix.io` / `Password123!` — your documents are auto-imported on first
-start (SDC - Grok.pdf, Section 2, A-dsa, Spectrum PPTX…).
+Open http://localhost:5173. Vite proxies `/api` requests to the local backend.
+Firebase email/password sign-in requires a configured Firebase web app and
+email verification.
 
-## 🗂️ Structure
+### Optional local demo fixtures
+
+Demo seeding is disabled by default and is restricted to SQLite without
+Firebase configured. To import files from `backend/uploads/` into a local demo
+project, set `ENABLE_DEMO_SEED=true` and a private `DEMO_PASSWORD` in
+`backend/.env`, then start the backend. Never enable this for a hosted
+deployment; the hosted database may contain real user data.
+
+## Current limitations
+
+Document chat currently returns mocked backend responses, and persisted
+per-document AI grants are not enforced. Do not treat third-party AI consent
+or AI document access as a complete production security boundary.
+
+## Verification
+
+From the project directory:
+
+```bash
+backend/.venv/bin/python backend/qa_firebase_auth.py
+backend/.venv/bin/python backend/qa_search_batch.py
+backend/.venv/bin/python backend/qa_file_formats.py
+backend/.venv/bin/python backend/qa_storage_rest.py
+npm --prefix frontend run build
 ```
-knoprix-v2-midreview/
-├── backend/                 FastAPI app
-│   ├── app/
-│   │   ├── dsa/             pure-Python Trie, InvertedIndex, bookmark collection
-│   │   ├── routers/         auth, projects, documents, search, dsa, bookmarks
-│   │   ├── services/        pdf/pptx/docx parsing, DSA indexer
-│   │   ├── security.py      JWT + bcrypt + rate limiting + ownership
-│   │   └── main.py
-│   └── uploads/             your documents
-└── frontend/                React + Vite + Tailwind (orange theme)
-    └── src/                 components, contexts, api client
-```
 
-## 🧮 DSA engine notes
-- `dsa/trie.py` — prefix tree with frequencies, autocomplete + top keywords
-- `dsa/inverted_index.py` — word → {document: count}, ranked search
-- `dsa/bookmark_collection.py` — hash table + doubly linked list for bookmark lookup and recency order
-- Indexes are serialized to SQLite (`dsa_indices`) and rebuilt on upload/delete
-- No AI/API keys required — the app is fully self-contained
+The storage QA uses a local fake HTTP server; the other commands do not access
+deployed services.
+Live API and browser QA scripts require a test account via
+`KNOPRIX_QA_EMAIL` and `KNOPRIX_QA_PASSWORD`; keep those values in the shell
+environment, not in source files.
+
+## Deployment
+
+The intended beta architecture is Vercel (frontend), Render (FastAPI), and
+Supabase (PostgreSQL and private Storage). See [`docs/DEPLOY.md`](docs/DEPLOY.md)
+for environment setup and the Firebase configuration steps. Keep database
+URLs, JWT secrets, and the Supabase Storage service key server-side.

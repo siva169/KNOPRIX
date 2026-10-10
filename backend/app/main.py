@@ -17,7 +17,8 @@ from .seed import seed
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    seed()
+    if cfg.ENABLE_DEMO_SEED:
+        seed()
     yield
 
 

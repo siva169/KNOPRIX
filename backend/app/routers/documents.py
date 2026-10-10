@@ -18,7 +18,7 @@ from ..services import storage
 
 router = APIRouter(prefix="/api", tags=["documents"])
 
-ALLOWED_TYPES = {".pdf", ".pptx", ".ppt", ".docx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".webp"}
+ALLOWED_TYPES = {".pdf", ".pptx", ".docx", ".txt", ".md"}
 PREFIX_RE = re.compile(r"^\d+-\d+-")
 OBJECT_URI_PREFIXES = ("s3://", "r2://")
 
@@ -53,7 +53,11 @@ def _materialize_document(doc: dict) -> tuple[Path, bool]:
         fd, temp_name = tempfile.mkstemp(prefix="knoprix-document-")
         os.close(fd)
         temp = Path(temp_name)
-        storage.download(object_key_value, temp)
+        try:
+            storage.download(object_key_value, temp)
+        except Exception:
+            temp.unlink(missing_ok=True)
+            raise
         return temp, True
     return _resolve_path(doc), False
 

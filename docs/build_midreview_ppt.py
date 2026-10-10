@@ -322,7 +322,7 @@ nov = [
     ("Ranked search with scores", "Inverted Index returns results with match scores and snippets — instant, self-contained."),
     ("Trie autocomplete with frequency", "O(L) prefix suggestions ranked by real word frequency across your documents."),
     ("Multi-format workspace", "PDF, PPTX, DOCX, TXT/MD in isolated projects — one place to read everything."),
-    ("Fully self-contained & secure", "JWT auth, owner-scoped routes (IDOR-proof), no API keys, deployed live on Netlify + Render."),
+    ("Secure full-stack system", "Verified Firebase sign-in, owner-scoped routes, Supabase persistence, Vercel + Render."),
 ]
 for i, (t, b) in enumerate(nov):
     col, row = i % 3, i // 3
@@ -344,7 +344,7 @@ objs = [
     ("Trie-based instant autocomplete", "Live prefix suggestions in the navbar, ranked by word frequency across all documents (O(L) search)."),
     ("Inverted-Index ranked full-text search", "Type a phrase → scored results with snippets; click any result to jump straight into the document."),
     ("Hash Table + DLL bookmarking", "Every bookmark is indexed by ID and linked newest-first; add, lookup, and unlink are average O(1)."),
-    ("Secure, deployable full-stack system", "JWT + bcrypt auth, rate-limited login, owner-scoped routes, SQLite persistence — deployed on Netlify + Render."),
+    ("Secure, deployable full-stack system", "Firebase authentication, owner-scoped routes, Supabase persistence — deployed on Vercel + Render."),
 ]
 y = 1.62
 for i, (t, b) in enumerate(objs):
@@ -391,7 +391,7 @@ py = 3.05
 rect(s, b1x + 3*(bw+gap) - 0.2, py, 2.72, 0.62, fill=RGBColor(0x33, 0x20, 0x0E),
      line=RGBColor(0x5A, 0x3B, 0x20), shape=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.2)
 textbox(s, b1x + 3*(bw+gap) - 0.05, py + 0.1, 2.42, 0.45,
-        [[("Persist to SQLite  ·  dsa_indices (JSON)", dict(size=9.5, bold=True, color=ACCENT))]], align=PP_ALIGN.CENTER)
+        [[("Persist indices to the configured database  ·  dsa_indices (JSON)", dict(size=9.5, bold=True, color=ACCENT))]], align=PP_ALIGN.CENTER)
 arrow_down(s, b1x + 3*(bw+gap) + 1.26 - 0.14, r1y + bh + 0.03)
 arrow_down(s, b1x + 3*(bw+gap) + 1.26 - 0.14, py + 0.62)
 
@@ -408,13 +408,13 @@ arrow_down(s, b1x + 0.85, py + 0.62, h=0.46)
 textbox(s, 0.55, 5.5, 12.2, 0.35,
         [[("Indices rebuild automatically on upload / delete  →  always fresh data", dict(size=10.5, color=FAINT))]])
 textbox(s, 0.55, 5.85, 12.2, 0.35,
-        [[("Every step is pure Python + SQLite — transparent, auditable, no external AI calls", dict(size=10.5, color=FAINT))]])
+        [[("Local development uses SQLite; hosted deployments use Supabase PostgreSQL and Storage", dict(size=10.5, color=FAINT))]])
 
 # ══ 7 · IMPLEMENTATION ════════════════════════════════════════════════════
 s = new_slide("07 · Implementation", "Implementation Details")
 
 textbox(s, 0.55, 1.55, 6.4, 0.3, [[("Tech stack", dict(size=12, bold=True, color=ACCENT))]])
-stack = ["FastAPI · Python 3.13", "SQLite", "React 18 · Vite", "Tailwind CSS", "pdf.js · python-pptx · python-docx", "JWT + bcrypt · rate limiting", "Netlify + Render deploy"]
+stack = ["FastAPI · Python", "Supabase PostgreSQL", "React 18 · Vite", "Tailwind CSS", "pdf.js · python-pptx · python-docx", "Firebase email/password auth", "Vercel + Render deploy"]
 for i, t in enumerate(stack):
     col, row = i % 2, i // 2
     chip(s, 0.55 + col * 3.2, 1.9 + row * 0.44, t, w=3.05, size=10)
@@ -486,7 +486,7 @@ for i, (fn, cap) in enumerate(shots):
             [[(cap, dict(size=10.5, bold=True, color=CREAM))]], align=PP_ALIGN.CENTER)
 
 textbox(s, 0.55, 7.02, 12.2, 0.35,
-        [[("Demo account: demo@knoprix.io / Password123!  ·  Live at knoprixv2midreview.netlify.app", dict(size=10, color=FAINT))]])
+        [[("Sign in with a verified Firebase account · Live at knoprix.vercel.app", dict(size=10, color=FAINT))]])
 
 # ══ 9 · OUTPUTS 2 (DSA modal + stack) ══════════════════════════════════════
 s = new_slide("08 · Outputs", "Outputs — DSA visualizer & bookmark collection")
@@ -532,7 +532,7 @@ done = [
     "Auth (JWT + bcrypt), projects, uploads",
     "PDF / PPTX / DOCX / TXT readers",
     "Orange Saraswati theme, light/dark",
-    "Public deploy — Netlify + Render",
+    "Public deploy — Vercel + Render + Supabase",
     "16/16 API tests · frontend build clean",
 ]
 for i, t in enumerate(done):

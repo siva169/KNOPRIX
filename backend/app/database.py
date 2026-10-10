@@ -3,7 +3,7 @@
 Two backends, same API:
 
 - SQLite (local dev): when `DATABASE_URL` is not set, uses `knoprix.db`.
-- PostgreSQL (deployed): when `DATABASE_URL` is set (Neon / Render Postgres),
+- PostgreSQL (deployed): when `DATABASE_URL` is set (Supabase / Render Postgres),
   uses psycopg2 with RealDictCursor. The routers keep calling
   `db.execute(sql, params).fetchall()` etc. exactly as with sqlite3 — this
   module translates the tiny dialect differences (`?` → `%s`, `datetime('now')`

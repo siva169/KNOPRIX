@@ -3,15 +3,20 @@
 import { chromium } from 'playwright';
 
 const KEY = process.env.GROQ_KEY || '';
-if (!KEY) { console.log('FAIL  no GROQ_KEY in env'); process.exit(1); }
+const QA_EMAIL = process.env.KNOPRIX_QA_EMAIL || '';
+const QA_PASSWORD = process.env.KNOPRIX_QA_PASSWORD || '';
+if (!KEY || !QA_EMAIL || !QA_PASSWORD) {
+  console.log('FAIL  set GROQ_KEY, KNOPRIX_QA_EMAIL, and KNOPRIX_QA_PASSWORD in env');
+  process.exit(1);
+}
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 try {
   await page.goto('http://127.0.0.1:5173/', { waitUntil: 'domcontentloaded' });
-  await page.getByPlaceholder('Email address').fill('demo@knoprix.io');
-  await page.getByPlaceholder('Password').fill('Password123!');
-  await page.locator('form').getByRole('button').first().click();
+  await page.getByLabel('Email address').fill(QA_EMAIL);
+  await page.getByLabel('Password').fill(QA_PASSWORD);
+  await page.getByRole('button', { name: /SIGN IN/ }).click();
   await page.getByRole('button', { name: /Chat QA signals/ }).first().click({ timeout: 15000 });
   const docName = page.getByText('chatqa.txt');
   const n = await docName.count();

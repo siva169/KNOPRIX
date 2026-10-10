@@ -1,9 +1,15 @@
 """QA for the Min-Heap slice (structure unit tests + top-passages endpoint)."""
 import json
+import os
 import random
 import urllib.request
 
 from app.dsa.minheap import MinHeap, top_k
+
+QA_EMAIL = os.getenv("KNOPRIX_QA_EMAIL", "demo@knoprix.io")
+QA_PASSWORD = os.getenv("KNOPRIX_QA_PASSWORD", "")
+if not QA_PASSWORD:
+    raise SystemExit("Set KNOPRIX_QA_PASSWORD to run the local heap API test.")
 
 results = []
 
@@ -62,7 +68,7 @@ def call(method, path, body=None, token=None):
             return e.code, {}
 
 
-s, d = call("POST", "/auth/login", {"email": "demo@knoprix.io", "password": "Password123!"})
+s, d = call("POST", "/auth/login", {"email": QA_EMAIL, "password": QA_PASSWORD})
 TOKEN = d.get("tokens", {}).get("accessToken", "")
 s, d = call("GET", "/projects", token=TOKEN)
 PID = next((p["id"] for p in d.get("projects", [])), None)

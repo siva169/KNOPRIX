@@ -155,7 +155,7 @@ def extract_pptx_slides(path: str | Path) -> dict:
         paras = [_para_data(p) for p in tf.paragraphs]
         return {"anchor": anchor, "paras": paras}
 
-    def walk(shapes, acc, depth=0):
+    def walk(shapes, acc):
         for shape in shapes:
             if shape.left is None or shape.top is None or shape.width is None or shape.height is None:
                 continue
@@ -177,7 +177,7 @@ def extract_pptx_slides(path: str | Path) -> dict:
                 t = None
 
             if t == MSO_SHAPE_TYPE.GROUP:
-                walk(shape.shapes, acc, depth + 1)
+                walk(shape.shapes, acc)
                 continue
             if t == MSO_SHAPE_TYPE.PICTURE:
                 try:

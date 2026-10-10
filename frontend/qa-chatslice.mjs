@@ -2,6 +2,10 @@
    Viewports: 390 (bottom sheet) + 1280 (side panel). Saves PNG evidence. */
 import { chromium } from 'playwright';
 
+const QA_EMAIL = process.env.KNOPRIX_QA_EMAIL || '';
+const QA_PASSWORD = process.env.KNOPRIX_QA_PASSWORD || '';
+if (!QA_EMAIL || !QA_PASSWORD) throw new Error('Set KNOPRIX_QA_EMAIL and KNOPRIX_QA_PASSWORD.');
+
 const SHOTS = new URL('../qa-artifacts/knoprix-chat-slice/', import.meta.url).pathname;
 const { mkdirSync } = await import('fs');
 mkdirSync(SHOTS, { recursive: true });
@@ -23,9 +27,9 @@ for (const [tag, vp] of [['390', { width: 390, height: 844 }], ['1280', { width:
     step('goto');
     await page.goto('http://127.0.0.1:5173/', { waitUntil: 'domcontentloaded' });
     step('login');
-    await page.getByPlaceholder('Email address').fill('demo@knoprix.io');
-    await page.getByPlaceholder('Password').fill('Password123!');
-    await page.locator('form').getByRole('button').first().click();
+    await page.getByLabel('Email address').fill(QA_EMAIL);
+    await page.getByLabel('Password').fill(QA_PASSWORD);
+    await page.getByRole('button', { name: /SIGN IN/ }).click();
     step('open project');
     // Projects render as buttons under "Choose a different project"
     // (the CURRENT TRAIL heading shows the same name but is NOT clickable).

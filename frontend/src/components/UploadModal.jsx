@@ -79,7 +79,7 @@ export default function UploadModal({ onClose }) {
             ref={inputRef}
             type="file"
             hidden
-            accept=".pdf,.pptx,.ppt,.docx,.txt,.md"
+            accept=".pdf,.pptx,.docx,.txt,.md"
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) uploadFile(file);
@@ -96,7 +96,7 @@ export default function UploadModal({ onClose }) {
                 <UploadCloud className="w-7 h-7 text-accent" />
               </motion.div>
               <p className="text-xs text-ivory font-semibold">Drag &amp; drop your document here</p>
-              <p className="text-[10px] text-ivory/60 mt-1">or click to browse · PDF, PPTX, DOCX, TXT (max 500MB)</p>
+              <p className="text-[10px] text-ivory/60 mt-1">or click to browse · PDF, PPTX, DOCX, TXT, MD (max 500MB)</p>
             </>
           ) : done ? (
             <div className="py-4 flex flex-col items-center">

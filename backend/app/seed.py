@@ -1,11 +1,11 @@
-"""Seed — demo account + import the user's copied documents into an MSA project.
+"""Local-only demo account and document fixture setup.
 
-Idempotent: re-runs on every server start but skips docs already imported.
+Run explicitly with ENABLE_DEMO_SEED=true and a private DEMO_PASSWORD.
 """
 import re
 import uuid
 
-from .config import UPLOAD_DIR
+from .config import DATABASE_URL, UPLOAD_DIR, cfg
 from .database import connect
 from .security import hash_password
 from .services.indexer import rebuild_project_indices
@@ -19,19 +19,35 @@ def _original_name(fname: str) -> str:
 
 
 def seed() -> None:
+    if not cfg.ENABLE_DEMO_SEED:
+        raise RuntimeError("Set ENABLE_DEMO_SEED=true to run the local demo seed")
+    if cfg.FIREBASE_PROJECT_ID or DATABASE_URL:
+        raise RuntimeError("The demo seed is restricted to local SQLite development")
+    if not cfg.DEMO_PASSWORD:
+        raise RuntimeError("Set DEMO_PASSWORD to a private local value")
+
     conn = connect()
     try:
         demo = conn.execute(
-            "SELECT id FROM users WHERE email = 'demo@knoprix.io'"
+            "SELECT id FROM users WHERE email = ?", (cfg.DEMO_ACCOUNT_EMAIL,)
         ).fetchone()
         if demo is None:
             demo_id = "user-demo-1"
             conn.execute(
                 "INSERT INTO users (id, email, password_hash, full_name) VALUES (?, ?, ?, ?)",
-                (demo_id, "demo@knoprix.io", hash_password("Password123!"), "Alex Mercer"),
+                (
+                    demo_id,
+                    cfg.DEMO_ACCOUNT_EMAIL,
+                    hash_password(cfg.DEMO_PASSWORD),
+                    "Alex Mercer",
+                ),
             )
         else:
             demo_id = demo["id"]
+            conn.execute(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                (hash_password(cfg.DEMO_PASSWORD), demo_id),
+            )
 
         proj = conn.execute(
             "SELECT id FROM projects WHERE user_id = ? AND name = 'MSA'",
@@ -92,3 +108,7 @@ def seed() -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+if __name__ == "__main__":
+    seed()

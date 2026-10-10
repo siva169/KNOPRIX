@@ -1,9 +1,14 @@
 """QA for the document-chat slice (BYOK contract gates, mocked providers)."""
 import json
+import os
 import subprocess
 import urllib.request
 
 BASE = "http://127.0.0.1:8011/api"
+QA_EMAIL = os.getenv("KNOPRIX_QA_EMAIL", "demo@knoprix.io")
+QA_PASSWORD = os.getenv("KNOPRIX_QA_PASSWORD", "")
+if not QA_PASSWORD:
+    raise SystemExit("Set KNOPRIX_QA_PASSWORD to run the local chat API test.")
 results = []
 TOKEN = ""
 PID = PID_DOCS = None
@@ -33,8 +38,8 @@ def check(name, cond, detail=""):
     print(f"{'PASS' if cond else 'FAIL'}  {name}{' — ' + detail if detail else ''}")
 
 
-# Login (demo seed user, same as qa_smoke.py)
-s, d = call("POST", "/auth/login", {"email": "demo@knoprix.io", "password": "Password123!"})
+# Login with a local QA account.
+s, d = call("POST", "/auth/login", {"email": QA_EMAIL, "password": QA_PASSWORD})
 TOKEN = d.get("tokens", {}).get("accessToken", "")
 check("login for chat QA", s == 200 and bool(TOKEN), f"HTTP {s}")
 
@@ -99,7 +104,6 @@ s, _ = call("POST", "/chat/ask", ASK)
 check("ask without token rejected", s in (401, 403), f"HTTP {s}")
 
 # 10. Log scan — the rejected test key must be nowhere in the server log
-import os
 LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "server-8011.log")
 out = subprocess.run(
     ["grep", "-c", "SK-TESTKEY-NEVERLOG-999", LOG],

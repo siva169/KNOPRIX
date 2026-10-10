@@ -80,6 +80,8 @@ def login(body: LoginBody, request: Request, db=Depends(get_db)):
     if not login_limiter.allow(request.client.host if request.client else "unknown"):
         raise HTTPException(429, "Too many login attempts. Try again in a minute.")
     email = body.email.strip().lower()
+    if email == cfg.DEMO_ACCOUNT_EMAIL and not cfg.ENABLE_DEMO_SEED:
+        raise HTTPException(401, "Invalid email or password")
     row = db.execute(
         "SELECT * FROM users WHERE email = ?", (email,)
     ).fetchone()

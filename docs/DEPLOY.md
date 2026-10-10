@@ -59,6 +59,8 @@ In **Render → Environment**, add:
 
 Render generates `JWT_SECRET` and `JWT_REFRESH_SECRET` from the blueprint.
 Never paste secret values into `render.yaml` or Git.
+`ENABLE_DEMO_SEED` is explicitly disabled in the blueprint. Do not enable
+local demo seeding against hosted databases or real user data.
 
 ## 3. Deploy the Vercel frontend
 

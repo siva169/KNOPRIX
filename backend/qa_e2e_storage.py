@@ -106,8 +106,12 @@ def main():
 
     # Register a fresh user (register returns tokens directly).
     email = f"qa-{uuid.uuid4().hex[:8]}@example.com"
-    status, payload = api("POST", "/api/auth/register",
-                          body={"email": email, "password": "Password123!", "fullName": "QA Bot"})
+    password = f"Qa-{uuid.uuid4().hex}-1!"
+    status, payload = api(
+        "POST",
+        "/api/auth/register",
+        body={"email": email, "password": password, "fullName": "QA Bot"},
+    )
     token = json.loads(payload).get("tokens", {}).get("accessToken", "") if status == 201 else ""
     check("register returns access token", bool(token), f"HTTP {status}: {payload[:120]}")
 

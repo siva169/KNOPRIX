@@ -24,6 +24,9 @@ _load_dotenv()
 class Config:
     PORT = int(os.getenv("PORT", "8000"))
     FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "").strip()
+    ENABLE_DEMO_SEED = os.getenv("ENABLE_DEMO_SEED", "").lower() in {"1", "true"}
+    DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "")
+    DEMO_ACCOUNT_EMAIL = "demo@knoprix.io"
 
     JWT_SECRET = os.getenv("JWT_SECRET", "change-me")
     JWT_REFRESH_SECRET = os.getenv("JWT_REFRESH_SECRET", "change-me-refresh")
@@ -60,7 +63,7 @@ class Config:
     )
 
 
-# Optional persistent Postgres (Neon/Render Postgres). When set, the backend
+# Optional persistent Postgres (Supabase/Render Postgres). When set, the backend
 # uses Postgres instead of the local SQLite file — required on hosts whose
 # disk is ephemeral (Render free tier wipes SQLite on every restart).
 DATABASE_URL = os.getenv("DATABASE_URL", "")

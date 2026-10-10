@@ -136,6 +136,15 @@ def get_current_user(
             "SELECT id, email, full_name, firebase_uid FROM users WHERE id = ?",
             (user_id,),
         ).fetchone()
+        if (
+            row is not None
+            and row["email"].lower() == cfg.DEMO_ACCOUNT_EMAIL
+            and not cfg.ENABLE_DEMO_SEED
+        ):
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                "Use verified Firebase sign-in to access this account",
+            )
         if row is not None and row["firebase_uid"]:
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED,

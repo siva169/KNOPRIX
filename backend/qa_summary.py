@@ -1,8 +1,13 @@
 """QA for the summary slice (extractive, key-free)."""
 import json
+import os
 import urllib.request
 
 BASE = "http://127.0.0.1:8011/api"
+QA_EMAIL = os.getenv("KNOPRIX_QA_EMAIL", "demo@knoprix.io")
+QA_PASSWORD = os.getenv("KNOPRIX_QA_PASSWORD", "")
+if not QA_PASSWORD:
+    raise SystemExit("Set KNOPRIX_QA_PASSWORD to run the local summary API test.")
 results = []
 
 
@@ -30,7 +35,7 @@ def check(name, cond, detail=""):
     print(f"{'PASS' if cond else 'FAIL'}  {name}{' — ' + detail if detail else ''}")
 
 
-s, d = call("POST", "/auth/login", {"email": "demo@knoprix.io", "password": "Password123!"})
+s, d = call("POST", "/auth/login", {"email": QA_EMAIL, "password": QA_PASSWORD})
 TOKEN = d.get("tokens", {}).get("accessToken", "")
 check("login for summary QA", s == 200 and bool(TOKEN), f"HTTP {s}")
 
