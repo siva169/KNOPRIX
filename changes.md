@@ -1,5 +1,14 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-11 — Upgrade Vite to patched 6.4.x
+
+- Upgraded Vite from 5.4.21 to 6.4.4, the patched Vite 6 line compatible
+  with the existing React plugin. Reviewed the Vite 6 migration notes and
+  security-fix changelog.
+- Verification: production build and PDF.js browser smoke test pass. The
+  production audit remains clear; the full audit now reports eight
+  development-tool advisories, all in the Tailwind 3 dependency tree.
+
 ## 2026-10-11 — Migrate PDF viewing to patched PDF.js 6
 
 - Upgraded `pdfjs-dist` from 3.11.174 to 6.4.299 and migrated text rendering
