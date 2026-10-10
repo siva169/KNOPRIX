@@ -94,9 +94,10 @@ In Firebase project `knoprix-a647`:
 
 The web app configuration is public client configuration; do not add a
 Firebase service-account key to the frontend. The backend verifies Firebase
-ID tokens against Google's signing keys and requires a verified email.
-Existing Knoprix users are linked by verified email without changing their
-user ID or project records.
+ID tokens against Google's signing keys. New Firebase accounts can sign in
+without email verification. Linking an existing unlinked Knoprix account by
+email requires a verified Firebase email to protect its data; linking keeps
+the existing user ID and project records.
 
 If the production Vercel domain changes, update Render's `CORS_ORIGINS` to the
 new exact origin (without a trailing slash) and redeploy the API.

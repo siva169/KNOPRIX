@@ -5,30 +5,22 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import BlackMirror from '../BlackMirror.jsx';
 
 export default function LoginPage({ onSwitch }) {
-  const { login, authError, resendVerification } = useAuth();
+  const { login, authError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
-  const [verificationRequired, setVerificationRequired] = useState(false);
-  const [resendStatus, setResendStatus] = useState('');
-  const [resending, setResending] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
     setError('');
-    setVerificationRequired(false);
-    setResendStatus('');
     setBusy(true);
     try {
       await login(email.trim(), password);
     } catch (err) {
       const data = err.response?.data;
-      if (err.code === 'auth/email-not-verified') {
-        setVerificationRequired(true);
-        setError('Verify your email from the link we sent before signing in.');
-      } else if (err.message?.startsWith('Firebase is not configured')) {
+      if (err.message?.startsWith('Firebase is not configured')) {
         setError(err.message);
       } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
         setError('Email or password is incorrect.');
@@ -48,19 +40,6 @@ export default function LoginPage({ onSwitch }) {
       }
     } finally {
       setBusy(false);
-    }
-  };
-
-  const resend = async () => {
-    setResending(true);
-    setResendStatus('');
-    try {
-      await resendVerification();
-      setResendStatus('Verification email sent again.');
-    } catch (err) {
-      setResendStatus(err.message || 'Could not resend the verification email.');
-    } finally {
-      setResending(false);
     }
   };
 
@@ -147,20 +126,6 @@ export default function LoginPage({ onSwitch }) {
                 >
                   {error || authError}
                 </motion.p>
-              )}
-
-              {verificationRequired && (
-                <div>
-                  <button
-                    type="button"
-                    onClick={resend}
-                    disabled={resending}
-                    className="text-xs font-semibold text-[#e8be6a] underline disabled:opacity-50"
-                  >
-                    {resending ? 'Sending…' : 'Resend verification email'}
-                  </button>
-                  {resendStatus && <p role="status" className="mt-2 text-xs text-ivory/70">{resendStatus}</p>}
-                </div>
               )}
 
               <div className="pt-1">

@@ -48,8 +48,9 @@ npm run dev
 
 Open http://localhost:5173. Vite proxies `/api` requests to the local backend.
 Use Node.js 22.13 or later to build the frontend (required by PDF.js).
-Firebase email/password sign-in requires a configured Firebase web app and
-email verification.
+Firebase email/password registration and sign-in do not require email
+verification. For safety, linking an existing unlinked Knoprix account by
+email still requires a verified Firebase email.
 
 ### Optional local demo fixtures
 

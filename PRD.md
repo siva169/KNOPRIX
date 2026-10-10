@@ -91,10 +91,11 @@ your documents.
 - The backend and frontend have separate local start commands.
 - No uploaded documents, database files, dependency caches, or secrets are
   copied into the new baseline.
-- When Firebase is configured, email/password registration and sign-in require
-  a verified email; the backend verifies Firebase ID tokens and links existing
-  Knoprix accounts by verified email without changing their internal user ID
-  or project ownership. Firebase console and deployment setup remain manual.
+- When Firebase is configured, email/password registration and sign-in do not
+  require email verification. The backend verifies Firebase ID tokens; a
+  verified email is required only to link an unlinked existing Knoprix account,
+  preserving its internal user ID and project ownership. Firebase console
+  and deployment setup remain manual.
 
 ### Core backend
 

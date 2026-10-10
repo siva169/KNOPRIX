@@ -5,30 +5,24 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import GoldOrbs from '../GoldOrbs.jsx';
 
 export default function RegisterPage({ onSwitch }) {
-  const { register, resendVerification } = useAuth();
+  const { register } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
-  const [verificationEmail, setVerificationEmail] = useState('');
-  const [resendStatus, setResendStatus] = useState('');
-  const [resending, setResending] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
     setError('');
-    setVerificationEmail('');
-    setResendStatus('');
     setBusy(true);
     try {
-      const result = await register(fullName.trim(), email.trim(), password);
-      setVerificationEmail(result.email);
+      await register(fullName.trim(), email.trim(), password);
     } catch (err) {
       if (err.message?.startsWith('Firebase is not configured')) setError(err.message);
       else if (err.code === 'auth/email-already-in-use') {
-        setError('An account already uses this email. Sign in after verifying it to connect your existing Knoprix data.');
+        setError('An account already uses this email. Sign in to connect your existing Knoprix data.');
       } else if (err.code === 'auth/weak-password') {
         setError('Choose a password with at least 8 characters.');
       } else if (err.code === 'auth/network-request-failed') {
@@ -40,19 +34,6 @@ export default function RegisterPage({ onSwitch }) {
       } else setError(err.response?.data?.detail || err.message || 'Registration failed.');
     } finally {
       setBusy(false);
-    }
-  };
-
-  const resend = async () => {
-    setResending(true);
-    setResendStatus('');
-    try {
-      await resendVerification();
-      setResendStatus('Verification email sent again.');
-    } catch (err) {
-      setResendStatus(err.message || 'Could not resend the verification email.');
-    } finally {
-      setResending(false);
     }
   };
 
@@ -170,25 +151,10 @@ export default function RegisterPage({ onSwitch }) {
               </motion.p>
             )}
 
-            {verificationEmail && (
-              <div role="status" aria-live="polite" className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-3 text-xs text-emerald-100">
-                <p>Check {verificationEmail} for the verification link. Verify it, then sign in to connect your Knoprix account.</p>
-                <button
-                  type="button"
-                  onClick={resend}
-                  disabled={resending}
-                  className="mt-2 font-semibold text-[#e8be6a] underline disabled:opacity-50"
-                >
-                  {resending ? 'Sending…' : 'Resend verification email'}
-                </button>
-                {resendStatus && <p className="mt-2 text-ivory/70">{resendStatus}</p>}
-              </div>
-            )}
-
             <motion.button
               whileHover={{ y: -1 }}
               whileTap={{ scale: 0.98 }}
-              disabled={busy || Boolean(verificationEmail)}
+              disabled={busy}
               className="w-full py-3 rounded-full font-bold text-sm tracking-[0.18em] disabled:opacity-50 transition"
               style={{
                 background: 'linear-gradient(140deg, #f4d696, #d4943a)',

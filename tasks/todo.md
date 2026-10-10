@@ -242,14 +242,15 @@ approved callback configuration before connection/testing.
 `backend/migrations/`, `frontend/src/components/auth/`, auth tests
 **Estimated scope:** Medium
 
-### [ ] 1.3 Add email verification and account recovery
+### [ ] 1.3 Add account recovery
 
 **Priority:** P1
-**Description:** Make email ownership and account recovery safe before adding
-email-based contacts and share invitations.
+**Description:** Add safe password recovery. Normal Firebase registration and
+sign-in do not require email verification; keep verified-email checks only for
+linking an existing unlinked Knoprix account by email.
 
 **Acceptance criteria**
-- [ ] Verification/reset tokens are single-use, expiring, stored hashed, and
+- [ ] Password-reset tokens are single-use, expiring, stored hashed, and
   invalidated after use or replacement.
 - [ ] Responses avoid revealing whether an email has an account.
 - [ ] Password-reset flow invalidates/revokes sessions according to the
@@ -270,8 +271,8 @@ before connecting it.
 
 **Priority:** P1
 **Description:** Protect registration, login, recovery, and contact-invite
-flows against automated abuse. CAPTCHA complements—not replaces—rate limits,
-email verification, and abuse monitoring.
+flows against automated abuse. CAPTCHA complements—not replaces—rate limits
+and abuse monitoring.
 
 **Acceptance criteria**
 - [ ] Boss selects a provider after reviewing privacy/data transfer,

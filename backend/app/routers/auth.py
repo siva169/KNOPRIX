@@ -12,7 +12,7 @@ from ..security import (
     create_refresh_token,
     decode_token,
     get_current_user,
-    get_verified_firebase_claims,
+    get_firebase_claims,
     hash_password,
     login_limiter,
     register_limiter,
@@ -109,6 +109,11 @@ def _get_or_create_firebase_user(db, claims: dict, full_name: str = "") -> dict:
     if existing:
         if existing["firebase_uid"] and existing["firebase_uid"] != firebase_uid:
             raise HTTPException(409, "This email is linked to another Firebase account")
+        if claims.get("email_verified") is not True:
+            raise HTTPException(
+                403,
+                "Verify your email before linking this existing Knoprix account",
+            )
         db.execute(
             "UPDATE users SET firebase_uid = ? WHERE id = ? AND firebase_uid IS NULL",
             (firebase_uid, existing["id"]),
@@ -150,7 +155,7 @@ def _get_or_create_firebase_user(db, claims: dict, full_name: str = "") -> dict:
 @router.post("/firebase/session")
 def firebase_session(
     body: FirebaseSessionBody,
-    claims=Depends(get_verified_firebase_claims),
+    claims=Depends(get_firebase_claims),
     db=Depends(get_db),
 ):
     return _get_or_create_firebase_user(db, claims, body.fullName or "")

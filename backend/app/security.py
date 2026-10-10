@@ -70,7 +70,7 @@ def decode_token(token: str, secret: str) -> str:
 
 
 def verify_firebase_id_token(token: str) -> dict:
-    """Verify a Firebase ID token and require a verified email."""
+    """Verify a Firebase ID token and its required identity claims."""
     if not cfg.FIREBASE_PROJECT_ID:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Firebase auth is not configured")
     try:
@@ -94,8 +94,6 @@ def verify_firebase_id_token(token: str) -> dict:
     except (jwt.InvalidTokenError, PyJWKClientError) as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Firebase ID token") from exc
 
-    if claims.get("email_verified") is not True:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Verify your email before signing in")
     if not isinstance(claims.get("sub"), str) or not claims["sub"]:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Firebase token has no valid user ID")
     auth_time = claims["auth_time"]
@@ -155,7 +153,7 @@ def get_current_user(
     return dict(row)
 
 
-def get_verified_firebase_claims(
+def get_firebase_claims(
     cred: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> dict:
     if cred is None:

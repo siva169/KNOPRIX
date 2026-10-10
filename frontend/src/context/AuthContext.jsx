@@ -2,8 +2,6 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
-  reload,
-  sendEmailVerification,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
@@ -24,6 +22,7 @@ export function AuthProvider({ children }) {
   const [authError, setAuthError] = useState('');
   const syncedUid = useRef(null);
   const syncInFlight = useRef(null);
+  const registrationInProgress = useRef(false);
 
   const syncFirebaseUser = async (firebaseUser) => {
     if (syncedUid.current === firebaseUser.uid) {
@@ -90,23 +89,20 @@ export function AuthProvider({ children }) {
           await restoreLegacySession();
         } else {
           clearLegacyTokens();
-          if (!firebaseUser.emailVerified) {
-            setUser(null);
-          } else {
-            try {
-              const session = await syncFirebaseUser(firebaseUser);
-              if (active) {
-                setUser(session);
-                setAuthError('');
-              }
-            } catch (error) {
-              if (active) {
-                setUser(null);
-                setAuthError(
-                  error.response?.data?.detail ||
-                  "Couldn't connect your Firebase account to Knoprix. Try signing in again.",
-                );
-              }
+          if (registrationInProgress.current) return;
+          try {
+            const session = await syncFirebaseUser(firebaseUser);
+            if (active) {
+              setUser(session);
+              setAuthError('');
+            }
+          } catch (error) {
+            if (active) {
+              setUser(null);
+              setAuthError(
+                error.response?.data?.detail ||
+                "Couldn't connect your Firebase account to Knoprix. Try signing in again.",
+              );
             }
           }
         }
@@ -138,30 +134,26 @@ export function AuthProvider({ children }) {
     const auth = requireFirebase();
     setAuthError('');
     const credential = await signInWithEmailAndPassword(auth, email, password);
-    await reload(credential.user);
-    if (!credential.user.emailVerified) {
-      const error = new Error('Verify your email before signing in.');
-      error.code = 'auth/email-not-verified';
-      throw error;
-    }
     const session = await syncFirebaseUser(credential.user);
     clearLegacyTokens();
     setUser(session);
+    setAuthError('');
   };
 
   const register = async (fullName, email, password) => {
     const auth = requireFirebase();
-    const credential = await createUserWithEmailAndPassword(auth, email, password);
-    await updateProfile(credential.user, { displayName: fullName });
-    await sendEmailVerification(credential.user);
-    setAuthError('');
-    return { email: credential.user.email };
-  };
-
-  const resendVerification = async () => {
-    const auth = requireFirebase();
-    if (!auth.currentUser) throw new Error('Sign in to resend the verification email.');
-    await sendEmailVerification(auth.currentUser);
+    registrationInProgress.current = true;
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(credential.user, { displayName: fullName });
+      const session = await syncFirebaseUser(credential.user);
+      clearLegacyTokens();
+      setUser(session);
+      setAuthError('');
+    } finally {
+      registrationInProgress.current = false;
+      setLoading(false);
+    }
   };
 
   const logout = async () => {
@@ -174,7 +166,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, authError, login, register, resendVerification, logout }}
+      value={{ user, loading, authError, login, register, logout }}
     >
       {children}
     </AuthContext.Provider>

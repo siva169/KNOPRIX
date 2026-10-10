@@ -16,20 +16,25 @@ Analogy that carries through the whole app:
 ## 1. Login & accounts
 
 With Firebase configured, the browser signs users up or in with Firebase
-email/password authentication. New accounts must verify their email.
+email/password authentication. New accounts can use Knoprix immediately;
+Knoprix does not send verification emails as part of registration or login.
 
 1. The frontend sends the Firebase ID token to `POST /api/auth/firebase/session`.
-2. The backend verifies its signature, project, expiry, and verified email
+2. The backend verifies its signature, project, expiry, issuer, and audience
    using Firebase's signing keys.
-3. A verified email links to its existing Knoprix user row, preserving project
-   ownership, or creates a new row.
-4. Subsequent API requests use the Firebase ID token; the backend resolves it
+3. A new Firebase UID creates an independent Knoprix account, even when its
+   email is not verified. An already-linked UID remains usable regardless of
+   email verification.
+4. An unlinked legacy Knoprix account can be matched by email only when
+   Firebase marks that email verified; this protects its existing projects
+   from being claimed by someone else.
+5. Subsequent API requests use the Firebase ID token; the backend resolves it
    to the linked Knoprix user.
 
 Legacy password login remains for older, unlinked accounts. Registration via
 the legacy API is disabled when `FIREBASE_PROJECT_ID` is configured. The old
-public demo password is no longer accepted by default; an existing owner can
-recover that account only by verifying its email through Firebase.
+public demo password is no longer accepted by default. Verified email is
+required only when linking an unlinked legacy account by email.
 
 Deployed accounts and documents use Supabase PostgreSQL and private Supabase
 Storage. Local development uses SQLite and disk storage by default. The

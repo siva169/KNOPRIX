@@ -1,5 +1,18 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-11 — Remove email verification from normal Firebase sign-in
+
+- Removed verification-email sending, resend controls, and email-verified
+  gates from registration, sign-in, and Firebase session restoration. New
+  Firebase accounts can sign in immediately with email and password.
+- Kept signed-token, project, issuer, audience, expiry, and authentication
+  time validation. Unverified Firebase identities cannot claim an existing
+  unlinked Knoprix account by email; already UID-linked accounts remain usable.
+- Updated setup, workflow, product, and API-contract documentation to describe
+  the normal flow and legacy-account linking safeguard.
+- Verification: Firebase auth QA passes (28/28) and the frontend production
+  build passes. No live Firebase account or deployed service was accessed.
+
 ## 2026-10-11 — Migrate frontend toolchain to Vite 8 and Tailwind 4
 
 - Upgraded Vite and its React plugin to versions compatible with Vite 8, and

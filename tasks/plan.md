@@ -63,11 +63,11 @@ Target additions
 
 ### Confirmed by inspected source
 
-- Auth retains legacy password/JWT sessions for unlinked accounts. When
-  configured, Firebase email/password sign-in requires verified email and
-  links existing accounts by verified email without changing their Knoprix
-  IDs or project ownership. Google OAuth, password recovery, and CAPTCHA were
-  not found in the inspected code.
+- Auth retains legacy password/JWT sessions for unlinked accounts. Firebase
+  email/password sign-in does not require verified email; a verified email is
+  required only to link an unlinked existing account without changing its
+  Knoprix ID or project ownership. Google OAuth, password recovery, and CAPTCHA
+  were not found in the inspected code.
 - Upload checks allowed extensions and size; extraction supports PDF, PPTX,
   DOCX paragraphs/tables, and plain text. OCR and robust image extraction are
   not implemented; legacy `.ppt` is accepted but the parser uses the PPTX
@@ -132,8 +132,9 @@ current SQLite/PostgreSQL records safely.
 ### Phase 1 — Account security and abuse controls
 
 Harden sessions/secrets and rate limits; add Google OIDC as an optional
-provider; implement verified email/account recovery; select and integrate a
-CAPTCHA provider with accessible fallback.
+provider; implement account recovery; select and integrate a CAPTCHA provider
+with accessible fallback. Keep verified-email checks limited to safe linking
+of existing unlinked accounts.
 
 **Exit gate:** Account linking, recovery, challenge verification, abuse
 controls, and secret handling are tested. External account/service setup is

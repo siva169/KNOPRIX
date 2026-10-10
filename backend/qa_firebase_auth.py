@@ -298,10 +298,9 @@ class FirebaseAuthTests(unittest.TestCase):
                 security.verify_firebase_id_token(self.token())
         self.assertEqual(raised.exception.status_code, 503)
 
-    def test_requires_verified_email(self):
-        with self.assertRaises(HTTPException) as raised:
-            self.verify(self.token(email_verified=False))
-        self.assertEqual(raised.exception.status_code, 403)
+    def test_accepts_valid_token_with_unverified_email(self):
+        claims = self.verify(self.token(email_verified=False))
+        self.assertFalse(claims["email_verified"])
 
     def test_rejects_future_authentication_time(self):
         with self.assertRaises(HTTPException) as raised:
@@ -325,6 +324,30 @@ class FirebaseAuthTests(unittest.TestCase):
         )
         credentials = HTTPAuthorizationCredentials(
             scheme="Bearer", credentials=self.token()
+        )
+        jwks = SimpleNamespace(
+            get_signing_key_from_jwt=lambda _: SimpleNamespace(key=self.public_key)
+        )
+        with (
+            patch.object(security.cfg, "FIREBASE_PROJECT_ID", PROJECT_ID),
+            patch.object(security, "_firebase_jwks", jwks),
+        ):
+            user = security.get_current_user(credentials, conn)
+        self.assertEqual(user["id"], "knoprix-id")
+        conn.close()
+
+    def test_firebase_bearer_resolves_linked_user_with_unverified_email(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            "CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, full_name TEXT, firebase_uid TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO users VALUES (?, ?, ?, ?)",
+            ("knoprix-id", "reader@example.com", "Reader One", "firebase-user-1"),
+        )
+        credentials = HTTPAuthorizationCredentials(
+            scheme="Bearer", credentials=self.token(email_verified=False)
         )
         jwks = SimpleNamespace(
             get_signing_key_from_jwt=lambda _: SimpleNamespace(key=self.public_key)
@@ -416,6 +439,53 @@ class FirebaseAuthTests(unittest.TestCase):
             "Reader One",
         )
         self.assertEqual(user["full_name"], "Reader One")
+        conn.close()
+
+    def test_creates_new_firebase_account_without_verified_email(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute(
+            "CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, password_hash TEXT, full_name TEXT, firebase_uid TEXT)"
+        )
+        user = _get_or_create_firebase_user(
+            conn,
+            {
+                "sub": "firebase-user-1",
+                "email": "reader@example.com",
+                "email_verified": False,
+            },
+            "Reader One",
+        )
+        self.assertEqual(user["email"], "reader@example.com")
+        conn.close()
+
+    def test_unverified_firebase_email_cannot_link_existing_knoprix_account(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.executescript(
+            """
+            CREATE TABLE users (
+                id TEXT PRIMARY KEY, email TEXT UNIQUE, password_hash TEXT,
+                full_name TEXT, firebase_uid TEXT
+            );
+            INSERT INTO users VALUES ('knoprix-id', 'reader@example.com', 'legacy-hash', 'Reader One', NULL);
+            """
+        )
+        with self.assertRaises(HTTPException) as raised:
+            _get_or_create_firebase_user(
+                conn,
+                {
+                    "sub": "firebase-user-1",
+                    "email": "reader@example.com",
+                    "email_verified": False,
+                },
+            )
+        self.assertEqual(raised.exception.status_code, 403)
+        self.assertIsNone(
+            conn.execute(
+                "SELECT firebase_uid FROM users WHERE id = 'knoprix-id'"
+            ).fetchone()["firebase_uid"]
+        )
         conn.close()
 
     def test_repeated_session_sync_returns_same_user(self):
