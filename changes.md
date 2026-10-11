@@ -1,5 +1,15 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-12 — Fix session reset and upload compensation
+
+- Firebase session reset now revokes the browser's HttpOnly legacy refresh
+  session through an origin-checked endpoint before signing out of Firebase.
+- If document persistence or indexing fails after object-storage upload, the
+  backend deletes the new object; cleanup failures are logged without hiding
+  the original request error.
+- Added regression checks for refresh-session revocation, untrusted origins,
+  and object cleanup after a simulated indexing failure.
+
 ## 2026-10-12 — Isolate fake-storage end-to-end test configuration
 
 - Explicitly clear `FIREBASE_PROJECT_ID` before the fake-storage E2E test

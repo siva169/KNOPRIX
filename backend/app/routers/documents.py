@@ -1,5 +1,6 @@
 """Document routes — upload / list / stream / get / delete (owner-scoped)."""
 import codecs
+import logging
 import os
 import re
 import shutil
@@ -27,6 +28,7 @@ from ..services.indexer import rebuild_project_indices
 from ..services.pdf_parser import extract_document, extract_pptx_slides
 
 router = APIRouter(prefix="/api", tags=["documents"])
+logger = logging.getLogger(__name__)
 
 ALLOWED_TYPES = {
     ".pdf", ".pptx", ".docx", ".txt", ".md",
@@ -309,33 +311,44 @@ async def upload_document(project_id: str, file: UploadFile = File(...),
 
         doc_id = str(uuid.uuid4())
         use_object_storage = storage.enabled()
+        storage_key = None
         if use_object_storage:
-            key = storage.object_key(doc_id, safe_name)
-            storage.upload(dest, key, CONTENT_TYPES[ext])
-            file_path = f"s3://{key}"
+            storage_key = storage.object_key(doc_id, safe_name)
+            storage.upload(dest, storage_key, CONTENT_TYPES[ext])
+            file_path = f"s3://{storage_key}"
         else:
             file_path = str(dest)
 
-        db.execute(
-            """
-            INSERT INTO documents (id, project_id, file_name, file_type, file_path,
-                                   file_size, page_count, extracted_text,
-                                   extraction_method, is_scanned)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (doc_id, project_id, original, ext.lstrip("."), file_path,
-             size, parsed["page_count"], parsed["text"], parsed["method"],
-             1 if parsed["is_scanned"] else 0),
-        )
-        for i, page_text in enumerate(parsed["pages"], start=1):
+        try:
             db.execute(
-                "INSERT INTO document_pages (id, document_id, page_number, page_text) VALUES (?, ?, ?, ?)",
-                (str(uuid.uuid4()), doc_id, i, page_text),
+                """
+                INSERT INTO documents (id, project_id, file_name, file_type, file_path,
+                                       file_size, page_count, extracted_text,
+                                       extraction_method, is_scanned)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (doc_id, project_id, original, ext.lstrip("."), file_path,
+                 size, parsed["page_count"], parsed["text"], parsed["method"],
+                 1 if parsed["is_scanned"] else 0),
             )
+            for i, page_text in enumerate(parsed["pages"], start=1):
+                db.execute(
+                    "INSERT INTO document_pages (id, document_id, page_number, page_text) VALUES (?, ?, ?, ?)",
+                    (str(uuid.uuid4()), doc_id, i, page_text),
+                )
 
-        rebuild_project_indices(db, project_id)
+            rebuild_project_indices(db, project_id)
 
-        row = db.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+            row = db.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+        except Exception:
+            if storage_key is not None:
+                try:
+                    storage.delete(storage_key)
+                except Exception:
+                    logger.exception(
+                        "Failed to remove uploaded object after document save failure"
+                    )
+            raise
         keep_local_file = not use_object_storage
         return {"document": dict(row)}
     finally:

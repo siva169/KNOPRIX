@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, RotateCcw, LogOut } from 'lucide-react';
+import { signOut } from 'firebase/auth';
 import api, { clearAccessToken } from '../api';
 import { firebaseAuth } from '../firebase';
 
@@ -37,9 +38,14 @@ export default class ErrorBoundary extends React.Component {
 
   async handleResetSession() {
     try {
-      if (!firebaseAuth?.currentUser) await api.post('/auth/logout');
+      if (firebaseAuth?.currentUser) {
+        await api.post('/auth/logout-cookie');
+        await signOut(firebaseAuth);
+      } else {
+        await api.post('/auth/logout');
+      }
     } catch (error) {
-      if (error.response?.status !== 401) {
+      if (error.response?.status !== 401 || firebaseAuth?.currentUser) {
         this.setState({ resetError: 'Could not reach Knoprix to reset the session. Try again.' });
         return;
       }

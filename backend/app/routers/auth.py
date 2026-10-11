@@ -349,6 +349,26 @@ def logout(
     return {"success": True, "message": "Logged out"}
 
 
+@router.post("/logout-cookie")
+def logout_cookie(request: Request, response: Response, db=Depends(get_db)):
+    _assert_trusted_origin(request)
+    refresh_token = request.cookies.get(cfg.AUTH_COOKIE_NAME)
+    if refresh_token:
+        token_hash = hashlib.sha256(refresh_token.encode("utf-8")).hexdigest()
+        row = db.execute(
+            "SELECT session_id FROM auth_refresh_tokens WHERE token_hash = ?",
+            (token_hash,),
+        ).fetchone()
+        if row is not None:
+            db.execute(
+                "UPDATE auth_sessions SET revoked_at = ? "
+                "WHERE id = ? AND revoked_at IS NULL",
+                (int(time.time()), row["session_id"]),
+            )
+    _clear_refresh_cookie(response)
+    return {"success": True, "message": "Logged out"}
+
+
 @router.post("/logout-all")
 def logout_all(
     response: Response,

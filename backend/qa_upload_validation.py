@@ -217,6 +217,30 @@ class UploadValidationTests(unittest.TestCase):
         self.assertEqual(object_response.headers["content-type"], "application/octet-stream")
         self.assertEqual(object_response.headers["x-content-type-options"], "nosniff")
 
+    def test_database_failure_deletes_uploaded_object(self):
+        content = b"valid text"
+        with (
+            patch.object(documents.storage, "enabled", return_value=True),
+            patch.object(documents.storage, "upload") as upload,
+            patch.object(documents.storage, "delete") as delete,
+            patch.object(
+                documents,
+                "rebuild_project_indices",
+                side_effect=RuntimeError("simulated index failure"),
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "simulated index failure"):
+                self.upload("notes.txt", content)
+
+        key = upload.call_args.args[1]
+        delete.assert_called_once_with(key)
+        self.db.rollback()
+        self.assertEqual(
+            self.db.execute("SELECT COUNT(*) FROM documents").fetchone()[0],
+            0,
+        )
+        self.assertEqual(list(self.upload_dir.glob("*")), [])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

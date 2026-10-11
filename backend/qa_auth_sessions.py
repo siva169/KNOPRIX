@@ -180,6 +180,50 @@ class LegacyAuthSessionTests(unittest.TestCase):
             self.current_user(first_data["tokens"]["accessToken"])
         self.assertEqual(self.refresh(second_refresh)[0]["user"]["id"], second_data["user"]["id"])
 
+    def test_logout_cookie_revokes_refresh_session_without_bearer_token(self):
+        data, response = self.register()
+        refresh_cookie = self.response_cookie(response)
+        session_id = jwt.decode(
+            refresh_cookie,
+            cfg.JWT_REFRESH_SECRET,
+            algorithms=["HS256"],
+        )["sid"]
+
+        logout_response = Response()
+        result = auth.logout_cookie(
+            self.request(cookie=refresh_cookie, origin=self.origin),
+            logout_response,
+            self.db,
+        )
+
+        self.assertTrue(result["success"])
+        self.assertIsNotNone(
+            self.db.execute(
+                "SELECT revoked_at FROM auth_sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()["revoked_at"]
+        )
+        self.assertIn("max-age=0", logout_response.headers["set-cookie"].lower())
+        with self.assertRaises(HTTPException):
+            self.refresh(refresh_cookie)
+        with self.assertRaises(HTTPException):
+            self.current_user(data["tokens"]["accessToken"])
+
+    def test_logout_cookie_rejects_untrusted_origin(self):
+        _, response = self.register()
+
+        with self.assertRaises(HTTPException) as raised:
+            auth.logout_cookie(
+                self.request(
+                    cookie=self.response_cookie(response),
+                    origin="https://attacker.invalid",
+                ),
+                Response(),
+                self.db,
+            )
+
+        self.assertEqual(raised.exception.status_code, 403)
+
     def test_logout_all_revokes_all_sessions_for_the_same_user(self):
         first_data, _ = self.register()
         second_data, _ = self.login()
