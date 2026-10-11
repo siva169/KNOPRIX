@@ -1,5 +1,13 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-12 — Isolate fake-storage end-to-end test configuration
+
+- Explicitly clear `FIREBASE_PROJECT_ID` before the fake-storage E2E test
+  imports the application, so ignored local Firebase settings cannot disable
+  the legacy registration route that the test exercises.
+- Verification: focused auth, Firebase, migration, upload, storage REST, and
+  storage E2E suites pass. No application runtime configuration changed.
+
 ## 2026-10-12 — Configure Firebase token verification locally
 
 - Added `FIREBASE_PROJECT_ID=knoprix-a647` to the ignored backend `.env` and

@@ -74,6 +74,7 @@ def main():
     os.environ["OBJECT_STORAGE_ENDPOINT"] = f"http://127.0.0.1:{port}/storage/v1/s3"
     os.environ["OBJECT_STORAGE_BUCKET"] = "knoprix-documents"
     os.environ["OBJECT_STORAGE_API_KEY"] = "test-key"
+    os.environ["FIREBASE_PROJECT_ID"] = ""
     os.environ["DATABASE_URL"] = ""
     os.environ["APP_ENV"] = "development"
     os.environ["AUTH_COOKIE_SAMESITE"] = "lax"
