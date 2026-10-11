@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import BlackMirror from '../BlackMirror.jsx';
+import BrandWordmark from './BrandWordmark.jsx';
 
 export default function LoginPage({ onSwitch }) {
   const { login, authError } = useAuth();
@@ -54,11 +55,7 @@ export default function LoginPage({ onSwitch }) {
 
       <div className="relative max-w-6xl mx-auto px-5 sm:px-8 flex flex-col min-h-screen">
         <header className="flex items-center justify-center pt-6 sm:pt-8">
-          <img
-            src="/knoprix-logo.png"
-            alt="Knoprix"
-            className="h-20 sm:h-24 md:h-28 w-auto max-w-[84%] sm:max-w-[540px] object-contain select-none"
-          />
+          <BrandWordmark />
         </header>
 
         <main className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-6 items-center py-10">

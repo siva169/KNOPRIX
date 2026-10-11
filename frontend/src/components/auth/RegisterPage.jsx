@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { UserPlus, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import GoldOrbs from '../GoldOrbs.jsx';
+import BrandWordmark from './BrandWordmark.jsx';
 
 export default function RegisterPage({ onSwitch }) {
   const { register } = useAuth();
@@ -48,11 +49,7 @@ export default function RegisterPage({ onSwitch }) {
         className="relative w-full max-w-md"
       >
         <div className="flex justify-center mb-6">
-          <img
-            src="/knoprix-logo.png"
-            alt="Knoprix"
-            className="h-16 w-auto max-w-[260px] object-contain select-none"
-          />
+          <BrandWordmark compact />
         </div>
 
         <div

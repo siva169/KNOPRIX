@@ -1,11 +1,11 @@
 # Knoprix Final Project — Changes
 
-## 2026-10-11 — Applied the product logo to auth branding and favicon
+## 2026-10-11 — Rebuilt the Knoprix logo as a vector brand mark for auth screens
 
-- Added the provided Knoprix logo to the login and register screens in a clean, non-cluttered header placement.
-- Added a branded favicon mark and kept the browser tab icon aligned with the product identity.
-- Kept the auth layout visual hierarchy intact so the logo supports the interface without crowding the form.
-- Verification: frontend production build passes and the Vite local server serves both `/knoprix-logo.png` and `/favicon.svg` successfully on localhost:5173.
+- Reconstructed the Knoprix identity as a custom SVG mark instead of using a bitmap copy of the reference image.
+- Kept the favicon as the refined gold hexagon badge and used the reconstructed vector for the login/register wordmark treatment.
+- Positioned the brand cleanly in the auth shell so it supports the interface without crowding the form.
+- Verification: frontend production build passes and the local Vite app is serving the updated branded auth shell correctly on localhost:5173.
 
 ## 2026-10-11 — Remove email verification from normal Firebase sign-in
 
