@@ -171,8 +171,11 @@ this document-only task.
 ### `POST /api/v1/projects/{projectId}/documents`
 
 Authenticated multipart upload; header `Idempotency-Key: <uuid>`. Accepted
-initial formats: PDF, PPTX, DOCX, TXT, and MD. English OCR is the initial
-target. Return `202 Accepted` immediately after durable job creation:
+initial formats: PDF, PPTX, DOCX, TXT, MD, PNG, JPG/JPEG, and static SVG.
+Standalone images are preserved without OCR; legacy `.ppt` is rejected. The
+current implementation and per-format signature/resource limits are recorded
+in `docs/upload-support-matrix.md`. Return `202 Accepted` immediately after
+durable job creation:
 
 ```json
 {

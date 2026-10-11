@@ -68,10 +68,9 @@ Target additions
   required only to link an unlinked existing account without changing its
   Knoprix ID or project ownership. Google OAuth, password recovery, and CAPTCHA
   were not found in the inspected code.
-- Upload checks allowed extensions and size; extraction supports PDF, PPTX,
-  DOCX paragraphs/tables, and plain text. OCR and robust image extraction are
-  not implemented; legacy `.ppt` is accepted but the parser uses the PPTX
-  library.
+- Uploads are content-validated for PDF, PPTX, DOCX, TXT, MD, PNG, JPG/JPEG,
+  and static SVG. Images are stored without OCR; legacy `.ppt` is rejected.
+  See `docs/upload-support-matrix.md` for resource limits and validation.
 - Project document listing currently includes `extracted_text`, broader
   content exposure than a strict selected-content AI design should allow.
 - Summary is extractive sentence selection. Chat validates selected,

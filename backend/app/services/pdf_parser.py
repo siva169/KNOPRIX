@@ -55,11 +55,7 @@ def extract_docx(path: str | Path) -> dict:
     """DOCX (modern Word) — paragraphs + tables. Legacy .doc is not supported."""
     from docx import Document
 
-    try:
-        doc = Document(str(path))
-    except Exception:
-        return {"text": "", "pages": [], "method": "none",
-                "is_scanned": True, "page_count": 1}
+    doc = Document(str(path))
     paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
     table_lines: list[str] = []
     for table in doc.tables:
@@ -229,6 +225,14 @@ def extract_pptx_slides(path: str | Path) -> dict:
 
 def extract_document(path: str | Path, file_type: str) -> dict:
     file_type = (file_type or "").lower()
+    if file_type in {"png", "jpg", "jpeg", "svg"}:
+        return {
+            "text": "",
+            "pages": [""],
+            "method": "none",
+            "is_scanned": True,
+            "page_count": 1,
+        }
     if file_type == "pdf":
         return extract_pdf(path)
     if file_type in ("pptx", "ppt"):

@@ -77,9 +77,10 @@ your documents.
   deletes them. Encrypted backups may retain deleted data for up to 30 days
   before purge; actual deletion/export behavior must be implemented and
   verified before public beta.
-- **Initial file scope:** PDF, PPTX, DOCX, TXT, and MD. English OCR is the
-  initial target; images and other OCR languages require explicit support and
-  quality evidence before being represented as supported.
+- **Initial file scope:** PDF, PPTX, DOCX, TXT, MD, PNG, JPG/JPEG, and static
+  SVG. Standalone images are stored as originals without OCR in this slice;
+  English OCR remains a separate capability requiring explicit support and
+  quality evidence. Legacy `.ppt` is unsupported.
 - **Initial scale assumption:** Plan initially for 100–1,000 users; this is a
   planning estimate, not a capacity or availability guarantee.
 
@@ -211,8 +212,9 @@ Required responsive checks: 390px, 425px, 768px, and 1024px.
 - Conversation history: browser-local only in v1; no Knoprix sync.
 - Extraction history: terminal job metadata expires after 30 days; this does
   not delete the source document.
-- Initial supported formats: PDF, PPTX, DOCX, TXT, MD; English OCR is the
-  first target.
+- Initial supported formats: PDF, PPTX, DOCX, TXT, MD, PNG, JPG/JPEG, and
+  static SVG. Standalone images are preserved without OCR; English OCR is a
+  separate capability. See `docs/upload-support-matrix.md`.
 - Retention: content remains until user deletion; encrypted backups may retain
   deleted content for up to 30 days.
 - Deployment direction: Render + Vercel + Supabase.

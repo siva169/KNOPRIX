@@ -27,7 +27,7 @@ export default function UploadModal({ onClose }) {
       setDone(file.name);
       await fetchDocuments(activeProject.id);
       await fetchProjects();
-      notify(`"${file.name}" uploaded & indexed with the DSA engine`, 'success');
+      notify(`"${file.name}" uploaded to the project`, 'success');
       setTimeout(onClose, 900);
     } catch (err) {
       setProgress(null);
@@ -79,7 +79,7 @@ export default function UploadModal({ onClose }) {
             ref={inputRef}
             type="file"
             hidden
-            accept=".pdf,.pptx,.docx,.txt,.md"
+            accept=".pdf,.pptx,.docx,.txt,.md,.png,.jpg,.jpeg,.svg"
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) uploadFile(file);
@@ -96,12 +96,12 @@ export default function UploadModal({ onClose }) {
                 <UploadCloud className="w-7 h-7 text-accent" />
               </motion.div>
               <p className="text-xs text-ivory font-semibold">Drag &amp; drop your document here</p>
-              <p className="text-[10px] text-ivory/60 mt-1">or click to browse · PDF, PPTX, DOCX, TXT, MD (max 500MB)</p>
+              <p className="text-[10px] text-ivory/60 mt-1">or click to browse · PDF, PPTX, DOCX, TXT, MD, PNG, JPG, JPEG, SVG (max 500MB)</p>
             </>
           ) : done ? (
             <div className="py-4 flex flex-col items-center">
               <CheckCircle2 className="w-10 h-10 text-emerald-400 mb-2" />
-              <p className="text-xs text-ivory font-semibold">{done} — indexed! 🎉</p>
+              <p className="text-xs text-ivory font-semibold">{done} — uploaded!</p>
             </div>
           ) : (
             <div className="py-4">
@@ -117,7 +117,7 @@ export default function UploadModal({ onClose }) {
         </div>
 
         <p className="text-[10px] text-ivory/40 mt-3 text-center">
-          Files are parsed (pypdf / python-pptx / python-docx) and added to the Trie &amp; Inverted Index automatically.
+          Documents are text-indexed; images are stored as originals without OCR. Legacy PPT is not supported.
         </p>
       </motion.div>
     </motion.div>

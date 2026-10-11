@@ -116,7 +116,9 @@ locations, key handling, document-consent meaning, and operational limits.
 - Provider keys: browser-local only; never sent to/stored by the backend.
 - Sharing: mutual contacts; each share separately accepted; deliver in Knoprix;
   optional email is notification only.
-- Initial files: PDF/PPTX/DOCX/TXT/MD; English OCR target.
+- Initial files: PDF/PPTX/DOCX/TXT/MD; English OCR target. On 2026-10-12,
+  boss expanded the accepted formats to include PNG, JPG/JPEG, and static SVG;
+  standalone images are stored without OCR in this slice.
 - Retention: until user deletes; encrypted backups may retain deleted data up
   to 30 days.
 - Deployment: Render + Vercel + Supabase; initial planning assumption
@@ -310,23 +312,27 @@ processing require explicit approval.
 
 ## Phase 2 — Reliable, inspectable document ingestion
 
-### [ ] 2.1 Make upload validation content-based and explicit
+### [x] 2.1 Make upload validation content-based and explicit
 
 **Priority:** P0
 **Description:** Treat every file as untrusted. Validate actual file content,
 not only filename extension or browser MIME type.
 
 **Acceptance criteria**
-- [ ] Enforce configured size limits while streaming; reject empty, malformed,
+- [x] Enforce configured size limits while streaming; reject empty, malformed,
   unsupported, and mismatched files before processing.
-- [ ] Validate file signatures, safe storage keys, decompression/resource
+- [x] Validate file signatures, safe storage keys, decompression/resource
   limits, and filename display separately.
-- [ ] Publish a tested support matrix for PDF, PPTX, DOCX, TXT, MD, and image
-  formats; reject legacy `.ppt` until a real parser is supported.
-- [ ] Uploaded files remain private and downloadable only after authorization.
+- [x] Publish a tested support matrix for PDF, PPTX, DOCX, TXT, MD, PNG,
+  JPG/JPEG, and static SVG; reject legacy `.ppt` until a real parser is
+  supported.
+- [x] Uploaded files remain private and downloadable only after authorization.
 
-**Verification:** Upload tests include spoofed extensions/MIME, oversized,
-truncated, empty, and valid sample files.
+**Verification:** Focused upload tests cover spoofed extensions/MIME,
+oversized, truncated, empty, valid samples, unsafe SVG, generated storage
+keys, and owner-scoped downloads.
+**Support matrix:** `docs/upload-support-matrix.md`. Standalone images are
+preserved without OCR; SVG is served only as a download.
 **Dependencies:** 0.2.
 **Files likely touched:** `backend/app/routers/documents.py`,
 `backend/app/services/storage.py`, `backend/app/config.py`, tests

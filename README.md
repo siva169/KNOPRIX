@@ -7,8 +7,10 @@ and Doubly Linked List data structures.
 
 ## Supported documents
 
-PDF, PPTX, DOCX, TXT, and MD. Image OCR and legacy `.ppt` files are not
-supported.
+PDF, PPTX, DOCX, TXT, MD, PNG, JPG/JPEG, and static SVG. Standalone images
+are stored as originals without OCR; legacy `.ppt` files are unsupported.
+See [`docs/upload-support-matrix.md`](docs/upload-support-matrix.md) for
+validation and resource limits.
 
 ## Local development
 

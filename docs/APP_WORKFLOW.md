@@ -64,6 +64,8 @@ project → its files appear in the tree. Click a file → the viewer opens it.
 - PPTX → `python-pptx` reads each slide's text boxes
 - DOCX → `python-docx` reads paragraphs + tables
 - TXT / MD → read as plain text
+- PNG / JPG / JPEG / SVG → validated and stored as originals; no OCR or inline
+  preview is provided. SVG downloads are forced as attachments.
 
 ---
 

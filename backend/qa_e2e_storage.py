@@ -74,6 +74,16 @@ def main():
     os.environ["OBJECT_STORAGE_ENDPOINT"] = f"http://127.0.0.1:{port}/storage/v1/s3"
     os.environ["OBJECT_STORAGE_BUCKET"] = "knoprix-documents"
     os.environ["OBJECT_STORAGE_API_KEY"] = "test-key"
+    os.environ["DATABASE_URL"] = ""
+    os.environ["APP_ENV"] = "development"
+    os.environ["AUTH_COOKIE_SAMESITE"] = "lax"
+    os.environ["AUTH_COOKIE_SECURE"] = "false"
+    os.environ["JWT_SECRET"] = "qa-only-access-secret-0123456789abcdef"
+    os.environ["JWT_REFRESH_SECRET"] = "qa-only-refresh-secret-0123456789abcdef"
+    qa_dir = tempfile.TemporaryDirectory(prefix="knoprix-qa-e2e-", dir=Path(__file__).parent)
+    from app import config as app_config
+    app_config.DB_PATH = Path(qa_dir.name) / "knoprix.db"
+    app_config.UPLOAD_DIR = Path(qa_dir.name) / "uploads"
 
     results = []
 
@@ -92,7 +102,8 @@ def main():
     API["base"] = f"http://127.0.0.1:{free_port}"
     config = uvicorn.Config(app, host="127.0.0.1", port=free_port, log_level="error")
     server_uv = uvicorn.Server(config)
-    threading.Thread(target=server_uv.run, daemon=True).start()
+    app_thread = threading.Thread(target=server_uv.run, daemon=True)
+    app_thread.start()
     for _ in range(80):
         try:
             with urllib.request.urlopen(API["base"] + "/api/health", timeout=1) as r:
@@ -102,6 +113,10 @@ def main():
             time.sleep(0.25)
     else:
         check("app booted", False, "health never returned 200")
+        server.shutdown()
+        server.server_close()
+        server_uv.should_exit = True
+        app_thread.join(timeout=5)
         return 1
 
     # Register a fresh user (register returns tokens directly).
@@ -170,10 +185,13 @@ def main():
     check("object removed from Storage", quoted_key not in FAKE)
 
     server.shutdown()
+    server.server_close()
     server_uv.should_exit = True
+    app_thread.join(timeout=5)
 
     failed = results.count(False)
     print(f"\n{len(results) - failed}/{len(results)} checks passed")
+    qa_dir.cleanup()
     return 1 if failed else 0
 
 

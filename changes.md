@@ -1,5 +1,20 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-12 — Validate and support approved image uploads
+
+- Added content-based validation for PDF, Office archives, UTF-8 text, PNG,
+  JPEG, and static SVG; bounded archive expansion and image/XML complexity;
+  sanitized display names; and replaced upload-derived storage names with
+  random keys.
+- Kept image files as private originals without OCR or inline preview. SVG
+  downloads are attachments with `nosniff`. Updated the upload picker and
+  support documentation to match the user-approved formats.
+- Verification: 7 focused upload tests, the upload-format allowlist check,
+  fake-storage REST and end-to-end suites (9 checks each), Python compilation,
+  frontend production build, and `git diff --check` pass. A real configured
+  object-storage service and PostgreSQL were not exercised. No deployment or
+  remote push occurred.
+
 ## 2026-10-12 — Coalesce concurrent legacy-session refreshes
 
 - Prevented duplicate browser refresh requests from React Strict Mode and
