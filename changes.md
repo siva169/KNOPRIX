@@ -1,5 +1,12 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-12 — Configure local Firebase web app
+
+- Added the Firebase web-app configuration to the ignored
+  `frontend/.env.local` so the local frontend can initialize Firebase Auth.
+  The configuration remains local and is not committed.
+- Restarted the local Vite server to load the new environment values.
+
 ## 2026-10-12 — Validate and support approved image uploads
 
 - Added content-based validation for PDF, Office archives, UTF-8 text, PNG,
