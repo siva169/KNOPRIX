@@ -1,12 +1,13 @@
 """Knoprix v2 — auth & security helpers.
 
 - bcrypt password hashing
-- JWT access + refresh tokens (PyJWT)
-- login rate limiting (in-memory)
+- JWT access tokens and revocable refresh sessions
+- database-backed authentication rate limiting
 - object-ownership checks (IDOR protection)
 """
+import hashlib
+import secrets
 import time
-from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -39,33 +40,57 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 # ── JWT ──────────────────────────────────────────────────────────────────────
-def _create_token(user_id: str, secret: str, expires_delta: timedelta) -> str:
+def _create_token(
+    user_id: str,
+    secret: str,
+    expires_delta: timedelta,
+    session_id: str | None = None,
+) -> str:
     payload = {
         "sub": user_id,
         "iat": datetime.now(timezone.utc),
         "exp": datetime.now(timezone.utc) + expires_delta,
     }
+    if session_id:
+        payload["sid"] = session_id
     return jwt.encode(payload, secret, algorithm="HS256")
 
 
-def create_access_token(user_id: str) -> str:
-    return _create_token(user_id, cfg.JWT_SECRET,
-                         timedelta(minutes=cfg.ACCESS_TOKEN_EXPIRE_MINUTES))
+def create_access_token(user_id: str, session_id: str | None = None) -> str:
+    return _create_token(
+        user_id,
+        cfg.JWT_SECRET,
+        timedelta(minutes=max(1, min(cfg.ACCESS_TOKEN_EXPIRE_MINUTES, 15))),
+        session_id,
+    )
 
 
-def create_refresh_token(user_id: str) -> str:
-    return _create_token(user_id, cfg.JWT_REFRESH_SECRET,
-                         timedelta(days=cfg.REFRESH_TOKEN_EXPIRE_DAYS))
+def create_refresh_token(user_id: str, session_id: str, expires_at: int) -> str:
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": user_id,
+        "sid": session_id,
+        "jti": secrets.token_urlsafe(24),
+        "iat": now,
+        "exp": datetime.fromtimestamp(expires_at, timezone.utc),
+    }
+    return jwt.encode(payload, cfg.JWT_REFRESH_SECRET, algorithm="HS256")
+
+
+def decode_token_claims(token: str, secret: str) -> dict:
+    try:
+        return jwt.decode(token, secret, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
 
 
 def decode_token(token: str, secret: str) -> str:
     """Returns the user_id (sub) or raises HTTPException(401)."""
     try:
-        payload = jwt.decode(token, secret, algorithms=["HS256"])
-        return payload["sub"]
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Token expired")
-    except jwt.InvalidTokenError:
+        return decode_token_claims(token, secret)["sub"]
+    except (KeyError, TypeError):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
 
 
@@ -129,11 +154,27 @@ def get_current_user(
             (claims["sub"],),
         ).fetchone()
     else:
-        user_id = decode_token(token, cfg.JWT_SECRET)
+        claims = decode_token_claims(token, cfg.JWT_SECRET)
+        user_id = claims.get("sub")
+        if not isinstance(user_id, str) or not user_id:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid token")
         row = db.execute(
             "SELECT id, email, full_name, firebase_uid FROM users WHERE id = ?",
             (user_id,),
         ).fetchone()
+        session_id = claims.get("sid")
+        if session_id:
+            session = db.execute(
+                "SELECT user_id, expires_at, revoked_at FROM auth_sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+            if (
+                session is None
+                or session["user_id"] != user_id
+                or session["revoked_at"] is not None
+                or session["expires_at"] <= int(time.time())
+            ):
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Session revoked or expired")
         if (
             row is not None
             and row["email"].lower() == cfg.DEMO_ACCOUNT_EMAIL
@@ -162,25 +203,48 @@ def get_firebase_claims(
 
 
 # ── Login rate limiting ──────────────────────────────────────────────────────
-class RateLimiter:
-    def __init__(self, max_calls: int, window_seconds: int):
+class DatabaseRateLimiter:
+    def __init__(self, max_calls: int, window_seconds: int, scope: str):
         self.max_calls = max_calls
         self.window = window_seconds
-        self._hits: dict[str, deque] = defaultdict(deque)
+        self.scope = scope
 
-    def allow(self, key: str) -> bool:
-        now = time.monotonic()
-        dq = self._hits[key]
-        while dq and now - dq[0] > self.window:
-            dq.popleft()
-        if len(dq) >= self.max_calls:
-            return False
-        dq.append(now)
-        return True
+    def allow(self, db, key: str, now: int | None = None) -> bool:
+        now = int(time.time()) if now is None else now
+        window_start = now - now % self.window
+        bucket_key = hashlib.sha256(
+            f"{self.scope}:{key}".encode("utf-8")
+        ).hexdigest()
+        db.execute(
+            "DELETE FROM auth_rate_limits WHERE window_start < ?",
+            (now - 3600,),
+        )
+        db.execute(
+            """
+            INSERT INTO auth_rate_limits (bucket_key, window_start, attempts)
+            VALUES (?, ?, 1)
+            ON CONFLICT(bucket_key) DO UPDATE SET
+                window_start = CASE
+                    WHEN auth_rate_limits.window_start < ? THEN excluded.window_start
+                    ELSE auth_rate_limits.window_start
+                END,
+                attempts = CASE
+                    WHEN auth_rate_limits.window_start < ? THEN 1
+                    ELSE auth_rate_limits.attempts + 1
+                END
+            """,
+            (bucket_key, window_start, window_start, window_start),
+        )
+        attempts = db.execute(
+            "SELECT attempts FROM auth_rate_limits WHERE bucket_key = ?",
+            (bucket_key,),
+        ).fetchone()["attempts"]
+        db.commit()
+        return attempts <= self.max_calls
 
 
-login_limiter = RateLimiter(max_calls=8, window_seconds=60)
-register_limiter = RateLimiter(max_calls=5, window_seconds=3600)
+login_limiter = DatabaseRateLimiter(max_calls=8, window_seconds=60, scope="login")
+register_limiter = DatabaseRateLimiter(max_calls=5, window_seconds=3600, scope="register")
 
 
 # ── Ownership checks (IDOR protection) ───────────────────────────────────────

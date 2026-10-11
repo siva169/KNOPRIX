@@ -1,7 +1,7 @@
 # Spec: Legacy Account Session Hardening
 
 **Module:** `auth`
-**Status:** Draft for approval
+**Status:** Implemented and verified locally
 **Backlog:** `tasks/todo.md`, Phase 1, Task 1.1
 **Capability map:** `capability-map.md`
 

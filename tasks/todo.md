@@ -196,7 +196,7 @@ runtime verification was unavailable: no `DATABASE_URL` was configured and
 
 ## Phase 1 — Consumer-grade account access and abuse protection
 
-### [ ] 1.1 Harden account/session lifecycle
+### [x] 1.1 Harden account/session lifecycle
 
 **Priority:** P0
 **Description:** Strengthen the existing password/JWT flow and align browser
@@ -210,17 +210,21 @@ cross-instance rate limits; Firebase sessions remain Firebase-managed.
 Detailed spec: `SPEC-auth-session-hardening.md`.
 
 **Acceptance criteria**
-- [ ] Access/refresh tokens have explicit rotation, expiry, logout/revocation,
+- [x] Access/refresh tokens have explicit rotation, expiry, logout/revocation,
   and concurrent-session behavior.
-- [ ] Production secrets are required and validated; unsafe default JWT
+- [x] Production secrets are required and validated; unsafe default JWT
   secrets cannot start a production deployment.
-- [ ] Auth errors avoid account enumeration; rate limits work across deployed
+- [x] Login errors avoid account enumeration; rate limits work across deployed
   instances, not only in one process.
-- [ ] Frontend session storage and refresh failure behavior are documented and
+- [x] Frontend session storage and refresh failure behavior are documented and
   tested; no credentials/tokens appear in logs.
 
 **Verification:** Auth tests cover invalid credentials, expiry, refresh
-rotation/reuse, logout, rate limit, and cross-user access.
+rotation/reuse, logout, rate limit, account-type-neutral errors, and access
+revocation. SQLite migration/auth/Firebase/bookmark/parser suites pass; the
+frontend production build passes; local ASGI and browser flows verify
+registration, HttpOnly refresh-cookie restoration, rotation, and logout.
+PostgreSQL runtime was not tested.
 **Dependencies:** 0.2, 0.3.
 **Files likely touched:** `backend/app/security.py`, `backend/app/routers/auth.py`,
 `backend/app/config.py`, `frontend/src/context/AuthContext.jsx`, auth tests

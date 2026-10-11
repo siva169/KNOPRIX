@@ -1,12 +1,41 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-12 — Coalesce concurrent legacy-session refreshes
+
+- Prevented duplicate browser refresh requests from React Strict Mode and
+  concurrent API retries from rotating the same refresh cookie twice and
+  revoking the active session.
+- Rejected production startup when `AUTH_COOKIE_SECURE` is disabled, regardless
+  of the configured SameSite policy.
+- Added a guarded local Playwright regression check for cookie restoration and
+  current-session logout.
+- Verification: the browser check failed before the fix and passes afterward;
+  the frontend production build passes with the existing large-chunk warning.
+
+## 2026-10-12 — Harden legacy password sessions
+
+- Added append-only migration 3 for refresh-session records and shared
+  database-backed rate-limit buckets. New access tokens expire within 15
+  minutes; refresh tokens rotate, are stored as hashes, and expire within
+  seven days. Replay revokes that session, while logout and logout-all revoke
+  access immediately without invalidating Firebase sessions.
+- Moved legacy access tokens to memory and refresh tokens to HttpOnly cookies;
+  added strict refresh Origin checks, production secret/cookie validation, and
+  neutral login errors for password/Firebase account types. Updated the local
+  Render blueprint's environment marker and documented the separate-host
+  cookie requirement.
+- Verification: focused SQLite migration/auth/Firebase/bookmark/parser suites,
+  backend compilation, frontend build, OpenAPI generation, a disposable local
+  ASGI registration/refresh/logout flow, and a browser cookie-restoration flow
+  passed. PostgreSQL runtime was not tested; the frontend build retains the
+  existing large-chunk warning. No deployment or push occurred.
+
 ## 2026-10-12 — Specify approved legacy auth session policy
 
 - Recorded the selected token lifetimes/rotation, multi-device logout behavior,
   memory + HttpOnly-cookie transport, and database-backed rate-limit policy.
 - Added `SPEC-auth-session-hardening.md` and updated the dependency plan.
-  Implementation remains gated on review of this focused spec; no auth code
-  changed in this step.
+  The implementation followed in the next entry after boss approval.
 
 ## 2026-10-12 — Add versioned, transactional database migrations
 

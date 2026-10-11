@@ -23,6 +23,7 @@ _load_dotenv()
 
 class Config:
     PORT = int(os.getenv("PORT", "8000"))
+    APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
     FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "").strip()
     ENABLE_DEMO_SEED = os.getenv("ENABLE_DEMO_SEED", "").lower() in {"1", "true"}
     DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "")
@@ -30,8 +31,14 @@ class Config:
 
     JWT_SECRET = os.getenv("JWT_SECRET", "change-me")
     JWT_REFRESH_SECRET = os.getenv("JWT_REFRESH_SECRET", "change-me-refresh")
-    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
     REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+    AUTH_COOKIE_NAME = "knoprix_refresh"
+    AUTH_COOKIE_PATH = "/api/auth"
+    AUTH_COOKIE_SECURE = os.getenv(
+        "AUTH_COOKIE_SECURE", "true" if APP_ENV == "production" else "false"
+    ).lower() in {"1", "true"}
+    AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "lax").lower()
 
     MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "500"))
     MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
@@ -69,6 +76,31 @@ class Config:
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 cfg = Config()
+
+
+def validate_security_config(config=cfg):
+    if config.AUTH_COOKIE_SAMESITE not in {"lax", "strict", "none"}:
+        raise RuntimeError("AUTH_COOKIE_SAMESITE must be lax, strict, or none")
+    if config.AUTH_COOKIE_SAMESITE == "none" and not config.AUTH_COOKIE_SECURE:
+        raise RuntimeError("AUTH_COOKIE_SECURE must be enabled with SameSite=None")
+    if config.APP_ENV != "production":
+        return
+    if not config.AUTH_COOKIE_SECURE:
+        raise RuntimeError("AUTH_COOKIE_SECURE must be enabled in production")
+    for name in ("JWT_SECRET", "JWT_REFRESH_SECRET"):
+        secret = getattr(config, name)
+        if (
+            not isinstance(secret, str)
+            or secret in {"change-me", "change-me-refresh"}
+            or len(secret) < 32
+            or len(set(secret)) < 8
+        ):
+            raise RuntimeError(
+                f"{name} must be a high-entropy secret of at least 32 characters in production"
+            )
+    if config.JWT_SECRET == config.JWT_REFRESH_SECRET:
+        raise RuntimeError("JWT_SECRET and JWT_REFRESH_SECRET must be different")
+
 
 _storage_values = (
     cfg.OBJECT_STORAGE_BUCKET,

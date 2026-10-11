@@ -2,19 +2,38 @@ import axios from 'axios';
 import { API_BASE } from './config';
 import { firebaseAuth } from './firebase';
 
-const api = axios.create({ baseURL: API_BASE });
+const api = axios.create({ baseURL: API_BASE, withCredentials: true });
 
-// Distinct token keys (knoprix_mr_*) so stale sessions from the original
-// knoprix-v2 project can never leak into this review build.
-const ACCESS_KEY = 'knoprix_mr_access_token';
-const REFRESH_KEY = 'knoprix_mr_refresh_token';
+const LEGACY_ACCESS_KEY = 'knoprix_mr_access_token';
+const LEGACY_REFRESH_KEY = 'knoprix_mr_refresh_token';
+let legacyAccessToken = null;
+let refreshRequest = null;
 
-export { ACCESS_KEY, REFRESH_KEY };
+export function refreshLegacySession() {
+  if (!refreshRequest) {
+    refreshRequest = axios
+      .post(`${API_BASE}/auth/refresh`, {}, { withCredentials: true })
+      .finally(() => {
+        refreshRequest = null;
+      });
+  }
+  return refreshRequest;
+}
+
+export function setAccessToken(token) {
+  legacyAccessToken = token;
+}
+
+export function clearAccessToken() {
+  legacyAccessToken = null;
+  localStorage.removeItem(LEGACY_ACCESS_KEY);
+  localStorage.removeItem(LEGACY_REFRESH_KEY);
+}
 
 export async function getAccessToken(forceRefresh = false) {
   const firebaseUser = firebaseAuth?.currentUser;
   if (firebaseUser) return firebaseUser.getIdToken(forceRefresh);
-  return localStorage.getItem(ACCESS_KEY);
+  return legacyAccessToken;
 }
 
 api.interceptors.request.use(async (config) => {
@@ -27,6 +46,7 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
+    const isRefreshRequest = original?.url?.endsWith('/auth/refresh');
     if (
       error.response?.status === 401 &&
       original &&
@@ -42,18 +62,20 @@ api.interceptors.response.use(
         window.dispatchEvent(new Event('auth:logout'));
       }
     }
-    const refreshToken = localStorage.getItem(REFRESH_KEY);
-    if (error.response?.status === 401 && original && !original._retry && refreshToken) {
+    if (
+      error.response?.status === 401 &&
+      original &&
+      !original._retry &&
+      !isRefreshRequest
+    ) {
       original._retry = true;
       try {
-        const { data } = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken });
-        localStorage.setItem(ACCESS_KEY, data.tokens.accessToken);
-        localStorage.setItem(REFRESH_KEY, data.tokens.refreshToken);
+        const { data } = await refreshLegacySession();
+        setAccessToken(data.tokens.accessToken);
         original.headers.Authorization = `Bearer ${data.tokens.accessToken}`;
         return api(original);
       } catch {
-        localStorage.removeItem(ACCESS_KEY);
-        localStorage.removeItem(REFRESH_KEY);
+        clearAccessToken();
         window.dispatchEvent(new Event('auth:logout'));
       }
     }

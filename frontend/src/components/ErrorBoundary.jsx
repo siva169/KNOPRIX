@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertTriangle, RotateCcw, LogOut } from 'lucide-react';
-import { ACCESS_KEY, REFRESH_KEY } from '../api';
+import api, { clearAccessToken } from '../api';
+import { firebaseAuth } from '../firebase';
 
 /**
  * ErrorBoundary — root-level crash guard for the app shell.
@@ -16,7 +17,7 @@ import { ACCESS_KEY, REFRESH_KEY } from '../api';
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { error: null };
+    this.state = { error: null, resetError: '' };
     this.handleRetry = this.handleRetry.bind(this);
     this.handleResetSession = this.handleResetSession.bind(this);
   }
@@ -31,17 +32,20 @@ export default class ErrorBoundary extends React.Component {
   }
 
   handleRetry() {
-    this.setState({ error: null });
+    this.setState({ error: null, resetError: '' });
   }
 
-  handleResetSession() {
-    // Clear auth tokens and hard-reload so the app boots from a clean state.
+  async handleResetSession() {
     try {
-      localStorage.removeItem(ACCESS_KEY);
-      localStorage.removeItem(REFRESH_KEY);
-    } finally {
-      window.location.assign(window.location.origin);
+      if (!firebaseAuth?.currentUser) await api.post('/auth/logout');
+    } catch (error) {
+      if (error.response?.status !== 401) {
+        this.setState({ resetError: 'Could not reach Knoprix to reset the session. Try again.' });
+        return;
+      }
     }
+    clearAccessToken();
+    window.location.assign(window.location.origin);
   }
 
   render() {
@@ -67,6 +71,11 @@ export default class ErrorBoundary extends React.Component {
             Your saved work is safe — only this view failed. Try again, or reset
             the session if the problem keeps coming back.
           </p>
+          {this.state.resetError && (
+            <p className="mt-3 text-xs text-rose-300">
+              {this.state.resetError}
+            </p>
+          )}
 
           <p className="mt-4 font-mono text-[10px] text-ivory/40 bg-midnight-deep/80 border border-glass-borderDark rounded-lg px-3 py-2 break-words text-left">
             {String(error?.message || error)}

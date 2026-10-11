@@ -35,6 +35,10 @@ Production requires `JWT_SECRET`, `JWT_REFRESH_SECRET`,
 `FIREBASE_PROJECT_ID`, `DATABASE_URL`, and `CORS_ORIGINS`. Persistent document
 storage also requires `OBJECT_STORAGE_BUCKET`, `OBJECT_STORAGE_ENDPOINT`, and
 `OBJECT_STORAGE_API_KEY` together. The Supabase service key is backend-only.
+Set `APP_ENV=production` so startup rejects default or weak JWT secrets. Legacy
+password sessions use 15-minute access tokens and rotating, seven-day maximum
+HttpOnly refresh cookies; a first-party API origin or same-site proxy is needed
+for reliable cookie behavior when hosting frontend and API separately.
 The frontend requires the `VITE_FIREBASE_*` values from its Firebase web app;
 `VITE_API_URL` points to the deployed API.
 

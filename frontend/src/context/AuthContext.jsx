@@ -6,15 +6,16 @@ import {
   signOut,
   updateProfile,
 } from 'firebase/auth';
-import api, { ACCESS_KEY, REFRESH_KEY } from '../api';
+import api, {
+  clearAccessToken,
+  refreshLegacySession,
+  setAccessToken,
+} from '../api';
 import { firebaseAuth } from '../firebase';
 
 const AuthContext = createContext(null);
 
-const clearLegacyTokens = () => {
-  localStorage.removeItem(ACCESS_KEY);
-  localStorage.removeItem(REFRESH_KEY);
-};
+const clearLegacyTokens = clearAccessToken;
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -50,13 +51,14 @@ export function AuthProvider({ children }) {
     let active = true;
 
     const restoreLegacySession = async () => {
-      if (!localStorage.getItem(ACCESS_KEY)) {
-        if (active) setUser(null);
-        return;
-      }
       try {
-        const { data } = await api.get('/auth/me');
-        if (active) setUser(data);
+        clearLegacyTokens();
+        const { data: session } = await refreshLegacySession();
+        setAccessToken(session.tokens.accessToken);
+        if (active) {
+          setUser(session.user);
+          setAuthError('');
+        }
       } catch (error) {
         if (error.response?.status === 401) clearLegacyTokens();
         else if (active) setAuthError("Can't reach Knoprix. Check your connection and try again.");
@@ -157,11 +159,20 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    try {
+      if (firebaseAuth?.currentUser) {
+        await signOut(firebaseAuth);
+      } else {
+        await api.post('/auth/logout');
+      }
+    } catch (error) {
+      setAuthError("Couldn't sign out. Check your connection and try again.");
+      throw error;
+    }
     clearLegacyTokens();
     syncedUid.current = null;
     setUser(null);
     setAuthError('');
-    if (firebaseAuth) await signOut(firebaseAuth);
   };
 
   return (

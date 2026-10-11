@@ -42,9 +42,21 @@ class DatabaseMigrationTests(unittest.TestCase):
 
         self.assertEqual(
             [(row["version"], row["name"]) for row in versions],
-            [(1, "baseline-schema"), (2, "legacy-schema-compatibility")],
+            [
+                (1, "baseline-schema"),
+                (2, "legacy-schema-compatibility"),
+                (3, "auth-session-and-rate-limit-state"),
+            ],
         )
-        self.assertTrue({"users", "projects", "documents", "dsa_indices"} <= tables)
+        self.assertTrue({
+            "users",
+            "projects",
+            "documents",
+            "dsa_indices",
+            "auth_sessions",
+            "auth_refresh_tokens",
+            "auth_rate_limits",
+        } <= tables)
 
     def test_legacy_upgrade_preserves_records_and_cleans_old_filename_once(self):
         conn = self.connect()

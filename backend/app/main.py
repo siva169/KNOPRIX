@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .config import cfg
+from .config import cfg, validate_security_config
 from .database import init_db
 from .routers import auth, bookmarks, chat, documents, dsa, graph, highlights, projects, search, summary
 from .seed import seed
@@ -16,6 +16,7 @@ from .seed import seed
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_security_config()
     init_db()
     if cfg.ENABLE_DEMO_SEED:
         seed()
