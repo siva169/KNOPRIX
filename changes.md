@@ -1,5 +1,14 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-12 — Approve upgrade map and draft migration foundation spec
+
+- Expanded the capability map to include versioned migrations, centralized
+  access controls, evidence-linked mapping, sharing, and release readiness,
+  preserving the existing module IDs.
+- Drafted `SPEC-database-foundation.md` for the first prerequisite slice.
+  Implementation remains gated on review of that spec; no application code
+  changed and no deployment or remote operation was performed.
+
 ## 2026-10-11 — Use the supplied Knoprix logo artwork
 
 - Replaced the reconstructed auth mark with the artwork from the supplied `1.svg`, cropping its SVG viewport to the hexagonal logo so the brand-sheet heading and guide lines are not shown.
