@@ -202,6 +202,13 @@ runtime verification was unavailable: no `DATABASE_URL` was configured and
 **Description:** Strengthen the existing password/JWT flow and align browser
 token handling with the approved threat model.
 
+**Approved implementation policy (boss-approved 2026-10-12):** 15-minute
+access tokens; rotating refresh sessions with a 7-day maximum lifetime;
+multiple device sessions; current-session logout and logout-all; access token
+in memory and refresh token in an HttpOnly cookie; database-backed
+cross-instance rate limits; Firebase sessions remain Firebase-managed.
+Detailed spec: `SPEC-auth-session-hardening.md`.
+
 **Acceptance criteria**
 - [ ] Access/refresh tokens have explicit rotation, expiry, logout/revocation,
   and concurrent-session behavior.

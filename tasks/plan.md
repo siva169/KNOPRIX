@@ -131,10 +131,23 @@ current SQLite/PostgreSQL records safely.
 
 ### Phase 1 — Account security and abuse controls
 
-Harden sessions/secrets and rate limits; add Google OIDC as an optional
-provider; implement account recovery; select and integrate a CAPTCHA provider
-with accessible fallback. Keep verified-email checks limited to safe linking
-of existing unlinked accounts.
+1. Harden existing legacy password/JWT sessions using the approved auth
+   decisions: 15-minute access tokens, rotating 7-day refresh sessions,
+   multiple active device sessions, current-session and all-session logout,
+   in-memory access tokens plus HttpOnly refresh cookies, production-only
+   secret enforcement, and shared database-backed rate limits. Firebase
+   session/refresh behavior remains Firebase-managed.
+2. Add Google OIDC only after the OAuth client and callback configuration are
+   explicitly approved.
+3. Implement account recovery only after an email delivery provider is chosen
+   and authorized.
+4. Add CAPTCHA only after its provider, privacy/data-transfer, accessibility,
+   cost, and fallback policy are approved.
+
+The auth session implementation spec is `SPEC-auth-session-hardening.md`.
+Localhost verification is in scope. A production deployment using refresh
+cookies requires a same-site API origin or equivalent proxy; no host or domain
+is selected here.
 
 **Exit gate:** Account linking, recovery, challenge verification, abuse
 controls, and secret handling are tested. External account/service setup is

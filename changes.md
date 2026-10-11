@@ -1,5 +1,13 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-12 — Specify approved legacy auth session policy
+
+- Recorded the selected token lifetimes/rotation, multi-device logout behavior,
+  memory + HttpOnly-cookie transport, and database-backed rate-limit policy.
+- Added `SPEC-auth-session-hardening.md` and updated the dependency plan.
+  Implementation remains gated on review of this focused spec; no auth code
+  changed in this step.
+
 ## 2026-10-12 — Add versioned, transactional database migrations
 
 - Replaced untracked startup schema alterations with append-only migration
