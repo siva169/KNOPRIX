@@ -1,7 +1,7 @@
 # Spec: Knoprix Versioned Database Foundation
 
 **Module:** `database-foundation`
-**Status:** Draft for approval
+**Status:** Approved
 **Backlog:** `tasks/todo.md`, Phase 0, Task 0.3
 **Plan:** `tasks/plan.md`, Phase 0
 
@@ -68,6 +68,20 @@ schema changes in untracked startup conditionals.
 - PostgreSQL behavior must be exercised only with an explicitly configured
   disposable database; if none is available, report that limitation rather
   than claiming PostgreSQL runtime verification.
+
+## Migration and Recovery Strategy
+
+- Version numbers are append-only. Released migrations are not edited; schema
+  changes are added as new migrations.
+- Each migration runs in a transaction. SQLite startup obtains an immediate
+  write lock; PostgreSQL startup obtains an exclusive lock on the migration
+  table so multiple workers do not apply the same version concurrently.
+- A failed migration rolls back and is not recorded as applied. Startup surfaces
+  the error instead of serving the app against a partially migrated schema.
+- There are no automatic down-migrations. Before applying migrations to a
+  persistent/shared environment, take a verified database backup; recover by
+  restoring that backup and correcting/reapplying the migration. No shared or
+  deployed database is used for local verification.
 
 ## Boundaries
 

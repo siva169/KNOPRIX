@@ -1,5 +1,6 @@
 """Persistence for Knoprix.
 
+
 Two backends, same API:
 
 - SQLite (local dev): when `DATABASE_URL` is not set, uses `knoprix.db`.
@@ -13,6 +14,7 @@ Why: hosts like Render's free tier use an ephemeral disk that wipes a local
 SQLite file on every restart, silently deleting user accounts and documents.
 A persistent Postgres database survives restarts.
 """
+import re
 import sqlite3
 
 from .config import DATABASE_URL, DB_PATH
@@ -211,50 +213,125 @@ def connect():
     return conn
 
 
+_PREFIX_RE = re.compile(r"^\d+-[0-9a-f]{8}-(.+)$")
+
+
+def _clean_legacy_file_names(conn) -> None:
+    rows = conn.execute("SELECT id, file_name FROM documents").fetchall()
+    for r in rows:
+        m = _PREFIX_RE.match(r["file_name"] or "")
+        if m:
+            conn.execute(
+                "UPDATE documents SET file_name = ? WHERE id = ?",
+                (m.group(1), r["id"]),
+            )
+
+
+def _create_base_schema(conn) -> None:
+    for statement in SCHEMA.split(";"):
+        if statement.strip():
+            conn.execute(statement)
+
+
+def _table_columns(conn, table_name: str) -> set[str]:
+    if DATABASE_URL:
+        rows = conn.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = current_schema() AND table_name = ?",
+            (table_name,),
+        ).fetchall()
+        return {row["column_name"] for row in rows}
+    return {
+        row["name"]
+        for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    }
+
+
+def _migrate_legacy_schema(conn) -> None:
+    user_columns = _table_columns(conn, "users")
+    highlight_columns = _table_columns(conn, "highlights")
+    bookmark_columns = _table_columns(conn, "bookmarks")
+
+    if "firebase_uid" not in user_columns:
+        conn.execute("ALTER TABLE users ADD COLUMN firebase_uid TEXT")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_firebase_uid "
+        "ON users(firebase_uid)"
+    )
+    if "match_all" not in highlight_columns:
+        conn.execute(
+            "ALTER TABLE highlights ADD COLUMN match_all INTEGER NOT NULL DEFAULT 0"
+        )
+    if "name" not in bookmark_columns:
+        conn.execute(
+            "ALTER TABLE bookmarks ADD COLUMN name TEXT NOT NULL DEFAULT ''"
+        )
+    if "anchor_start" not in bookmark_columns:
+        conn.execute("ALTER TABLE bookmarks ADD COLUMN anchor_start INTEGER")
+    if "anchor_end" not in bookmark_columns:
+        conn.execute("ALTER TABLE bookmarks ADD COLUMN anchor_end INTEGER")
+    # Preserve the existing cleanup for timestamp-prefixed legacy filenames.
+    _clean_legacy_file_names(conn)
+
+
+# Migration versions are append-only; never edit a migration after it is released.
+MIGRATIONS = (
+    (1, "baseline-schema", _create_base_schema),
+    (2, "legacy-schema-compatibility", _migrate_legacy_schema),
+)
+
+
+def _apply_migrations(conn) -> None:
+    for version, name, migrate in MIGRATIONS:
+        try:
+            if DATABASE_URL:
+                conn.execute("LOCK TABLE schema_migrations IN EXCLUSIVE MODE")
+            else:
+                conn.execute("BEGIN IMMEDIATE")
+
+            applied = conn.execute(
+                "SELECT version FROM schema_migrations WHERE version = ?",
+                (version,),
+            ).fetchone()
+            if applied is not None:
+                conn.commit()
+                continue
+
+            migrate(conn)
+            conn.execute(
+                "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
+                (version, name),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+
 def init_db():
     conn = connect()
     try:
-        conn.executescript(SCHEMA)
         if DATABASE_URL:
-            user_rows = conn.execute(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name = 'users'"
-            ).fetchall()
-            user_cols = [r["column_name"] for r in user_rows]
-            rows = conn.execute(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name = 'highlights'"
-            ).fetchall()
-            cols = [r["column_name"] for r in rows]
-            bookmark_rows = conn.execute(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name = 'bookmarks'"
-            ).fetchall()
-            bookmark_cols = [r["column_name"] for r in bookmark_rows]
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(?))",
+                ("knoprix.schema_migrations",),
+            )
         else:
-            cols = [c[1] for c in conn.execute("PRAGMA table_info(highlights)").fetchall()]
-            bookmark_cols = [
-                c[1] for c in conn.execute("PRAGMA table_info(bookmarks)").fetchall()
-            ]
-            user_cols = [
-                c[1] for c in conn.execute("PRAGMA table_info(users)").fetchall()
-            ]
-        if "firebase_uid" not in user_cols:
-            conn.execute("ALTER TABLE users ADD COLUMN firebase_uid TEXT")
+            conn.execute("BEGIN IMMEDIATE")
         conn.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_firebase_uid "
-            "ON users(firebase_uid)"
+            """
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
         )
-        # Migration for DBs created before the match_all column existed.
-        if "match_all" not in cols:
-            conn.execute("ALTER TABLE highlights ADD COLUMN match_all INTEGER NOT NULL DEFAULT 0")
-        if "name" not in bookmark_cols:
-            conn.execute("ALTER TABLE bookmarks ADD COLUMN name TEXT NOT NULL DEFAULT ''")
-        if "anchor_start" not in bookmark_cols:
-            conn.execute("ALTER TABLE bookmarks ADD COLUMN anchor_start INTEGER")
-        if "anchor_end" not in bookmark_cols:
-            conn.execute("ALTER TABLE bookmarks ADD COLUMN anchor_end INTEGER")
         conn.commit()
+        _apply_migrations(conn)
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 

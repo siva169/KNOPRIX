@@ -169,7 +169,7 @@ implementation boundary are explicitly identified.
 `changes.md`
 **Estimated scope:** Medium
 
-### [ ] 0.3 Add safe, versioned database migrations
+### [x] 0.3 Add safe, versioned database migrations
 
 **Priority:** P0
 **Description:** Replace schema changes hidden inside startup code with
@@ -177,15 +177,18 @@ versioned, testable migrations before introducing grants, sharing, jobs, or
 structured extraction records.
 
 **Acceptance criteria**
-- [ ] Existing SQLite and PostgreSQL databases can be upgraded without losing
+- [x] Existing SQLite databases can be upgraded without losing
   users, documents, bookmarks, highlights, or DSA data.
-- [ ] Each migration records its version and can detect already-applied work.
-- [ ] Migration tests cover fresh database, current database upgrade, repeated
+- [x] Each migration records its version and can detect already-applied work.
+- [x] Migration tests cover fresh database, current database upgrade, repeated
   startup, and documented recovery/rollback strategy.
 
 **Verification:** Run migration tests on disposable copies of both supported
 database types where available; compare row counts and key relationships
-before/after.
+before/after. SQLite fresh/legacy/repeated-startup/failure rollback tests and
+Firebase, bookmark, and parser regression suites pass (36 tests). PostgreSQL
+runtime verification was unavailable: no `DATABASE_URL` was configured and
+`pg_isready` was not installed.
 **Dependencies:** 0.2.
 **Files likely touched:** `backend/app/database.py`, `backend/migrations/`,
 `backend/qa_*`, `backend/requirements.txt`

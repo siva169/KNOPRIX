@@ -1,5 +1,17 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-12 — Add versioned, transactional database migrations
+
+- Replaced untracked startup schema alterations with append-only migration
+  versions for the baseline schema and legacy compatibility. Migrations run
+  transactionally, serialize concurrent startup, and preserve the existing
+  filename-cleanup behavior and edit.
+- Added disposable SQLite coverage for fresh initialization, legacy data
+  preservation, repeat startup, and rollback after a failed migration.
+- Verification: 36 migration/auth/bookmark/file-format tests pass; Python
+  compilation and `git diff --check` pass. PostgreSQL runtime was not tested:
+  no `DATABASE_URL` was configured and `pg_isready` was unavailable.
+
 ## 2026-10-12 — Approve upgrade map and draft migration foundation spec
 
 - Expanded the capability map to include versioned migrations, centralized
