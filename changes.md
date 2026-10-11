@@ -1,5 +1,12 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-11 — Refine the Knoprix auth brand and keep the orb responsive
+
+- Reworked the auth brand lockup to a cleaner premium wordmark treatment with better spacing and hierarchy across the login and register screens.
+- Kept the custom SVG mark and favicon minimal and high-contrast instead of copying the reference image too literally.
+- Preserved the existing orb motion and cursor responsiveness while keeping the login shell spacious and non-cluttered.
+- Verification: frontend production build passes, and the branded auth shell renders successfully on the local Vite app without breaking the form flow.
+
 ## 2026-10-11 — Rebuilt the Knoprix logo as a vector brand mark for auth screens
 
 - Reconstructed the Knoprix identity as a custom SVG mark instead of using a bitmap copy of the reference image.

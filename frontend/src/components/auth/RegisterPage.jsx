@@ -48,7 +48,7 @@ export default function RegisterPage({ onSwitch }) {
         transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
         className="relative w-full max-w-md"
       >
-        <div className="flex justify-center mb-6">
+        <div className="flex justify-center mb-5">
           <BrandWordmark compact />
         </div>
 

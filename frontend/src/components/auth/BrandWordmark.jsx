@@ -1,8 +1,9 @@
 export default function BrandWordmark({ compact = false }) {
-  const markSize = compact ? 'h-20 w-20 sm:h-24 sm:w-24' : 'h-28 w-28 sm:h-32 sm:w-32';
+  const markSize = compact ? 'h-12 w-12 sm:h-14 sm:w-14' : 'h-14 w-14 sm:h-20 sm:w-20 md:h-24 md:w-24';
+  const wordSize = compact ? 'text-3xl sm:text-4xl' : 'text-[2.3rem] sm:text-[3.8rem] md:text-[4.6rem]';
 
   return (
-    <div className="flex flex-col items-center justify-center gap-3 sm:gap-4">
+    <div className="flex items-center justify-center gap-2 sm:gap-3 md:gap-4">
       <img
         src="/knoprix-mark.svg"
         alt="Knoprix"
@@ -10,13 +11,13 @@ export default function BrandWordmark({ compact = false }) {
       />
 
       <div
-        className={compact ? 'text-3xl sm:text-4xl' : 'text-[2.6rem] sm:text-[3.6rem] md:text-[4.3rem]'}
+        className={`${wordSize} font-medium`}
         style={{
           fontFamily: 'Georgia, "Times New Roman", serif',
           letterSpacing: '-0.08em',
-          lineHeight: 1,
+          lineHeight: 0.9,
           color: '#e9c877',
-          textShadow: '0 0 16px rgba(233,200,119,0.18)',
+          textShadow: '0 0 18px rgba(233,200,119,0.2)',
         }}
       >
         Knoprix
