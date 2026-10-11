@@ -1,5 +1,12 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-11 — Applied the product logo to auth branding and favicon
+
+- Added the provided Knoprix logo to the login and register screens in a clean, non-cluttered header placement.
+- Added a branded favicon mark and kept the browser tab icon aligned with the product identity.
+- Kept the auth layout visual hierarchy intact so the logo supports the interface without crowding the form.
+- Verification: frontend production build passes and the Vite local server serves both `/knoprix-logo.png` and `/favicon.svg` successfully on localhost:5173.
+
 ## 2026-10-11 — Remove email verification from normal Firebase sign-in
 
 - Removed verification-email sending, resend controls, and email-verified

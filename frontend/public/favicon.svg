@@ -1,18 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Knoprix favicon">
   <defs>
-    <linearGradient id="g" x1="0%" y1="100%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#f97316" />
-      <stop offset="100%" stop-color="#f59e0b" />
+    <linearGradient id="gold" x1="10%" y1="0%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#f7e3a2"/>
+      <stop offset="22%" stop-color="#f0c667"/>
+      <stop offset="52%" stop-color="#d89f3f"/>
+      <stop offset="100%" stop-color="#b8741e"/>
+    </linearGradient>
+    <linearGradient id="goldSoft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff4d0" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#c07a26" stop-opacity="0.8"/>
     </linearGradient>
   </defs>
-  <rect width="32" height="32" rx="8" fill="url(#g)" />
-  <text
-    x="16"
-    y="23"
-    text-anchor="middle"
-    font-family="'Space Grotesk', ui-sans-serif, system-ui, sans-serif"
-    font-size="20"
-    font-weight="800"
-    fill="#ffffff"
-  >K</text>
+  <rect width="128" height="128" rx="30" fill="#08131d"/>
+  <path d="M20 32 L64 8 L108 32 L108 96 L64 120 L20 96 Z" fill="none" stroke="url(#gold)" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M44 34 L44 94 M44 64 L78 34 L79 94" fill="none" stroke="url(#goldSoft)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44 64 L81 94" fill="none" stroke="url(#goldSoft)" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="84" cy="34" r="3.5" fill="#f3d37a"/>
+  <circle cx="84" cy="94" r="3.5" fill="#f3d37a"/>
 </svg>

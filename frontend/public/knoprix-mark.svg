@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Knoprix brand mark">
+  <defs>
+    <linearGradient id="gold" x1="10%" y1="0%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#f7e3a2"/>
+      <stop offset="22%" stop-color="#f0c667"/>
+      <stop offset="52%" stop-color="#d89f3f"/>
+      <stop offset="100%" stop-color="#b8741e"/>
+    </linearGradient>
+    <linearGradient id="goldSoft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff4d0" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#c07a26" stop-opacity="0.8"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="#08131d"/>
+  <path d="M20 32 L64 8 L108 32 L108 96 L64 120 L20 96 Z" fill="none" stroke="url(#gold)" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M44 34 L44 94 M44 64 L78 34 L79 94" fill="none" stroke="url(#goldSoft)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44 64 L81 94" fill="none" stroke="url(#goldSoft)" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="84" cy="34" r="3.5" fill="#f3d37a"/>
+  <circle cx="84" cy="94" r="3.5" fill="#f3d37a"/>
+</svg>

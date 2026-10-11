@@ -53,15 +53,14 @@ export default function LoginPage({ onSwitch }) {
       />
 
       <div className="relative max-w-6xl mx-auto px-5 sm:px-8 flex flex-col min-h-screen">
-        {/* top bar */}
-        <header className="flex items-start justify-between pt-6">
-          <div>
-            <p className="text-[18px] font-semibold tracking-[0.35em] text-[#e8be6a]">KNOPRIX</p>
-            <div className="mt-2 h-px w-16" style={{ background: 'rgba(232,190,106,0.6)' }} />
-          </div>
+        <header className="flex items-center justify-center pt-6 sm:pt-8">
+          <img
+            src="/knoprix-logo.png"
+            alt="Knoprix"
+            className="h-20 sm:h-24 md:h-28 w-auto max-w-[84%] sm:max-w-[540px] object-contain select-none"
+          />
         </header>
 
-        {/* main: form + mirror */}
         <main className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-6 items-center py-10">
           <motion.section
             initial={{ opacity: 0, y: 22 }}

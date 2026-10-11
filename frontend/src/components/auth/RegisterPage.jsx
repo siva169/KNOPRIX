@@ -47,7 +47,14 @@ export default function RegisterPage({ onSwitch }) {
         transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
         className="relative w-full max-w-md"
       >
-        {/* Frosted gold-glass card — mirrors LoginPage */}
+        <div className="flex justify-center mb-6">
+          <img
+            src="/knoprix-logo.png"
+            alt="Knoprix"
+            className="h-16 w-auto max-w-[260px] object-contain select-none"
+          />
+        </div>
+
         <div
           className="rounded-3xl p-8 sm:p-10 relative overflow-hidden"
           style={{
