@@ -1,5 +1,14 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-12 — Configure Firebase token verification locally
+
+- Added `FIREBASE_PROJECT_ID=knoprix-a647` to the ignored backend `.env` and
+  restarted the local API. The frontend had Firebase web-app settings, but
+  the backend was missing the project ID needed to verify Firebase ID tokens.
+- Verification: backend health responds; the Firebase session route now
+  rejects an invalid test token as `401 Invalid Firebase ID token` instead
+  of reporting Firebase auth as unconfigured. No real user credentials used.
+
 ## 2026-10-12 — Configure local Firebase web app
 
 - Added the Firebase web-app configuration to the ignored
