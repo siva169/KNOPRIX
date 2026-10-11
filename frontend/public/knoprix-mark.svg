@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Knoprix brand mark">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <defs>
     <linearGradient id="goldBorder" x1="20%" y1="0%" x2="80%" y2="100%">
       <stop offset="0%" stop-color="#f8e7b0"/>
@@ -12,14 +12,8 @@
     </linearGradient>
   </defs>
 
-  <path d="M20 32 L64 8 L108 32 L108 96 L64 120 L20 96 Z" fill="#0b1a27" stroke="url(#goldBorder)" stroke-width="4.5" stroke-linejoin="round"/>
-
-  <path d="M42 30 L42 98" stroke="url(#goldFill)" stroke-width="10" stroke-linecap="round"/>
-  <path d="M42 63 L81 30" stroke="url(#goldFill)" stroke-width="10" stroke-linecap="round"/>
-  <path d="M42 63 L81 98" stroke="url(#goldFill)" stroke-width="10" stroke-linecap="round"/>
-
-  <path d="M58 40 L60 88" stroke="url(#goldFill)" stroke-width="6" stroke-linecap="round" opacity="0.35"/>
-  <circle cx="84" cy="30" r="3.5" fill="#f3d37a"/>
-  <circle cx="84" cy="98" r="3.5" fill="#f3d37a"/>
-  <path d="M84 30 L84 98" stroke="url(#goldBorder)" stroke-width="1.8" opacity="0.7"/>
+  <path d="M14 32 L64 6 L114 32 L114 96 L64 122 L14 96 Z" fill="#0b1a27" stroke="url(#goldBorder)" stroke-width="4.5" stroke-linejoin="round"/>
+  <path d="M38 31 H52 V97 H38 Z M46 60 L79 31 H98 L60 66 Z M47 58 L60 57 L98 97 H80 Z" fill="url(#goldFill)" stroke="#f0d080" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M77 29 H94" stroke="url(#goldBorder)" stroke-width="2"/>
+  <circle cx="100" cy="29" r="4.5" fill="#f3d37a"/>
 </svg>

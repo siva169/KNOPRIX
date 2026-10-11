@@ -3,25 +3,27 @@ export default function BrandWordmark({ compact = false }) {
   const wordSize = compact ? 'text-3xl sm:text-4xl' : 'text-[2.3rem] sm:text-[3.8rem] md:text-[4.6rem]';
 
   return (
-    <div className="flex items-center justify-center gap-2 sm:gap-3 md:gap-4">
+    <div role="img" aria-label="Knoprix" className="flex items-center justify-center gap-3 sm:gap-4 md:gap-6">
       <img
         src="/knoprix-mark.svg"
-        alt="Knoprix"
+        alt=""
+        aria-hidden="true"
         className={`${markSize} select-none object-contain shrink-0`}
       />
 
-      <div
-        className={`${wordSize} font-medium`}
+      <span
+        aria-hidden="true"
+        className={`${wordSize} whitespace-nowrap font-medium`}
         style={{
-          fontFamily: 'Georgia, "Times New Roman", serif',
-          letterSpacing: '-0.08em',
+          fontFamily: '"Space Grotesk", ui-sans-serif, system-ui, sans-serif',
+          letterSpacing: '-0.045em',
           lineHeight: 0.9,
           color: '#e9c877',
-          textShadow: '0 0 18px rgba(233,200,119,0.2)',
+          textShadow: '0 0 10px rgba(233,200,119,0.12)',
         }}
       >
         Knoprix
-      </div>
+      </span>
     </div>
   );
 }

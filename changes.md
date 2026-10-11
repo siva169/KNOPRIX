@@ -1,5 +1,12 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-11 — Correct the Knoprix auth logo lockup
+
+- Rebuilt the hexagonal K from the actual Knoprix brand-sheet mark, including its clean geometric strokes and small circuit detail instead of the inaccurate generic K.
+- Matched the wordmark to the brand's sans-serif lettering, corrected its spacing, and exposed the combined lockup as one accessible image label.
+- Left the favicon unchanged.
+- Verification: frontend production build passed. Chromium confirmed the SVG loads, the wordmark uses the brand sans-serif with corrected spacing, the lockup appears on login and register, and no horizontal overflow appears at 390px; no browser errors.
+
 ## 2026-10-11 — Match the login screen to the supplied reference
 
 - Rebuilt the login composition around the supplied dark-and-gold reference: left-aligned branding and sign-in form, subtle orbital sky details, and a larger event-horizon orb on the right.
