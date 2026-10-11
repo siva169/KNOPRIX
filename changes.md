@@ -1,5 +1,13 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-12 — Add privacy-safe Firebase token rejection diagnostics
+
+- Log only the exception class when Firebase ID-token verification rejects a
+  token, to distinguish audience, issuer, signature, and signing-key failures.
+  Token contents and user identifiers are not logged.
+- Verification: focused Firebase auth tests, including a check that diagnostic
+  output contains no token or email, pass.
+
 ## 2026-10-12 — Fix session reset and upload compensation
 
 - Firebase session reset now revokes the browser's HttpOnly legacy refresh

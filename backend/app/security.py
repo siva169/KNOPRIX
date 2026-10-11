@@ -6,6 +6,7 @@
 - object-ownership checks (IDOR protection)
 """
 import hashlib
+import logging
 import secrets
 import time
 from datetime import datetime, timedelta, timezone
@@ -19,6 +20,7 @@ from jwt.exceptions import PyJWKClientConnectionError, PyJWKClientError
 from .config import cfg
 from .database import get_db
 
+logger = logging.getLogger(__name__)
 _bearer = HTTPBearer(auto_error=False)
 _firebase_jwks = jwt.PyJWKClient(
     "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com",
@@ -117,6 +119,7 @@ def verify_firebase_id_token(token: str) -> dict:
             "Firebase token verification is temporarily unavailable",
         ) from exc
     except (jwt.InvalidTokenError, PyJWKClientError) as exc:
+        logger.warning("Firebase ID token rejected: %s", type(exc).__name__)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Firebase ID token") from exc
 
     if not isinstance(claims.get("sub"), str) or not claims["sub"]:

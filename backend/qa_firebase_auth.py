@@ -268,6 +268,17 @@ class FirebaseAuthTests(unittest.TestCase):
             self.verify(self.token(aud="another-project"))
         self.assertEqual(raised.exception.status_code, 401)
 
+    def test_logs_firebase_rejection_category_without_token_or_user_data(self):
+        token = self.token(aud="another-project")
+
+        with self.assertLogs("app.security", level="WARNING") as captured:
+            with self.assertRaises(HTTPException):
+                self.verify(token)
+
+        self.assertIn("InvalidAudienceError", captured.output[0])
+        self.assertNotIn(token, captured.output[0])
+        self.assertNotIn("reader@example.com", captured.output[0])
+
     def test_rejects_wrong_issuer(self):
         with self.assertRaises(HTTPException) as raised:
             self.verify(self.token(iss="https://securetoken.google.com/another-project"))
