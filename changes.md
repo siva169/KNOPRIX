@@ -1,5 +1,11 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-11 — Use the supplied Knoprix logo artwork
+
+- Replaced the reconstructed auth mark with the artwork from the supplied `1.svg`, cropping its SVG viewport to the hexagonal logo so the brand-sheet heading and guide lines are not shown.
+- Kept the existing wordmark lockup and favicon unchanged. The supplied SVG embeds a PNG image, so the mark is raster artwork inside an SVG container.
+- Verification: frontend production build passed (with the existing large-chunk warning). Chromium confirmed the mark loads on login and registration at 390/425/768/1024px, with no horizontal overflow or browser errors.
+
 ## 2026-10-11 — Correct the Knoprix auth logo lockup
 
 - Rebuilt the hexagonal K from the actual Knoprix brand-sheet mark, including its clean geometric strokes and small circuit detail instead of the inaccurate generic K.
