@@ -1,5 +1,12 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-11 — Match the login screen to the supplied reference
+
+- Rebuilt the login composition around the supplied dark-and-gold reference: left-aligned branding and sign-in form, subtle orbital sky details, and a larger event-horizon orb on the right.
+- Preserved the existing login, password visibility, loading/error feedback, and registration-switch behavior; adapted the composition for smaller viewports.
+- Replaced the orb's always-running animation frame loop with direct pointer-driven CSS updates, stronger layered parallax, and cursor-following light. Reduced-motion preferences disable the positional/rotation motion.
+- Verification: frontend production build passed. Chromium checks confirmed password visibility and registration-switch controls, pointer-driven orb motion, reduced-motion handling, and no horizontal overflow at 390/425/768/1024/1440px; no browser errors. No real Firebase credentials or live account were used.
+
 ## 2026-10-11 — Refine the Knoprix auth brand and keep the orb responsive
 
 - Reworked the auth brand lockup to a cleaner premium wordmark treatment with better spacing and hierarchy across the login and register screens.
