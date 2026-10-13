@@ -248,10 +248,25 @@ export default function ContactsPage({ onClose, activeDocument, activeProject, o
         resourceType,
         resourceId,
       });
-      const created = data.shares.filter((item) => item.status === 'pending').length;
+      const createdShares = data.shares
+        .filter((item) => item.status === 'pending' && item.shareId)
+        .map((item) => ({
+          shareId: item.shareId,
+          resourceType,
+          resourceId,
+          recipientKnoprixId: item.knoprixId,
+          status: item.status,
+        }));
+      const created = createdShares.length;
+      setSentShares((current) => {
+        const existingIds = new Set(current.map((share) => share.shareId));
+        return [
+          ...createdShares.filter((share) => !existingIds.has(share.shareId)),
+          ...current,
+        ];
+      });
       notify(`${created} share request${created === 1 ? '' : 's'} sent`, created ? 'success' : 'info');
       setSelectedRecipients([]);
-      await refresh();
     } catch (requestError) {
       reportError(requestError, 'Could not create share requests.');
     } finally {

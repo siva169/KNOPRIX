@@ -26,6 +26,13 @@ From `knoprix-final-project/frontend`, start Vite on `127.0.0.1:5173`, then run:
 node ../screenshots-layouts/capture.mjs
 ```
 
+For the focused responsiveness and retry regressions without rewriting
+screenshots, run:
+
+```bash
+PERF_REGRESSION_ONLY=true node ../screenshots-layouts/capture.mjs
+```
+
 The script intercepts the app API and Firebase Auth endpoints with local,
 synthetic fixtures. All other non-local requests are aborted. No real sign-in,
 account creation, upload, or API write is performed.

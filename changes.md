@@ -1,5 +1,36 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-13 — Remove avoidable waits in project, bookmark, and share flows
+
+- Project selection now loads documents and bookmarks concurrently. A request
+  sequence guard prevents stale project responses from overwriting the active
+  workspace, and project changes clear the prior project's data while loading.
+- Bookmark deletion now reaches the API immediately instead of waiting for its
+  exit animation. The row shows a disabled progress affordance while pending;
+  successful deletion updates shared local state, while failure leaves the
+  bookmark available for retry without a compensating list fetch.
+- Share creation now inserts the server-confirmed pending shares into the
+  sender's list directly, avoiding seven unrelated profile/contact/inbox/share
+  refresh requests. A failed create leaves the recipient selection intact.
+- Local browser evidence (single headless Chromium run; synthetic API fixtures,
+  not production telemetry): with 120 ms delays on each project read, their
+  start gap fell from 124 ms to 1 ms; bookmark deletion's API-start delay fell
+  from 262 ms to 4 ms after the click; a mocked 80 ms share response reached a
+  visible sender acknowledgement in 183 ms, with post-create refresh requests
+  reduced from seven to zero. These single-run values are not p50/p95/p99.
+- Regression coverage includes opening a saved page, a failed delete followed
+  by a successful retry, immediate pending feedback, a failed share followed
+  by a successful retry, and the absence of post-create refresh traffic.
+  The full 87-capture browser run passed with no page errors or unmapped API
+  calls and no horizontal overflow; the frontend production build passed with
+  the pre-existing large-chunk warning.
+- Backend sharing/authentication logic was not changed. The recipient's
+  pending share is persisted immediately but the UI has no push or polling
+  channel; an already-open Contacts page sees it on its next refresh/reopen.
+  No production database or telemetry was available. Backend tests could not
+  be imported in the system Python because `python-docx` and `PyJWT` are
+  missing; no packages were installed.
+
 ## 2026-10-13 — Replace cursor-driven login orb with controlled motion
 
 - Removed the login orb's global pointer listeners and pointer-derived style

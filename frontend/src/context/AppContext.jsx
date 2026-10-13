@@ -17,6 +17,8 @@ export function AppProvider({ children }) {
   const [highlightSnippet, setHighlightSnippet] = useState(null);
   const [locationRequest, setLocationRequest] = useState(null);
   const locationSequence = useRef(0);
+  const projectRequestSequence = useRef(0);
+  const selectedProjectId = useRef(null);
 
   // Theme
   useEffect(() => {
@@ -43,6 +45,8 @@ export function AppProvider({ children }) {
   }, []);
 
   const resetWorkspace = useCallback(() => {
+    projectRequestSequence.current += 1;
+    selectedProjectId.current = null;
     setProjects([]);
     setActiveProject(null);
     setDocuments([]);
@@ -52,24 +56,43 @@ export function AppProvider({ children }) {
   }, []);
 
   const selectProject = useCallback(async (projectId) => {
+    const requestSequence = ++projectRequestSequence.current;
+    selectedProjectId.current = projectId;
     const proj = projects.find((p) => p.id === projectId);
     setActiveProject(proj || { id: projectId });
     setActiveDocument(null);
     setLocationRequest(null);
-    const { data } = await api.get(`/projects/${projectId}/documents`);
-    setDocuments(data.documents);
-    const bk = await api.get(`/projects/${projectId}/bookmarks`);
-    setBookmarks(bk.data.bookmarks);
+    setDocuments([]);
+    setBookmarks([]);
+    const [documentsResponse, bookmarksResponse] = await Promise.all([
+      api.get(`/projects/${projectId}/documents`),
+      api.get(`/projects/${projectId}/bookmarks`),
+    ]);
+    if (requestSequence !== projectRequestSequence.current) return;
+    setDocuments(documentsResponse.data.documents);
+    setBookmarks(bookmarksResponse.data.bookmarks);
   }, [projects]);
 
   const fetchDocuments = useCallback(async (projectId) => {
+    const requestSequence = projectRequestSequence.current;
     const { data } = await api.get(`/projects/${projectId}/documents`);
-    setDocuments(data.documents);
+    if (
+      requestSequence === projectRequestSequence.current &&
+      projectId === selectedProjectId.current
+    ) setDocuments(data.documents);
   }, []);
 
   const fetchBookmarks = useCallback(async (projectId) => {
+    const requestSequence = projectRequestSequence.current;
     const { data } = await api.get(`/projects/${projectId}/bookmarks`);
-    setBookmarks(data.bookmarks);
+    if (
+      requestSequence === projectRequestSequence.current &&
+      projectId === selectedProjectId.current
+    ) setBookmarks(data.bookmarks);
+  }, []);
+
+  const removeBookmarkFromState = useCallback((bookmarkId) => {
+    setBookmarks((current) => current.filter((bookmark) => bookmark.id !== bookmarkId));
   }, []);
 
   const openDocument = useCallback((doc) => {
@@ -127,7 +150,7 @@ export function AppProvider({ children }) {
         documents, fetchDocuments,
         activeDocument, openDocument, navigateToLocation,
         getReadingProgress, saveReadingProgress,
-        bookmarks, fetchBookmarks,
+        bookmarks, fetchBookmarks, removeBookmarkFromState,
         theme, toggleTheme,
         toast, notify,
         currentPage, setCurrentPage,

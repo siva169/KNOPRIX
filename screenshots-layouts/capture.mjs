@@ -130,6 +130,10 @@ const blockedExternalRequests = [];
 const unmappedApiRequests = [];
 const pageErrors = [];
 const captures = [];
+const projectReadProbe = { enabled: false, requests: [] };
+const bookmarkDeleteProbe = { failNext: false, lastStartedAt: null };
+const shareRefreshProbe = { enabled: false, requests: [] };
+const shareCreateProbe = { failNext: false, startedAt: null };
 let nextId = 1;
 let pinnedWords = ['signal'];
 
@@ -256,6 +260,23 @@ const apiRoute = async (route) => {
   const url = new URL(request.url());
   const pathname = url.pathname.replace(/^\/api/, '');
   const method = request.method();
+  const shareRefreshPaths = [
+    '/v1/profile',
+    '/v1/contacts',
+    '/v1/inbox',
+    '/v1/contact-requests/sent',
+    '/v1/shares/sent',
+    '/v1/shares/received',
+    '/v1/blocks',
+  ];
+  if (
+    shareRefreshProbe.enabled &&
+    method === 'GET' &&
+    shareRefreshPaths.includes(pathname)
+  ) {
+    shareRefreshProbe.requests.push(pathname);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  }
 
   if (pathname === '/auth/refresh') {
     return response(route, { detail: 'No preview session' }, 401);
@@ -280,11 +301,20 @@ const apiRoute = async (route) => {
   }
   if (/^\/projects\/[^/]+\/documents$/.test(pathname) && method === 'GET') {
     const id = pathname.split('/')[2];
+    if (projectReadProbe.enabled && id === projectId) {
+      projectReadProbe.requests.push({ path: 'documents', startedAt: Date.now() });
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
     return ok(route, { documents: id === projectId ? documents : [] });
   }
   if (/^\/projects\/[^/]+\/bookmarks$/.test(pathname) && method === 'GET') {
     const query = (url.searchParams.get('q') || '').toLowerCase();
-    const list = pathname.split('/')[2] === projectId ? bookmarkList : [];
+    const id = pathname.split('/')[2];
+    if (projectReadProbe.enabled && id === projectId && !query) {
+      projectReadProbe.requests.push({ path: 'bookmarks', startedAt: Date.now() });
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+    const list = id === projectId ? bookmarkList : [];
     return ok(route, {
       bookmarks: query
         ? list.filter((item) => `${item.name} ${item.highlighted_text} ${item.notes}`.toLowerCase().includes(query))
@@ -364,7 +394,18 @@ const apiRoute = async (route) => {
   if (/^\/highlights\/[^/]+$/.test(pathname) && method === 'DELETE') {
     return ok(route);
   }
-  if (/^\/bookmarks\/[^/]+$/.test(pathname) && method === 'DELETE') return ok(route);
+  if (/^\/bookmarks\/[^/]+$/.test(pathname) && method === 'DELETE') {
+    bookmarkDeleteProbe.lastStartedAt = Date.now();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    if (bookmarkDeleteProbe.failNext) {
+      bookmarkDeleteProbe.failNext = false;
+      return response(route, { detail: 'Synthetic delete failure' }, 503);
+    }
+    const bookmarkId = pathname.split('/').at(-1);
+    const bookmarkIndex = bookmarkList.findIndex((item) => item.id === bookmarkId);
+    if (bookmarkIndex !== -1) bookmarkList.splice(bookmarkIndex, 1);
+    return ok(route);
+  }
   if (/^\/bookmarks\/[^/]+$/.test(pathname) && method === 'PATCH') return ok(route);
   if (pathname === '/bookmarks' && method === 'POST') {
     const body = request.postDataJSON();
@@ -533,6 +574,22 @@ const apiRoute = async (route) => {
   if (pathname === '/v1/shared-resources/share-in-2') {
     return ok(route, { resourceType: 'bookmark', resource: { name: 'Shared reading cue', text: 'A source-linked note shared as a read-only preview.' } });
   }
+  if (pathname === '/v1/shares' && method === 'POST') {
+    shareCreateProbe.startedAt = Date.now();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    if (shareCreateProbe.failNext) {
+      shareCreateProbe.failNext = false;
+      return response(route, { detail: 'Synthetic share failure' }, 503);
+    }
+    const body = request.postDataJSON();
+    return ok(route, {
+      shares: body.recipientKnoprixIds.map((knoprixId) => ({
+        knoprixId,
+        shareId: `share-created-${nextId++}`,
+        status: 'pending',
+      })),
+    }, 201);
+  }
   if (/^\/v1\//.test(pathname)) return ok(route);
   if (pathname.startsWith('/api/')) {
     unmappedApiRequests.push(`${method} ${pathname}`);
@@ -645,6 +702,117 @@ try {
 
   await page.goto(origin);
   await page.getByRole('heading', { name: 'Enter quietly.' }).waitFor();
+  if (process.env.PERF_REGRESSION_ONLY === 'true') {
+    projectReadProbe.enabled = true;
+    await page.getByLabel('Email address').fill(previewEmail);
+    await page.getByLabel('Password', { exact: true }).fill('synthetic-preview-password');
+    await page.getByRole('button', { name: /sign in/i }).click();
+    await page.getByRole('heading', { name: /Your reading ledger/i }).waitFor();
+    await page.getByText('Research Brief.txt').first().waitFor();
+    projectReadProbe.enabled = false;
+    assert.deepEqual(
+      projectReadProbe.requests.map((request) => request.path).sort(),
+      ['bookmarks', 'documents'],
+      'project selection must request documents and bookmarks once each',
+    );
+    const projectReadStartGap = Math.abs(
+      projectReadProbe.requests[0].startedAt - projectReadProbe.requests[1].startedAt,
+    );
+    assert.ok(
+      projectReadStartGap < 80,
+      `project document and bookmark reads should overlap; observed a ${projectReadStartGap}ms start gap`,
+    );
+
+    await page.getByTitle('Bookmark collection').click();
+    await page.getByText('Bookmark Collection').waitFor();
+    await page.getByRole('button', { name: /Open bookmark: Reading workflow/i }).click();
+    await page.getByText('Patterns across sources', { exact: true }).waitFor();
+    await page.locator('[data-page="2"]').waitFor();
+
+    await page.getByTitle('Bookmark collection').click();
+    await page.getByText('Bookmark Collection').waitFor();
+    await page.getByLabel('Search bookmarks').fill('connected');
+    await page.getByRole('button', { name: /Open bookmark: Connected knowledge/i }).waitFor();
+    const trackBookmarkRemoveClick = () => page.evaluate(() => {
+      window.__bookmarkRemoveClickAt = null;
+      const listener = (event) => {
+        const target = event.target instanceof Element
+          ? event.target.closest('button[aria-label="Remove bookmark"]')
+          : null;
+        if (!target) return;
+        window.__bookmarkRemoveClickAt = Date.now();
+        document.removeEventListener('click', listener, true);
+      };
+      document.addEventListener('click', listener, true);
+    });
+    bookmarkDeleteProbe.failNext = true;
+    await trackBookmarkRemoveClick();
+    await page.getByRole('button', { name: 'Remove bookmark' }).click();
+    await page.getByRole('button', { name: 'Removing bookmark' }).waitFor();
+    assert.equal(
+      await page.getByRole('button', { name: 'Removing bookmark' }).isDisabled(),
+      true,
+      'a pending deletion should provide immediate feedback and prevent duplicate requests',
+    );
+    await page.getByText('Could not delete bookmark', { exact: true }).waitFor();
+    const failedDeleteClickAt = await page.evaluate(() => window.__bookmarkRemoveClickAt);
+    const failedDeleteDelay = bookmarkDeleteProbe.lastStartedAt - failedDeleteClickAt;
+    assert.ok(
+      failedDeleteDelay < 100,
+      `bookmark deletion should reach the API without an animation delay; observed ${failedDeleteDelay}ms`,
+    );
+    await page.getByRole('button', { name: /Open bookmark: Connected knowledge/i }).waitFor();
+
+    await trackBookmarkRemoveClick();
+    await page.getByRole('button', { name: 'Remove bookmark' }).click();
+    await page.getByText('Removed bookmark', { exact: true }).waitFor();
+    const retryDeleteClickAt = await page.evaluate(() => window.__bookmarkRemoveClickAt);
+    const retryDeleteDelay = bookmarkDeleteProbe.lastStartedAt - retryDeleteClickAt;
+    assert.ok(
+      retryDeleteDelay < 100,
+      `retrying bookmark deletion should also be immediate; observed ${retryDeleteDelay}ms`,
+    );
+    await page.getByRole('button', { name: /Open bookmark: Connected knowledge/i }).waitFor({ state: 'detached' });
+    await page.getByRole('button', { name: 'Close bookmark collection' }).click();
+
+    await page.getByRole('button', { name: /contacts and sharing/i }).click();
+    await page.getByRole('heading', { name: 'Contacts & sharing' }).waitFor();
+    await page.getByText('KP-JORDA000002', { exact: true }).first().waitFor();
+    await page.getByRole('checkbox', { name: 'KP-JORDA000002' }).check();
+    shareRefreshProbe.enabled = true;
+    shareCreateProbe.failNext = true;
+    await page.getByRole('button', { name: 'Send share requests' }).click();
+    await page.getByText('Synthetic share failure', { exact: true }).first().waitFor();
+    assert.equal(
+      await page.getByRole('checkbox', { name: 'KP-JORDA000002' }).isChecked(),
+      true,
+      'a failed share should retain the recipient selection for retry',
+    );
+    assert.equal(
+      await page.getByText('KP-JORDA000002 · pending', { exact: true }).count(),
+      0,
+      'a failed share must not appear as sent',
+    );
+    await page.getByRole('button', { name: 'Send share requests' }).waitFor();
+    await page.getByRole('button', { name: 'Send share requests' }).click();
+    await page.getByText('1 share request sent', { exact: true }).waitFor();
+    const shareAcknowledgementMs = Date.now() - shareCreateProbe.startedAt;
+    console.log(`Mocked share submission triggered ${shareRefreshProbe.requests.length} follow-up refresh requests.`);
+    assert.deepEqual(
+      shareRefreshProbe.requests,
+      [],
+      'creating a share should update the sender view without refetching unrelated contact data',
+    );
+    assert.equal(
+      await page.getByRole('button', { name: 'Sending…' }).count(),
+      0,
+      'the sender should leave the sending state as soon as the create request completes',
+    );
+    await page.getByText('KP-JORDA000002 · pending', { exact: true }).waitFor({ timeout: 500 });
+    console.log(
+      `PASS: local mocked UI regressions; project-read start gap ${projectReadStartGap}ms; bookmark delete API start ${failedDeleteDelay}ms after click; share acknowledgement ${shareAcknowledgementMs}ms; no post-share refresh requests.`,
+    );
+  } else {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   const blackMirror = page.getByTestId('black-mirror');
   const blackMirrorStyle = await blackMirror.getAttribute('style');
@@ -1036,6 +1204,7 @@ try {
   }, null, 2)}\n`);
 
   console.log(`PASS: captured ${captures.length} screenshots; no page errors or unmapped API calls; ${overflowCount} layouts report horizontal overflow; ${blockedExternalRequests.length} unmocked external requests were aborted.`);
+  }
 } finally {
   await browser.close();
 }

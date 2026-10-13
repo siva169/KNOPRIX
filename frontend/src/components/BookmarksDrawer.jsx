@@ -5,7 +5,10 @@ import { useApp } from '../context/AppContext.jsx';
 import api from '../api';
 
 export default function BookmarksDrawer({ onClose }) {
-  const { bookmarks, activeProject, fetchBookmarks, navigateToLocation, notify } = useApp();
+  const {
+    bookmarks, activeProject, fetchBookmarks, removeBookmarkFromState,
+    navigateToLocation, notify,
+  } = useApp();
   const [visible, setVisible] = useState(bookmarks);
   const [popping, setPopping] = useState(null);
   const [search, setSearch] = useState('');
@@ -54,42 +57,31 @@ export default function BookmarksDrawer({ onClose }) {
 
   const displayed = search.trim() ? searchResults || [] : visible;
 
-  // Remove the newest bookmark from the front of the collection.
-  const removeNewest = async () => {
-    if (!visible.length || popping) return;
-    const top = visible[0];
-    setPopping(top.id);
-    setTimeout(async () => {
-      try {
-        await api.delete(`/bookmarks/${top.id}`);
-        setVisible((v) => v.filter((b) => b.id !== top.id));
-        setSearchResults((results) => results?.filter((b) => b.id !== top.id) ?? null);
-        if (activeProject) fetchBookmarks(activeProject.id);
-        notify('Removed the newest bookmark', 'info');
-      } catch {
-        notify('Could not remove bookmark', 'error');
-      } finally {
-        setPopping(null);
-      }
-    }, 320);
+  const removeBookmark = async (id, successMessage, errorMessage) => {
+    if (popping) return;
+    setPopping(id);
+    try {
+      await api.delete(`/bookmarks/${id}`);
+      setVisible((items) => items.filter((item) => item.id !== id));
+      setSearchResults((items) => items?.filter((item) => item.id !== id) ?? null);
+      removeBookmarkFromState(id);
+      notify(successMessage, 'info');
+    } catch {
+      notify(errorMessage, 'error');
+    } finally {
+      setPopping(null);
+    }
   };
 
-  const remove = async (id, e) => {
-    e.stopPropagation();
-    setPopping(id);
-    setTimeout(async () => {
-      try {
-        await api.delete(`/bookmarks/${id}`);
-        setVisible((v) => v.filter((b) => b.id !== id));
-        setSearchResults((results) => results?.filter((b) => b.id !== id) ?? null);
-        if (activeProject) fetchBookmarks(activeProject.id);
-        notify('Removed bookmark', 'info');
-      } catch {
-        notify('Could not delete bookmark', 'error');
-      } finally {
-        setPopping(null);
-      }
-    }, 260);
+  const removeNewest = () => {
+    if (visible.length) {
+      void removeBookmark(visible[0].id, 'Removed the newest bookmark', 'Could not remove bookmark');
+    }
+  };
+
+  const remove = (id, event) => {
+    event.stopPropagation();
+    void removeBookmark(id, 'Removed bookmark', 'Could not delete bookmark');
   };
 
   const openBookmark = (bookmark) => {
@@ -362,11 +354,14 @@ export default function BookmarksDrawer({ onClose }) {
                   </button>
                   <button
                     onClick={(event) => remove(bm.id, event)}
-                    aria-label="Remove bookmark"
+                    aria-label={popping === bm.id ? 'Removing bookmark' : 'Remove bookmark'}
                     title="Remove bookmark"
+                    disabled={Boolean(popping)}
                     className="absolute right-3 top-3 grid min-h-11 min-w-11 place-items-center rounded-lg text-ivory/55 transition hover:bg-rose-500/10 hover:text-rose-400"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    {popping === bm.id
+                      ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                      : <Trash2 className="h-3.5 w-3.5" />}
                   </button>
                   <button
                     onClick={(event) => startEdit(bm, event)}
