@@ -544,19 +544,50 @@ def create_shares(body: ShareBody, user=Depends(get_current_user), db=Depends(ge
     ids = [value.upper() for value in body.recipientKnoprixIds]
     if len(set(ids)) != len(ids) or any(not KNOPRIX_ID_RE.fullmatch(value) for value in ids):
         raise HTTPException(422, "Recipient Knoprix IDs must be valid and unique")
+    recipient_rows = db.execute(
+        f"""SELECT id, knoprix_id FROM users
+            WHERE knoprix_id IN ({", ".join("?" for _ in ids)})""",
+        tuple(ids),
+    ).fetchall()
+    recipients_by_public_id = {
+        row["knoprix_id"]: row["id"]
+        for row in recipient_rows
+    }
+    recipient_user_ids = list(recipients_by_public_id.values())
+    blocked_user_ids = set()
+    contact_user_ids = set()
+    if recipient_user_ids:
+        placeholders = ", ".join("?" for _ in recipient_user_ids)
+        blocked_rows = db.execute(
+            f"""SELECT blocker_id, blocked_id FROM user_blocks
+                WHERE (blocker_id = ? AND blocked_id IN ({placeholders}))
+                   OR (blocked_id = ? AND blocker_id IN ({placeholders}))""",
+            (user["id"], *recipient_user_ids, user["id"], *recipient_user_ids),
+        ).fetchall()
+        blocked_user_ids = {
+            row["blocked_id"] if row["blocker_id"] == user["id"] else row["blocker_id"]
+            for row in blocked_rows
+        }
+        contact_rows = db.execute(
+            f"""SELECT user_low, user_high FROM contacts
+                WHERE (user_low = ? AND user_high IN ({placeholders}))
+                   OR (user_high = ? AND user_low IN ({placeholders}))""",
+            (user["id"], *recipient_user_ids, user["id"], *recipient_user_ids),
+        ).fetchall()
+        contact_user_ids = {
+            row["user_high"] if row["user_low"] == user["id"] else row["user_low"]
+            for row in contact_rows
+        }
     shares = []
     for public_id in ids:
-        recipient = db.execute(
-            "SELECT id FROM users WHERE knoprix_id = ?", (public_id,)
-        ).fetchone()
-        if recipient is None:
+        recipient_id = recipients_by_public_id.get(public_id)
+        if recipient_id is None:
             shares.append({"knoprixId": public_id, "status": "unavailable"})
             continue
-        recipient_id = recipient["id"]
         if (
             recipient_id == user["id"]
-            or _blocked(db, user["id"], recipient_id)
-            or not _is_contact(db, user["id"], recipient_id)
+            or recipient_id in blocked_user_ids
+            or recipient_id not in contact_user_ids
         ):
             shares.append({"knoprixId": public_id, "status": "not_eligible"})
             continue

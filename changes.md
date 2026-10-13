@@ -1,5 +1,24 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-13 — Batch document-share eligibility checks
+
+- Replaced per-recipient user, block, and contact reads in share creation with
+  three batched lookups. Server-side contact eligibility, blocks in either
+  direction, self-share rejection, and unavailable-recipient handling remain
+  enforced; the existing per-recipient writes and response order are retained.
+- Added backend regressions for a 20-recipient SQL statement budget and for
+  contact, block, self-share, and unavailable-recipient outcomes.
+- Synthetic direct-handler benchmark (20 runs per recipient count, in-memory
+  SQLite; not PostgreSQL, HTTP/auth middleware, network, or production data):
+  statement counts for 1/5/20 recipients fell from 8/28/103 to 8/16/46.
+  At 20 recipients, handler p50/p95/p99 changed from 0.781/0.844/0.903 ms to
+  0.521/0.574/0.642 ms. These small local timings do not establish a production
+  latency improvement; 20 samples are also insufficient for a reliable p99.
+- Verification: focused new tests and the complete `qa_social` plus
+  `qa_bookmarks` suites passed (15 tests); Python compilation and `git diff
+  --check` passed. PostgreSQL execution and production share/recipient timing
+  remain unmeasured.
+
 ## 2026-10-13 — Remove avoidable waits in project, bookmark, and share flows
 
 - Project selection now loads documents and bookmarks concurrently. A request

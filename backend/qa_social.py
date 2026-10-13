@@ -2,6 +2,7 @@
 import sqlite3
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from unittest.mock import patch
 
@@ -164,6 +165,101 @@ class SocialFeatureTests(unittest.TestCase):
                 "SELECT status FROM shares WHERE id = ?", (pending_again,)
             ).fetchone()["status"],
             "revoked",
+        )
+
+    def test_share_creation_batches_eligibility_lookups_for_twenty_recipients(self):
+        recipient_ids = ["KP-BBBBBBBBBB", "KP-CCCCCCCCCC"]
+        for number in range(1, 19):
+            user_id = f"bench-user-{number:02d}"
+            public_id = f"KP-{number:010d}"
+            self.db.execute(
+                """INSERT INTO users
+                   (id, email, password_hash, full_name, knoprix_id)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (user_id, f"{user_id}@example.test", "hash", user_id, public_id),
+            )
+            low, high = sorted(("user-a", user_id))
+            self.db.execute(
+                """INSERT INTO contacts (id, user_low, user_high, created_at)
+                   VALUES (?, ?, ?, ?)""",
+                (str(uuid.uuid4()), low, high, "2026-01-01T00:00:00+00:00"),
+            )
+            recipient_ids.append(public_id)
+
+        for user_id in ("user-b", "user-c"):
+            low, high = sorted(("user-a", user_id))
+            self.db.execute(
+                """INSERT INTO contacts (id, user_low, user_high, created_at)
+                   VALUES (?, ?, ?, ?)""",
+                (str(uuid.uuid4()), low, high, "2026-01-01T00:00:00+00:00"),
+            )
+
+        statements = []
+        self.db.set_trace_callback(statements.append)
+        try:
+            result = social.create_shares(
+                social.ShareBody(
+                    recipientKnoprixIds=recipient_ids,
+                    resourceType="document",
+                    resourceId="document-a",
+                ),
+                self.users["user-a"],
+                self.db,
+            )
+        finally:
+            self.db.set_trace_callback(None)
+
+        self.assertEqual(len(result["shares"]), 20)
+        self.assertTrue(all(share["status"] == "pending" for share in result["shares"]))
+        self.assertLessEqual(
+            len(statements),
+            46,
+            "recipient eligibility reads should be batched rather than repeated per recipient",
+        )
+
+    def test_share_creation_preserves_contact_block_and_self_checks(self):
+        self.db.execute(
+            """INSERT INTO users
+               (id, email, password_hash, full_name, knoprix_id)
+               VALUES (?, ?, ?, ?, ?)""",
+            ("user-d", "d@example.com", "hash", "user-d", "KP-DDDDDDDDDD"),
+        )
+        for user_id in ("user-b", "user-c"):
+            low, high = sorted(("user-a", user_id))
+            self.db.execute(
+                """INSERT INTO contacts (id, user_low, user_high, created_at)
+                   VALUES (?, ?, ?, ?)""",
+                (str(uuid.uuid4()), low, high, "2026-01-01T00:00:00+00:00"),
+            )
+        self.db.execute(
+            """INSERT INTO user_blocks (id, blocker_id, blocked_id, created_at)
+               VALUES (?, ?, ?, ?)""",
+            (str(uuid.uuid4()), "user-c", "user-a", "2026-01-01T00:00:00+00:00"),
+        )
+
+        result = social.create_shares(
+            social.ShareBody(
+                recipientKnoprixIds=[
+                    "KP-BBBBBBBBBB",
+                    "KP-CCCCCCCCCC",
+                    "KP-AAAAAAAAAA",
+                    "KP-DDDDDDDDDD",
+                    "KP-EEEEEEEEEE",
+                ],
+                resourceType="document",
+                resourceId="document-a",
+            ),
+            self.users["user-a"],
+            self.db,
+        )
+
+        self.assertEqual(
+            [share["status"] for share in result["shares"]],
+            ["pending", "not_eligible", "not_eligible", "not_eligible", "unavailable"],
+        )
+        self.assertEqual(
+            self.db.execute("SELECT COUNT(*) FROM shares").fetchone()[0],
+            1,
         )
 
     def test_document_share_exposes_only_safe_metadata_and_authorized_content(self):
