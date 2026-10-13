@@ -57,7 +57,8 @@ been implemented and verified; planning or partial wiring does not count.
 - [x] Trie autocomplete, inverted-index keyword search, Min-Heap top-k passage
   ranking, and persisted JSON-serialized derived search indexes.
 - [x] Bookmark collection implemented with Hash Table + Doubly Linked List
-  semantics; highlights are separate records and are not linked to bookmarks.
+  semantics; separately stored highlights can be optionally linked to
+  same-owner, same-document, same-page bookmarks without coupled deletion.
 - [x] Heuristic shared-word knowledge graph with evidence excerpts, page jumps,
   document filters, and user-pinned concepts; not a semantic mind map yet.
 - [x] Deterministic extractive summary endpoint; it selects original sentences
@@ -777,6 +778,11 @@ cancel/block/unblock/remove endpoints and basic Contacts-page controls are
 implemented and covered by focused two-account-style route tests. Browser
 acceptance and abuse-load/concurrency verification remain.
 
+**Security correction (2026-10-13):** The daily contact-request counter now
+retains its bucket for the full configured window. Blocking cancels accepted
+and pending requests before contact deletion to prevent an in-flight
+acceptance from restoring a relationship after unblocking.
+
 **Acceptance criteria**
 - [ ] Contact states cover pending, accepted, declined, blocked, and removed;
   duplicate/concurrent requests behave idempotently.
@@ -810,6 +816,11 @@ flows, and broader authorization-route coverage remain unverified.
 resource-specific field allowlists and omit internal owner/project IDs.
 Shared-document content is loaded through the owner/share-authorized document
 read endpoint; its shared response omits storage paths and project IDs.
+
+**Verification update (2026-10-13):** The focused backend regression command
+passed 68 tests and the frontend production build passed. PostgreSQL runtime,
+authenticated browser workflows, and broader share-route authorization
+coverage remain unverified; the phase remains open.
 
 **Acceptance criteria**
 - [ ] Share records identify sender, recipient, resource, allowed actions,
