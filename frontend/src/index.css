@@ -172,3 +172,42 @@ mark.kn-hl-plain:hover {
 .focus-reader-shell main {
   width: 100%;
 }
+
+.knoprix-login-orbit-a {
+  animation:
+    knoprix-login-orbit-a 32s linear infinite,
+    knoprix-login-sheen 5.8s ease-in-out infinite alternate;
+}
+
+.knoprix-login-orbit-b {
+  animation:
+    knoprix-login-orbit-b 48s linear infinite,
+    knoprix-login-sheen 7.2s ease-in-out -1.8s infinite alternate;
+}
+
+@keyframes knoprix-login-orbit-a {
+  from { transform: rotate(-32deg) scaleY(0.76); }
+  to { transform: rotate(328deg) scaleY(0.76); }
+}
+
+@keyframes knoprix-login-orbit-b {
+  from { transform: rotate(34deg) scaleY(0.72); }
+  to { transform: rotate(-326deg) scaleY(0.72); }
+}
+
+@keyframes knoprix-login-sheen {
+  from { opacity: 0.72; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .knoprix-login-orbit-a {
+    animation: none;
+    transform: rotate(-32deg) scaleY(0.76);
+  }
+
+  .knoprix-login-orbit-b {
+    animation: none;
+    transform: rotate(34deg) scaleY(0.72);
+  }
+}

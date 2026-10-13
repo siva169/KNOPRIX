@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-13T13:56:49.566Z",
+  "generatedAt": "2026-10-13T15:07:02.361Z",
   "baseUrl": "http://127.0.0.1:5173",
   "dataMode": "synthetic-fixtures-only",
   "externalRequestsAllowed": false,
@@ -22,6 +22,54 @@
     }
   ],
   "captures": [
+    {
+      "file": "auth/login-motion-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "auth/login-motion-425.png",
+      "width": 425,
+      "height": 900,
+      "viewportWidth": 425,
+      "documentWidth": 425,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "auth/login-motion-768.png",
+      "width": 768,
+      "height": 900,
+      "viewportWidth": 768,
+      "documentWidth": 768,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "auth/login-motion-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "auth/login-reduced-motion-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "auth/login-reduced-motion-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
     {
       "file": "auth/login-390.png",
       "width": 390,

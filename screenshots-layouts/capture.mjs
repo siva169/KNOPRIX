@@ -645,11 +645,82 @@ try {
 
   await page.goto(origin);
   await page.getByRole('heading', { name: 'Enter quietly.' }).waitFor();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const blackMirror = page.getByTestId('black-mirror');
+  const blackMirrorStyle = await blackMirror.getAttribute('style');
+  await page.mouse.move(24, 36);
+  await page.waitForTimeout(50);
+  assert.equal(
+    await blackMirror.getAttribute('style'),
+    blackMirrorStyle,
+    'pointer movement must not change the login orb or ring styles',
+  );
+  const firstOrbit = blackMirror.locator('[data-orbit="a"]').first();
+  const secondOrbit = blackMirror.locator('[data-orbit="b"]');
+  const firstOrbitStyle = await firstOrbit.evaluate((element) => ({
+    animationName: getComputedStyle(element).animationName,
+    animationDuration: getComputedStyle(element).animationDuration,
+    opacity: getComputedStyle(element).opacity,
+    transform: getComputedStyle(element).transform,
+  }));
+  const secondOrbitStyle = await secondOrbit.evaluate((element) => ({
+    animationName: getComputedStyle(element).animationName,
+    animationDuration: getComputedStyle(element).animationDuration,
+  }));
+  assert.match(firstOrbitStyle.animationName, /knoprix-login-orbit-a/);
+  assert.match(firstOrbitStyle.animationDuration, /32s/);
+  assert.match(secondOrbitStyle.animationName, /knoprix-login-orbit-b/);
+  assert.match(secondOrbitStyle.animationDuration, /48s/);
+  await page.waitForTimeout(900);
+  assert.notEqual(
+    await firstOrbit.evaluate((element) => getComputedStyle(element).transform),
+    firstOrbitStyle.transform,
+    'login rings must rotate without pointer input',
+  );
+  assert.notEqual(
+    await firstOrbit.evaluate((element) => getComputedStyle(element).opacity),
+    firstOrbitStyle.opacity,
+    'login rings must show the slow sheen pulse',
+  );
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const reducedTransform = await firstOrbit.evaluate((element) => getComputedStyle(element).transform);
+  assert.equal(
+    await firstOrbit.evaluate((element) => getComputedStyle(element).animationName),
+    'none',
+    'reduced motion must stop the login rings',
+  );
+  await page.waitForTimeout(400);
+  assert.equal(
+    await firstOrbit.evaluate((element) => getComputedStyle(element).transform),
+    reducedTransform,
+    'rings must remain still when reduced motion is enabled',
+  );
+  for (const width of widths) {
+    await page.setViewportSize({ width, height });
+    const layout = await page.evaluate(() => ({
+      viewportWidth: window.innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+    }));
+    assert.equal(layout.documentWidth, layout.viewportWidth, `login overflow at ${width}px`);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await capture(`auth/login-motion-${width}`, { animations: 'allow' });
+  }
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const width of [390, 1024]) {
+    await page.setViewportSize({ width, height });
+    await capture(`auth/login-reduced-motion-${width}`, { animations: 'allow' });
+  }
   for (const width of widths) {
     await page.setViewportSize({ width, height });
     await capture(`auth/login-${width}`);
   }
-
+  const passwordInput = page.getByLabel('Password', { exact: true });
+  await passwordInput.fill('synthetic-preview-password');
+  await page.getByRole('button', { name: 'Show password' }).click();
+  assert.equal(await passwordInput.getAttribute('type'), 'text');
+  await page.getByRole('button', { name: 'Hide password' }).click();
+  assert.equal(await passwordInput.getAttribute('type'), 'password');
+  await passwordInput.fill('');
   await page.getByRole('button', { name: /create an account/i }).click();
   await page.getByRole('heading', { name: 'REGISTER' }).waitFor();
   for (const width of widths) {

@@ -6,6 +6,7 @@ They are not captures of a signed-in personal or production account.
 ## Coverage
 
 - Login and registration, including duplicate-account recovery
+- Login motion at normal and reduced-motion preferences, including 390/425/768/1024px
 - Dashboard, project creation, responsive workspace navigation, filters, and document search
 - Upload dropzone and its mocked success state
 - Text, PDF text-fallback, and slide readers; selection, bookmark, highlight, and focus states
@@ -31,3 +32,8 @@ account creation, upload, or API write is performed.
 
 `manifest.json` records the file names, dimensions, and fixture note for each
 captured image.
+
+The login orb uses two CSS-driven counter-rotating rings and a restrained
+sheen; `prefers-reduced-motion: reduce` stops both effects. The pause/resume
+control was intentionally omitted at the user's request, so continuous motion
+does not meet the pause-control provision of WCAG 2.2.2.

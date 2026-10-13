@@ -1,5 +1,22 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-13 — Replace cursor-driven login orb with controlled motion
+
+- Removed the login orb's global pointer listeners and pointer-derived style
+  updates. Two existing gold ellipse rings now rotate in opposite directions
+  on 32-second and 48-second CSS loops, with a slow opacity sheen; the orb's
+  lighting stays fixed. No animation dependency or JS animation loop was added.
+- The rings and sheen become static under `prefers-reduced-motion`. Added
+  browser assertions for pointer independence, ongoing rotation, reduced-motion
+  stability, responsive overflow at 390/425/768/1024px, and password visibility.
+- Verification: the new pointer-independence assertion failed against the old
+  implementation (pointer movement changed all ring/core coordinates), then
+  the 87-screenshot Playwright run passed with no page errors or unmapped API
+  calls; all viewports reported no horizontal overflow. `npm run build` passed;
+  Vite reported the existing >500 kB minified-chunk warning.
+- At the user's request, no pause/resume control was added. This leaves the
+  pause-control provision of WCAG 2.2.2 unmet for users not using reduced motion.
+
 ## 2026-10-13 — Capture synthetic Knoprix UI inventory
 
 - Added 81 Playwright screenshots across authentication, workspace, readers,
