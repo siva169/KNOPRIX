@@ -34,15 +34,17 @@ export function AuthProvider({ children }) {
       return syncInFlight.current.promise;
     }
 
-    const promise = api
-      .post('/auth/firebase/session', { fullName: firebaseUser.displayName || '' })
-      .then(({ data }) => {
-        syncedUid.current = firebaseUser.uid;
-        return data;
-      })
-      .finally(() => {
-        if (syncInFlight.current?.promise === promise) syncInFlight.current = null;
+    const promise = (async () => {
+      await firebaseUser.reload();
+      await firebaseUser.getIdToken(true);
+      const { data } = await api.post('/auth/firebase/session', {
+        fullName: firebaseUser.displayName || '',
       });
+      syncedUid.current = firebaseUser.uid;
+      return data;
+    })().finally(() => {
+      if (syncInFlight.current?.promise === promise) syncInFlight.current = null;
+    });
     syncInFlight.current = { uid: firebaseUser.uid, promise };
     return promise;
   };

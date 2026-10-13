@@ -1,5 +1,17 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-13 — Refresh Firebase verification claims before session sync
+
+- Reload the Firebase user and force-refresh its ID token before creating a
+  Knoprix session, so email verification completed after an earlier sign-in is
+  reflected in the claims sent to the backend. Concurrent session syncs for
+  the same user continue to share the in-flight operation.
+- Added a mocked Playwright regression for the stale `email_verified: false`
+  token case; it verifies that only a refreshed verified token reaches the
+  Knoprix session endpoint.
+- Verification: the browser regression passed and `npm run build` passed with
+  the existing large-chunk warning. No real account sign-in was attempted.
+
 ## 2026-10-13 — Align Firebase web config for local preview
 
 - Set the frontend's local API key, auth domain, project ID, and app ID from
