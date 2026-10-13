@@ -1,5 +1,17 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-13 — Set Firebase project ID for local preview
+
+- Set backend `FIREBASE_PROJECT_ID` and frontend
+  `VITE_FIREBASE_PROJECT_ID` in the local env files to `knoprix-a64b7`;
+  updated the frontend `.env.example` to match.
+- Restarted the localhost API and Vite preview. The API health endpoint and
+  served frontend shell respond successfully, and the backend/frontend load
+  the requested project ID.
+- The frontend auth domain remains configured for the previous project ID.
+  Firebase sign-in was not tested; the remaining Firebase web-app settings
+  need to match the target project before authentication can be confirmed.
+
 ## 2026-10-13 — Minimize shared-resource response data
 
 - Changed accepted share responses to allowlist only the fields needed for
