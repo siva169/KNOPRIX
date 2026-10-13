@@ -1,5 +1,18 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-13 — Preserve unsuccessful share recipients for retry
+
+- A successful HTTP response can still contain per-recipient statuses other
+  than `pending`. The form now shows each recipient's result, removes only
+  successfully created requests from the selection, keeps unsuccessful
+  recipients selected, and reports partial or total failures accurately.
+- Added a mocked browser regression for a mixed result (one created request,
+  one ineligible recipient). It failed before the fix because the old UI
+  omitted the ineligible result and cleared both selections.
+- Verification: focused browser regressions pass, including failed-request
+  retry, mixed recipient outcomes, and no post-share refresh traffic.
+  `npm run build` passes with the existing >500 kB chunk warning.
+
 ## 2026-10-13 — Preserve project data when one parallel read fails
 
 - A review found that `selectProject` used `Promise.all` for documents and

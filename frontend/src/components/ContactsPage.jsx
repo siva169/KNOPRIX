@@ -8,6 +8,13 @@ const resourceLabel = (type) => ({
   highlight: 'Highlight',
 }[type] || type);
 
+const shareStatusLabel = (status) => ({
+  pending: 'Request sent',
+  already_shared_or_pending: 'Already shared or pending',
+  not_eligible: 'Not eligible to receive shares',
+  unavailable: 'User unavailable',
+}[status] || 'No request created');
+
 export default function ContactsPage({ onClose, activeDocument, activeProject, openDocument, notify }) {
   const [profile, setProfile] = useState(null);
   const [contacts, setContacts] = useState([]);
@@ -26,6 +33,7 @@ export default function ContactsPage({ onClose, activeDocument, activeProject, o
   const [resourceType, setResourceType] = useState('document');
   const [resourceId, setResourceId] = useState('');
   const [selectedRecipients, setSelectedRecipients] = useState([]);
+  const [shareResults, setShareResults] = useState([]);
   const [shareDetail, setShareDetail] = useState(null);
   const [privacy, setPrivacy] = useState({
     allowIdLookup: true,
@@ -242,6 +250,9 @@ export default function ContactsPage({ onClose, activeDocument, activeProject, o
     if (!resourceId || selectedRecipients.length === 0) return;
     setBusy('share-create');
     setError('');
+    setShareResults((current) => current.filter(
+      (item) => !selectedRecipients.includes(item.knoprixId),
+    ));
     try {
       const { data } = await api.post('/v1/shares', {
         recipientKnoprixIds: selectedRecipients,
@@ -258,6 +269,11 @@ export default function ContactsPage({ onClose, activeDocument, activeProject, o
           status: item.status,
         }));
       const created = createdShares.length;
+      const unsuccessful = Math.max(0, selectedRecipients.length - created);
+      const createdRecipients = new Set(
+        createdShares.map((share) => share.recipientKnoprixId),
+      );
+      setShareResults(data.shares);
       setSentShares((current) => {
         const existingIds = new Set(current.map((share) => share.shareId));
         return [
@@ -265,8 +281,15 @@ export default function ContactsPage({ onClose, activeDocument, activeProject, o
           ...current,
         ];
       });
-      notify(`${created} share request${created === 1 ? '' : 's'} sent`, created ? 'success' : 'info');
-      setSelectedRecipients([]);
+      setSelectedRecipients((current) => current.filter(
+        (knoprixId) => !createdRecipients.has(knoprixId),
+      ));
+      const message = unsuccessful === 0
+        ? `${created} share request${created === 1 ? '' : 's'} sent`
+        : created
+          ? `${created} sent; ${unsuccessful} could not be sent. Review recipient results.`
+          : 'No share requests were sent. Review recipient results.';
+      notify(message, unsuccessful ? 'error' : 'success');
     } catch (requestError) {
       reportError(requestError, 'Could not create share requests.');
     } finally {
@@ -334,6 +357,7 @@ export default function ContactsPage({ onClose, activeDocument, activeProject, o
     setSelectedRecipients((selected) => selected.includes(publicId)
       ? selected.filter((value) => value !== publicId)
       : [...selected, publicId]);
+    setShareResults((current) => current.filter((item) => item.knoprixId !== publicId));
   };
 
   return (
@@ -508,6 +532,15 @@ export default function ContactsPage({ onClose, activeDocument, activeProject, o
                       ))}
                     </div>
                   </fieldset>
+                )}
+                {shareResults.length > 0 && (
+                  <ul aria-label="Share results" aria-live="polite" className="space-y-1 text-xs text-ivory/70">
+                    {shareResults.map((item) => (
+                      <li key={item.knoprixId}>
+                        {item.knoprixId} — {shareStatusLabel(item.status)}
+                      </li>
+                    ))}
+                  </ul>
                 )}
                 <button disabled={busy === 'share-create' || !resourceId || !selectedRecipients.length} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white disabled:opacity-50">
                   <Link2 className="size-4" /> {busy === 'share-create' ? 'Sending…' : 'Send share requests'}

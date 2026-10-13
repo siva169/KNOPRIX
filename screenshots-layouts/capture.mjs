@@ -133,7 +133,7 @@ const captures = [];
 const projectReadProbe = { enabled: false, failBookmarksNext: false, requests: [] };
 const bookmarkDeleteProbe = { failNext: false, lastStartedAt: null };
 const shareRefreshProbe = { enabled: false, requests: [] };
-const shareCreateProbe = { failNext: false, startedAt: null };
+const shareCreateProbe = { failNext: false, partialResultNext: false, startedAt: null };
 let nextId = 1;
 let pinnedWords = ['signal'];
 
@@ -586,6 +586,16 @@ const apiRoute = async (route) => {
       return response(route, { detail: 'Synthetic share failure' }, 503);
     }
     const body = request.postDataJSON();
+    if (shareCreateProbe.partialResultNext) {
+      shareCreateProbe.partialResultNext = false;
+      return ok(route, {
+        shares: body.recipientKnoprixIds.map((knoprixId, index) => (
+          index === 0
+            ? { knoprixId, shareId: 'share-partial-created', status: 'pending' }
+            : { knoprixId, status: 'not_eligible' }
+        )),
+      }, 201);
+    }
     return ok(route, {
       shares: body.recipientKnoprixIds.map((knoprixId) => ({
         knoprixId,
@@ -817,6 +827,24 @@ try {
       'the sender should leave the sending state as soon as the create request completes',
     );
     await page.getByText('KP-JORDA000002 · pending', { exact: true }).waitFor({ timeout: 500 });
+
+    await page.getByRole('checkbox', { name: 'KP-JORDA000002' }).check();
+    await page.getByRole('checkbox', { name: 'KP-MORGA000001' }).check();
+    shareCreateProbe.partialResultNext = true;
+    await page.getByRole('button', { name: 'Send share requests' }).click();
+    await page.getByText('1 sent; 1 could not be sent. Review recipient results.', { exact: true }).waitFor();
+    assert.equal(
+      await page.getByRole('checkbox', { name: 'KP-JORDA000002' }).isChecked(),
+      false,
+      'successfully shared recipients should be removed from the retry selection',
+    );
+    assert.equal(
+      await page.getByRole('checkbox', { name: 'KP-MORGA000001' }).isChecked(),
+      true,
+      'unsuccessful recipients should remain selected for recovery',
+    );
+    await page.getByText('KP-JORDA000002 — Request sent', { exact: true }).waitFor();
+    await page.getByText('KP-MORGA000001 — Not eligible to receive shares', { exact: true }).waitFor();
     console.log(
       `PASS: local mocked UI regressions; project-read start gap ${projectReadStartGap}ms; bookmark delete API start ${failedDeleteDelay}ms after click; share acknowledgement ${shareAcknowledgementMs}ms; no post-share refresh requests.`,
     );
