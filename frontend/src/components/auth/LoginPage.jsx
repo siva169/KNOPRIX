@@ -5,10 +5,10 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import BlackMirror from '../BlackMirror.jsx';
 import BrandWordmark from './BrandWordmark.jsx';
 
-export default function LoginPage({ onSwitch }) {
+export default function LoginPage({ onSwitch, initialEmail = '' }) {
   const { login, authError, sendVerificationEmail, retryAccountLink } = useAuth();
   const prefersReducedMotion = useReducedMotion();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');

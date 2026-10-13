@@ -13,17 +13,20 @@ export default function RegisterPage({ onSwitch }) {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [existingAccount, setExistingAccount] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
     setError('');
+    setExistingAccount(false);
     setBusy(true);
     try {
       await register(fullName.trim(), email.trim(), password);
     } catch (err) {
       if (err.message?.startsWith('Firebase is not configured')) setError(err.message);
       else if (err.code === 'auth/email-already-in-use') {
-        setError('An account already uses this email. Sign in to connect your existing Knoprix data.');
+        setExistingAccount(true);
+        setError('This Gmail already has a Firebase account, so it cannot be registered again. Sign in to connect your existing Knoprix data.');
       } else if (err.code === 'auth/weak-password') {
         setError('Choose a password with at least 8 characters.');
       } else if (err.code === 'auth/network-request-failed') {
@@ -155,6 +158,16 @@ export default function RegisterPage({ onSwitch }) {
               </motion.p>
             )}
 
+            {existingAccount && (
+              <button
+                type="button"
+                onClick={() => onSwitch(email.trim())}
+                className="min-h-11 w-full rounded-xl border border-[#e8be6a]/35 px-4 text-sm font-semibold text-[#f0cf8a] hover:bg-white/[0.05]"
+              >
+                Sign in to verify and link this account
+              </button>
+            )}
+
             <motion.button
               whileHover={{ y: -1 }}
               whileTap={{ scale: 0.98 }}
@@ -177,7 +190,7 @@ export default function RegisterPage({ onSwitch }) {
           <div className="mt-6 pt-5" style={{ borderTop: '1px solid rgba(232,190,106,0.18)' }}>
             <p className="text-center text-xs text-ivory/60">
               Already have an account?{' '}
-              <button onClick={onSwitch} className="font-semibold hover:underline" style={{ color: '#e8be6a' }}>
+              <button onClick={() => onSwitch(email.trim())} className="font-semibold hover:underline" style={{ color: '#e8be6a' }}>
                 Sign in
               </button>
             </p>

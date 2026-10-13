@@ -1,5 +1,16 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-13 — Guide existing Gmail accounts into Knoprix linking
+
+- When Firebase says a registration email already exists, explain that a
+  duplicate account cannot be created and offer a direct sign-in action with
+  that email prefilled. This leads into the existing verification-email and
+  verified-account linking flow.
+- Extended the mocked browser regression to cover duplicate registration,
+  preserved email, verification email request, and successful account linking.
+- Verification: focused browser regression and frontend production build pass.
+  Actual Firebase email delivery still requires live account testing.
+
 ## 2026-10-13 — Restore Firebase email verification for account linking
 
 - When Firebase rejects an existing Knoprix account link because the email is

@@ -39,6 +39,7 @@ export default function App() {
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem('knoprix_sidebar_collapsed') === 'true',
   );
@@ -112,9 +113,20 @@ export default function App() {
 
   if (!user) {
     return authMode === 'login' ? (
-      <LoginPage onSwitch={() => setAuthMode('register')} />
+      <LoginPage
+        initialEmail={loginEmail}
+        onSwitch={() => {
+          setLoginEmail('');
+          setAuthMode('register');
+        }}
+      />
     ) : (
-      <RegisterPage onSwitch={() => setAuthMode('login')} />
+      <RegisterPage
+        onSwitch={(email = '') => {
+          setLoginEmail(email);
+          setAuthMode('login');
+        }}
+      />
     );
   }
 

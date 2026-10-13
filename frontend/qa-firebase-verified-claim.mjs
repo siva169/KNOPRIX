@@ -85,6 +85,18 @@ try {
 
     if (
       url.hostname === 'identitytoolkit.googleapis.com' &&
+      url.pathname.endsWith('/accounts:signUp')
+    ) {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 400, message: 'EMAIL_EXISTS' } }),
+      });
+      return;
+    }
+
+    if (
+      url.hostname === 'identitytoolkit.googleapis.com' &&
       url.pathname.endsWith('/accounts:signInWithPassword')
     ) {
       await route.fulfill({
@@ -170,10 +182,21 @@ try {
   });
 
   await page.goto(baseUrl);
+  await page.getByRole('button', { name: /create an account/i }).click();
+  await page.getByLabel('Full name').fill('Preview');
+  await page.getByLabel('Email address').fill('preview@example.invalid');
+  await page.getByLabel('Password', { exact: true }).fill('preview-password');
+  await page.getByRole('button', { name: /create account/i }).click();
+  await page.getByRole('button', { name: /sign in to verify and link/i }).waitFor();
+  await page.getByRole('button', { name: /sign in to verify and link/i }).click();
+  assert.equal(
+    await page.getByLabel('Email address').inputValue(),
+    'preview@example.invalid',
+    'existing email should be carried into sign-in',
+  );
   const sessionSyncResponse = page.waitForResponse((response) =>
     response.url().includes('/api/auth/firebase/session'),
   );
-  await page.getByLabel('Email address').fill('preview@example.invalid');
   await page.getByLabel('Password', { exact: true }).fill('preview-password');
   await page.getByRole('button', { name: /sign in/i }).click();
   await sessionSyncResponse;
