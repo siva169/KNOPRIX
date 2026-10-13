@@ -1,0 +1,681 @@
+{
+  "generatedAt": "2026-10-13T13:56:49.566Z",
+  "baseUrl": "http://127.0.0.1:5173",
+  "dataMode": "synthetic-fixtures-only",
+  "externalRequestsAllowed": false,
+  "breakpoints": [
+    {
+      "width": 390,
+      "height": 900
+    },
+    {
+      "width": 425,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 900
+    }
+  ],
+  "captures": [
+    {
+      "file": "auth/login-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "auth/login-425.png",
+      "width": 425,
+      "height": 900,
+      "viewportWidth": 425,
+      "documentWidth": 425,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "auth/login-768.png",
+      "width": 768,
+      "height": 900,
+      "viewportWidth": 768,
+      "documentWidth": 768,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "auth/login-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "auth/register-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "auth/register-425.png",
+      "width": 425,
+      "height": 900,
+      "viewportWidth": 425,
+      "documentWidth": 425,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "auth/register-768.png",
+      "width": 768,
+      "height": 900,
+      "viewportWidth": 768,
+      "documentWidth": 768,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "auth/register-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "auth/duplicate-account-recovery-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "dashboard/overview-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "dashboard/overview-425.png",
+      "width": 425,
+      "height": 900,
+      "viewportWidth": 425,
+      "documentWidth": 425,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "dashboard/overview-768.png",
+      "width": 768,
+      "height": 900,
+      "viewportWidth": 768,
+      "documentWidth": 768,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "dashboard/overview-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "dashboard/mobile-navigation-open-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "dashboard/filter-in-progress-1024.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "dashboard/filter-document-search-1024.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "search/trie-autocomplete-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "search/inverted-index-results-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "command-palette/actions-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "command-palette/document-search-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "projects/create-form-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "upload/dropzone-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "upload/mock-success-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/text-document-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/text-document-425.png",
+      "width": 425,
+      "height": 900,
+      "viewportWidth": 425,
+      "documentWidth": 425,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/text-document-768.png",
+      "width": 768,
+      "height": 900,
+      "viewportWidth": 768,
+      "documentWidth": 768,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/text-document-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/view-mode-options-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/single-page-mode-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/annotation-tools-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/page-bookmark-dialog-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/focus-mode-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/selection-actions-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/bookmark-name-dialog-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/saved-highlight-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "bookmarks/collection-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "bookmarks/collection-425.png",
+      "width": 425,
+      "height": 900,
+      "viewportWidth": 425,
+      "documentWidth": 425,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "bookmarks/collection-768.png",
+      "width": 768,
+      "height": 900,
+      "viewportWidth": 768,
+      "documentWidth": 768,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "bookmarks/collection-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "bookmarks/search-results-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "bookmarks/edit-bookmark-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "contacts/overview-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "contacts/overview-425.png",
+      "width": 425,
+      "height": 900,
+      "viewportWidth": 425,
+      "documentWidth": 425,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "contacts/overview-768.png",
+      "width": 768,
+      "height": 900,
+      "viewportWidth": 768,
+      "documentWidth": 768,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "contacts/overview-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "contacts/sharing-sections-mid-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "contacts/sharing-sections-bottom-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "contacts/sharing-sections-bottom-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "contacts/lookup-result-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "contacts/read-only-shared-resource-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "knowledge-map/overview-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "knowledge-map/overview-425.png",
+      "width": 425,
+      "height": 900,
+      "viewportWidth": 425,
+      "documentWidth": 425,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "knowledge-map/overview-768.png",
+      "width": 768,
+      "height": 900,
+      "viewportWidth": 768,
+      "documentWidth": 768,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "knowledge-map/overview-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "knowledge-map/concept-evidence-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "knowledge-map/tracked-concept-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "dsa-visualizer/overview-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "dsa-visualizer/overview-425.png",
+      "width": 425,
+      "height": 900,
+      "viewportWidth": 425,
+      "documentWidth": 425,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "dsa-visualizer/overview-768.png",
+      "width": 768,
+      "height": 900,
+      "viewportWidth": 768,
+      "documentWidth": 768,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "dsa-visualizer/overview-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "dsa-visualizer/top-k-results-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "document-chat/overview-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "document-chat/overview-425.png",
+      "width": 425,
+      "height": 900,
+      "viewportWidth": 425,
+      "documentWidth": 425,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "document-chat/overview-768.png",
+      "width": 768,
+      "height": 900,
+      "viewportWidth": 768,
+      "documentWidth": 768,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "document-chat/overview-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "document-chat/answer-with-citation-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "document-chat/document-summary-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "document-chat/full-screen-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "theme/light-dashboard-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/pdf-canvas-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/pdf-canvas-425.png",
+      "width": 425,
+      "height": 900,
+      "viewportWidth": 425,
+      "documentWidth": 425,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/pdf-canvas-768.png",
+      "width": 768,
+      "height": 900,
+      "viewportWidth": 768,
+      "documentWidth": 768,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/pdf-canvas-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/pdf-thumbnails-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/pdf-page-navigation-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/pdf-page-bookmark-dialog-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/slides-document-390.png",
+      "width": 390,
+      "height": 900,
+      "viewportWidth": 390,
+      "documentWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/slides-document-425.png",
+      "width": 425,
+      "height": 900,
+      "viewportWidth": 425,
+      "documentWidth": 425,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/slides-document-768.png",
+      "width": 768,
+      "height": 900,
+      "viewportWidth": 768,
+      "documentWidth": 768,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/slides-document-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    },
+    {
+      "file": "reader/pdf-text-fallback-1024.png",
+      "width": 1024,
+      "height": 900,
+      "viewportWidth": 1024,
+      "documentWidth": 1024,
+      "horizontalOverflow": false
+    }
+  ],
+  "horizontalOverflowCaptureCount": 0,
+  "blockedExternalRequestCount": 1,
+  "notes": [
+    "Firebase Auth and Knoprix API responses are intercepted locally.",
+    "Unrecognized third-party requests are aborted; no live account, production data, external API, or persistent backend write is used.",
+    "The PDF reader uses a generated local fixture; a separate PDF demonstrates the extracted-text fallback."
+  ]
+}

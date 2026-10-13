@@ -1,5 +1,18 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-13 — Capture synthetic Knoprix UI inventory
+
+- Added 81 Playwright screenshots across authentication, workspace, readers,
+  bookmarks, contacts and read-only sharing, knowledge map, DSA visualizer,
+  document chat, themes, and command palette workflows, including responsive
+  layouts at 390, 425, 768, and 1024 pixels.
+- Added the capture script, usage and safety notes, and a manifest. Firebase
+  and Knoprix API traffic use synthetic fixtures; one unmocked external request
+  was aborted. No real account or persistent backend data was used.
+- Verification: the capture script syntax check and full run passed with no
+  page errors or unmapped API calls. All 81 PNGs were validated against the
+  manifest dimensions; no captured layout reported horizontal overflow.
+
 ## 2026-10-13 — Guide existing Gmail accounts into Knoprix linking
 
 - When Firebase says a registration email already exists, explain that a
