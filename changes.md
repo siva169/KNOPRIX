@@ -1,16 +1,15 @@
 # Knoprix Final Project — Changes
 
-## 2026-10-13 — Set Firebase project ID for local preview
+## 2026-10-13 — Align Firebase web config for local preview
 
-- Set backend `FIREBASE_PROJECT_ID` and frontend
-  `VITE_FIREBASE_PROJECT_ID` in the local env files to `knoprix-a64b7`;
-  updated the frontend `.env.example` to match.
-- Restarted the localhost API and Vite preview. The API health endpoint and
-  served frontend shell respond successfully, and the backend/frontend load
-  the requested project ID.
-- The frontend auth domain remains configured for the previous project ID.
-  Firebase sign-in was not tested; the remaining Firebase web-app settings
-  need to match the target project before authentication can be confirmed.
+- Set the frontend's local API key, auth domain, project ID, and app ID from
+  the supplied Firebase web-app config; the backend's project ID already
+  matches. Updated the example auth domain.
+- Corrected sign-in error handling so Firebase `auth/*` errors are not reported
+  as backend connection failures.
+- Firebase credentials were not used for an actual sign-in. The localhost
+  API health check and frontend shell respond; test with an authorized account
+  to verify Firebase Auth end to end.
 
 ## 2026-10-13 — Minimize shared-resource response data
 

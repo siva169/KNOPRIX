@@ -32,6 +32,8 @@ export default function LoginPage({ onSwitch }) {
         setError("Can't reach Firebase Authentication. Check your internet connection.");
       } else if (err.code === 'auth/invalid-email') {
         setError('Enter a valid email address.');
+      } else if (err.code?.startsWith('auth/')) {
+        setError(`Firebase sign-in failed (${err.code}). Check the Firebase project configuration and enabled sign-in method.`);
       } else if (!err.response || typeof data === 'string') {
         setError("Can't reach the server. Start the backend on :8000 first, then try again.");
       } else {
