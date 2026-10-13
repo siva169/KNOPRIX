@@ -15,6 +15,7 @@ SQLite file on every restart, silently deleting user accounts and documents.
 A persistent Postgres database survives restarts.
 """
 import re
+import secrets
 import sqlite3
 
 from .config import DATABASE_URL, DB_PATH
@@ -305,11 +306,213 @@ def _create_auth_session_schema(conn) -> None:
         conn.execute(statement)
 
 
+_CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def _new_knoprix_id() -> str:
+    value = secrets.randbits(50)
+    chars = []
+    for shift in range(45, -1, -5):
+        chars.append(_CROCKFORD_BASE32[(value >> shift) & 31])
+    return f"KP-{''.join(chars)}"
+
+
+def new_knoprix_id(db) -> str:
+    """Generate a unique public account identifier with database collision checks."""
+    for _ in range(10):
+        public_id = _new_knoprix_id()
+        exists = db.execute(
+            "SELECT 1 FROM users WHERE knoprix_id = ?", (public_id,)
+        ).fetchone()
+        if exists is None:
+            return public_id
+    raise RuntimeError("Could not allocate a unique Knoprix ID")
+
+
+def _create_contacts_sharing_schema(conn) -> None:
+    user_columns = _table_columns(conn, "users")
+    for name, definition in (
+        ("knoprix_id", "TEXT"),
+        ("allow_id_lookup", "INTEGER NOT NULL DEFAULT 1"),
+        ("allow_contact_requests", "INTEGER NOT NULL DEFAULT 1"),
+        ("email_notifications_enabled", "INTEGER NOT NULL DEFAULT 0"),
+    ):
+        if name not in user_columns:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {name} {definition}")
+
+    rows = conn.execute(
+        "SELECT id FROM users WHERE knoprix_id IS NULL OR knoprix_id = ''"
+    ).fetchall()
+    for row in rows:
+        conn.execute(
+            "UPDATE users SET knoprix_id = ? WHERE id = ?",
+            (new_knoprix_id(conn), row["id"]),
+        )
+
+    for statement in (
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_knoprix_id "
+        "ON users(knoprix_id)",
+        """CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_link_identity
+            ON bookmarks(id, user_id, document_id, page_number)""",
+        """CREATE UNIQUE INDEX IF NOT EXISTS idx_highlights_link_identity
+            ON highlights(id, user_id, document_id, page_number)""",
+        """CREATE TABLE IF NOT EXISTS bookmark_highlight_links (
+            bookmark_id TEXT PRIMARY KEY,
+            highlight_id TEXT NOT NULL UNIQUE,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+            page_number INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (bookmark_id, user_id, document_id, page_number)
+                REFERENCES bookmarks(id, user_id, document_id, page_number)
+                ON DELETE CASCADE,
+            FOREIGN KEY (highlight_id, user_id, document_id, page_number)
+                REFERENCES highlights(id, user_id, document_id, page_number)
+                ON DELETE CASCADE
+        )""",
+        """CREATE TABLE IF NOT EXISTS contact_requests (
+            id TEXT PRIMARY KEY,
+            requester_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            user_low TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            user_high TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            status TEXT NOT NULL CHECK (
+                status IN ('pending', 'accepted', 'declined', 'canceled', 'expired')
+            ),
+            created_at TEXT NOT NULL,
+            expires_at TEXT,
+            updated_at TEXT NOT NULL,
+            CHECK (requester_id <> recipient_id),
+            CHECK (user_low < user_high),
+            CHECK (
+                (requester_id = user_low AND recipient_id = user_high)
+                OR (requester_id = user_high AND recipient_id = user_low)
+            )
+        )""",
+        """CREATE UNIQUE INDEX IF NOT EXISTS idx_contact_requests_pending_pair
+            ON contact_requests(user_low, user_high) WHERE status = 'pending'""",
+        """CREATE INDEX IF NOT EXISTS idx_contact_requests_recipient
+            ON contact_requests(recipient_id, status, created_at)""",
+        """CREATE TABLE IF NOT EXISTS contacts (
+            id TEXT PRIMARY KEY,
+            user_low TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            user_high TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL,
+            CHECK (user_low < user_high),
+            UNIQUE(user_low, user_high)
+        )""",
+        """CREATE TABLE IF NOT EXISTS user_blocks (
+            id TEXT PRIMARY KEY,
+            blocker_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            blocked_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL,
+            CHECK (blocker_id <> blocked_id),
+            UNIQUE(blocker_id, blocked_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS shares (
+            id TEXT PRIMARY KEY,
+            sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            resource_type TEXT NOT NULL CHECK (
+                resource_type IN ('document', 'bookmark', 'highlight')
+            ),
+            resource_id TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (
+                status IN ('pending', 'accepted', 'declined', 'revoked', 'expired', 'left')
+            ),
+            created_at TEXT NOT NULL,
+            expires_at TEXT,
+            accepted_at TEXT,
+            updated_at TEXT NOT NULL,
+            CHECK (sender_id <> recipient_id)
+        )""",
+        """CREATE UNIQUE INDEX IF NOT EXISTS idx_shares_active_resource_recipient
+            ON shares(sender_id, recipient_id, resource_type, resource_id)
+            WHERE status IN ('pending', 'accepted')""",
+        """CREATE INDEX IF NOT EXISTS idx_shares_recipient_status
+            ON shares(recipient_id, status, created_at)""",
+        """CREATE INDEX IF NOT EXISTS idx_shares_sender_status
+            ON shares(sender_id, status, created_at)""",
+        """CREATE TABLE IF NOT EXISTS inbox_items (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            actor_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+            event_type TEXT NOT NULL CHECK (
+                event_type IN ('contact_request', 'share_request', 'share_accepted', 'share_revoked')
+            ),
+            resource_type TEXT,
+            resource_id TEXT,
+            relationship_id TEXT,
+            created_at TEXT NOT NULL,
+            is_read INTEGER NOT NULL DEFAULT 0
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_inbox_items_user_created
+            ON inbox_items(user_id, created_at)""",
+    ):
+        conn.execute(statement)
+    if DATABASE_URL:
+        for resource_type, table in (
+            ("document", "documents"),
+            ("bookmark", "bookmarks"),
+            ("highlight", "highlights"),
+        ):
+            function_name = f"knoprix_revoke_{resource_type}_shares"
+            trigger_name = f"knoprix_revoke_{resource_type}_shares_after_delete"
+            conn.execute(
+                f"""CREATE OR REPLACE FUNCTION {function_name}() RETURNS trigger AS $$
+                    BEGIN
+                        UPDATE shares SET status = 'revoked', updated_at = now()
+                        WHERE resource_type = '{resource_type}'
+                          AND resource_id = OLD.id
+                          AND status IN ('pending', 'accepted');
+                        RETURN OLD;
+                    END;
+                    $$ LANGUAGE plpgsql"""
+            )
+            conn.execute(f"DROP TRIGGER IF EXISTS {trigger_name} ON {table}")
+            conn.execute(
+                f"""CREATE TRIGGER {trigger_name} AFTER DELETE ON {table}
+                    FOR EACH ROW EXECUTE FUNCTION {function_name}()"""
+            )
+    else:
+        for resource_type, table in (
+            ("document", "documents"),
+            ("bookmark", "bookmarks"),
+            ("highlight", "highlights"),
+        ):
+            conn.execute(
+                f"""CREATE TRIGGER IF NOT EXISTS knoprix_revoke_{resource_type}_shares_after_delete
+                    AFTER DELETE ON {table}
+                    BEGIN
+                        UPDATE shares SET status = 'revoked', updated_at = datetime('now')
+                        WHERE resource_type = '{resource_type}'
+                          AND resource_id = OLD.id
+                          AND status IN ('pending', 'accepted');
+                    END"""
+            )
+    if DATABASE_URL:
+        conn.execute("ALTER TABLE users ALTER COLUMN knoprix_id SET NOT NULL")
+    else:
+        conn.execute(
+            """CREATE TRIGGER IF NOT EXISTS users_knoprix_id_required_insert
+               BEFORE INSERT ON users
+               WHEN NEW.knoprix_id IS NULL OR NEW.knoprix_id = ''
+               BEGIN SELECT RAISE(ABORT, 'Knoprix ID is required'); END"""
+        )
+        conn.execute(
+            """CREATE TRIGGER IF NOT EXISTS users_knoprix_id_required_update
+               BEFORE UPDATE OF knoprix_id ON users
+               WHEN NEW.knoprix_id IS NULL OR NEW.knoprix_id = ''
+               BEGIN SELECT RAISE(ABORT, 'Knoprix ID is required'); END"""
+        )
+
+
 # Migration versions are append-only; never edit a migration after it is released.
 MIGRATIONS = (
     (1, "baseline-schema", _create_base_schema),
     (2, "legacy-schema-compatibility", _migrate_legacy_schema),
     (3, "auth-session-and-rate-limit-state", _create_auth_session_schema),
+    (4, "contacts-sharing-and-annotation-links", _create_contacts_sharing_schema),
 )
 
 

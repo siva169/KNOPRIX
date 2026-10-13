@@ -23,6 +23,7 @@ from pypdf.errors import PdfReadError, PdfStreamError
 from ..config import UPLOAD_DIR, cfg
 from ..database import get_db
 from ..security import get_current_user, get_owned_document, get_owned_project
+from .social import has_active_document_share, revoke_resource_shares
 from ..services import storage
 from ..services.indexer import rebuild_project_indices
 from ..services.pdf_parser import extract_document, extract_pptx_slides
@@ -53,6 +54,27 @@ MAX_SVG_ELEMENTS = 100_000
 MAX_SVG_DEPTH = 64
 PREFIX_RE = re.compile(r"^\d+-\d+-")
 OBJECT_URI_PREFIXES = ("s3://", "r2://")
+
+
+def _get_readable_document(db, user_id: str, document_id: str):
+    try:
+        return get_owned_document(db, user_id, document_id), False
+    except HTTPException as exc:
+        if exc.status_code != status.HTTP_404_NOT_FOUND:
+            raise
+    if not has_active_document_share(db, user_id, document_id):
+        raise HTTPException(404, "Document not found")
+    row = db.execute(
+        "SELECT d.* FROM documents d JOIN projects p ON p.id = d.project_id "
+        "WHERE d.id = ? AND EXISTS (SELECT 1 FROM shares s "
+        "WHERE s.sender_id = p.user_id AND s.recipient_id = ? "
+        "AND s.resource_type = 'document' AND s.resource_id = d.id "
+        "AND s.status = 'accepted')",
+        (document_id, user_id),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(404, "Document not found")
+    return dict(row), True
 
 
 def _safe_display_name(filename: str | None) -> str:
@@ -359,14 +381,26 @@ async def upload_document(project_id: str, file: UploadFile = File(...),
 
 @router.get("/documents/{document_id}")
 def get_document(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
-    doc = get_owned_document(db, user["id"], document_id)
-    return {"document": doc}
+    doc, read_only = _get_readable_document(db, user["id"], document_id)
+    if read_only:
+        doc = {
+            field: doc[field]
+            for field in (
+                "id",
+                "file_name",
+                "file_type",
+                "file_size",
+                "page_count",
+                "extracted_text",
+            )
+        }
+    return {"document": doc, "readOnly": read_only}
 
 
 @router.get("/documents/{document_id}/slides")
 def get_slides(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
     """Visual slide data for PPTX — renders like PowerPoint (shapes, text, tables, images)."""
-    doc = get_owned_document(db, user["id"], document_id)
+    doc, _read_only = _get_readable_document(db, user["id"], document_id)
     if (doc["file_type"] or "").lower() not in ("pptx", "ppt"):
         raise HTTPException(404, "Not a slideshow document")
     path, temporary = _materialize_document(doc)
@@ -384,7 +418,7 @@ def get_slides(document_id: str, user=Depends(get_current_user), db=Depends(get_
 
 @router.get("/documents/{document_id}/pages")
 def get_pages(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
-    get_owned_document(db, user["id"], document_id)
+    _get_readable_document(db, user["id"], document_id)
     rows = db.execute(
         "SELECT page_number, page_text FROM document_pages WHERE document_id = ? ORDER BY page_number",
         (document_id,),
@@ -394,13 +428,14 @@ def get_pages(document_id: str, user=Depends(get_current_user), db=Depends(get_d
 
 @router.get("/documents/{document_id}/stream")
 def stream_document(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
-    doc = get_owned_document(db, user["id"], document_id)
+    doc, _read_only = _get_readable_document(db, user["id"], document_id)
     file_type = (doc["file_type"] or "").lower()
     media_type = CONTENT_TYPES.get(f".{file_type}", "application/octet-stream")
     download_name = quote(str(doc["file_name"]), safe="")
     disposition = "attachment" if file_type == "svg" else "inline"
     headers = {
         "Content-Disposition": f"{disposition}; filename*=UTF-8''{download_name}",
+        "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
     }
     object_key_value = _object_key(str(doc["file_path"]))
@@ -424,6 +459,14 @@ def stream_document(document_id: str, user=Depends(get_current_user), db=Depends
 @router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
     doc = get_owned_document(db, user["id"], document_id)
+    for table, resource_type in (("bookmarks", "bookmark"), ("highlights", "highlight")):
+        rows = db.execute(
+            f"SELECT id FROM {table} WHERE document_id = ? AND user_id = ?",
+            (document_id, user["id"]),
+        ).fetchall()
+        for row in rows:
+            revoke_resource_shares(db, user["id"], resource_type, row["id"])
+    revoke_resource_shares(db, user["id"], "document", document_id)
     file_path = str(doc["file_path"])
     object_key_value = _object_key(file_path)
     if storage.enabled() and object_key_value:

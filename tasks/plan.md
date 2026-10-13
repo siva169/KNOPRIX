@@ -81,8 +81,9 @@ Target additions
   derived search structures, not a reason to store the whole application as
   JSON.
 - Knowledge graph links are heuristic shared terms. Bookmarks and highlights
-  are separate, with no explicit link relation. Contacts and resource sharing
-  were not found.
+  were separate at the planning baseline. Migration 4 now adds optional
+  independent-lifecycle bookmark/highlight links, Knoprix-ID contacts, and
+  resource-level share records.
 - Current DB initialization has in-code startup migrations; no formal
   migration framework was found in inspected project files.
 
@@ -198,13 +199,16 @@ cross-user rejection are tested.
 
 ### Phase 7 — Contacts and in-app resource sharing
 
-Add public Knoprix IDs, mutual contact requests, resource-specific share
-requests, recipient inbox, access enforcement/revocation, then optional email
-notifications through a durable outbox.
+Add public Knoprix IDs, mutual contact requests, individual document/bookmark/
+highlight share requests, recipient inbox, access enforcement/revocation, then
+optional email notifications through a durable outbox. Project snapshots are
+excluded. The first slice is implemented; provider delivery and broader
+browser/PostgreSQL verification remain.
 
 **Exit gate:** Two-account tests cover contact acceptance, per-resource
-acceptance, bulk recipients, revocation, expiry, and email failures. Shared
-files remain in Knoprix.
+acceptance, bulk recipients, revocation, expiry, and email failures. Current
+tests cover backend state/authorization paths; browser, PostgreSQL, and
+email-provider evidence is still outstanding. Shared files remain in Knoprix.
 
 ### Phase 8 — Consumer beta and release readiness
 
@@ -251,12 +255,13 @@ deployment or public release.
 - Extraction/OCR quality targets and OCR engine/language implementation.
 - Local versus cloud generation, embedding/model choices, and deployment
   constraints beyond the approved hosting direction.
-- Contact discovery privacy details, notification preferences, and whether
-  Google Contacts/Gmail integration is in scope remain open.
-- Resolved sharing contract: read-only project snapshots; AI on shared
-  documents requires sender opt-in plus recipient grant/consent; pending
-  requests expire after 30 days; accepted shares remain active until revoked
-  or left; contact removal cancels pending shares and revokes accepted shares.
+- Resolved (2026-10-12): contact discovery is Knoprix-ID-only; lookup and
+  incoming-request preferences are user controlled. No Google Contacts/Gmail
+  contact integration. Email-provider setup is deferred.
+- Resolved sharing contract (2026-10-12): read-only individual documents,
+  bookmarks, and highlights; no project snapshots. Pending requests expire
+  after 30 days; accepted shares remain until revoked/left/source deletion/
+  contact removal/block. Shared-resource AI access is not part of this slice.
 - Latency/availability targets for the 100–1,000-user planning assumption.
 
 ## Source of truth

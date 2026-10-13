@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from ..config import cfg
-from ..database import get_db
+from ..database import get_db, new_knoprix_id
 from ..security import (
     create_access_token,
     create_refresh_token,
@@ -142,8 +142,15 @@ def register(
         raise HTTPException(409, "An account with this email already exists")
     user_id = str(uuid.uuid4())
     db.execute(
-        "INSERT INTO users (id, email, password_hash, full_name) VALUES (?, ?, ?, ?)",
-        (user_id, email, hash_password(body.password), body.fullName.strip()),
+        "INSERT INTO users (id, email, password_hash, full_name, knoprix_id) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (
+            user_id,
+            email,
+            hash_password(body.password),
+            body.fullName.strip(),
+            new_knoprix_id(db),
+        ),
     )
     return _token_response(db, user_id, response)
 
@@ -213,14 +220,15 @@ def _get_or_create_firebase_user(db, claims: dict, full_name: str = "") -> dict:
         or email.split("@", 1)[0][:100]
     )
     db.execute(
-        "INSERT INTO users (id, email, password_hash, full_name, firebase_uid) "
-        "VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+        "INSERT INTO users (id, email, password_hash, full_name, firebase_uid, knoprix_id) "
+        "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
         (
             user_id,
             email,
             hash_password(secrets.token_urlsafe(32)),
             full_name,
             firebase_uid,
+            new_knoprix_id(db),
         ),
     )
     row = db.execute(

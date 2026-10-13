@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Bookmark, Trash2, Layers, ArrowDownToLine, ArrowUpFromLine, FileText, BookmarkCheck, Search, LoaderCircle, RotateCw } from 'lucide-react';
+import { X, Bookmark, Trash2, Layers, ArrowDownToLine, ArrowUpFromLine, FileText, BookmarkCheck, Search, LoaderCircle, RotateCw, Pencil, Check } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import api from '../api';
 
@@ -13,6 +13,11 @@ export default function BookmarksDrawer({ onClose }) {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
   const [searchRetry, setSearchRetry] = useState(0);
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState({ name: '', notes: '' });
+  const [editHighlights, setEditHighlights] = useState([]);
+  const [loadingEditHighlights, setLoadingEditHighlights] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => setVisible(bookmarks), [bookmarks]);
 
@@ -95,6 +100,66 @@ export default function BookmarksDrawer({ onClose }) {
       { start: bookmark.anchor_start, end: bookmark.anchor_end },
     );
     onClose();
+  };
+
+  const startEdit = async (bookmark, event) => {
+    event.stopPropagation();
+    setEditingId(bookmark.id);
+    setEditDraft({
+      name: bookmark.name || '',
+      notes: bookmark.notes || '',
+      highlightId: bookmark.linked_highlight_id || '',
+    });
+    setLoadingEditHighlights(true);
+    try {
+      const { data } = await api.get(`/documents/${bookmark.document_id}/highlights`);
+      setEditHighlights(
+        (data.highlights || [])
+          .filter((highlight) => highlight.page_number === bookmark.page_number)
+          .map((highlight) => ({ id: highlight.id, text: highlight.text })),
+      );
+    } catch {
+      setEditHighlights([]);
+      notify('Could not load highlights for this bookmark', 'error');
+    } finally {
+      setLoadingEditHighlights(false);
+    }
+  };
+
+  const saveEdit = async (event) => {
+    event.preventDefault();
+    if (!editingId || savingEdit) return;
+    setSavingEdit(true);
+    try {
+      await api.patch(`/bookmarks/${editingId}`, {
+        name: editDraft.name,
+        notes: editDraft.notes,
+        highlightId: editDraft.highlightId || null,
+      });
+      const applyUpdate = (items) => items.map((item) => (
+        item.id === editingId
+          ? {
+            ...item,
+            name: editDraft.name.trim(),
+            notes: editDraft.notes.trim(),
+            linked_highlight_id: editDraft.highlightId || null,
+          }
+          : item
+      ));
+      setVisible(applyUpdate);
+      setSearchResults((items) => items ? applyUpdate(items) : null);
+      setEditingId(null);
+      notify('Bookmark updated', 'success');
+      if (activeProject) {
+        void fetchBookmarks(activeProject.id).catch(() => {
+          notify('Bookmark updated, but the collection could not be refreshed', 'error');
+        });
+      }
+    } catch {
+      notify('Could not update bookmark', 'error');
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   return (
@@ -284,6 +349,11 @@ export default function BookmarksDrawer({ onClose }) {
                         {bm.notes}
                       </span>
                     )}
+                    {bm.linked_highlight_id && (
+                      <span className="mt-2 inline-flex rounded-full border border-secondary/25 bg-secondary/10 px-2 py-0.5 text-[9px] font-semibold text-secondary">
+                        Linked highlight
+                      </span>
+                    )}
                     {isTop && (
                       <span className="mt-2 block text-[9px] font-mono uppercase tracking-widest text-primary-hover/80">
                         ← newest bookmark
@@ -298,6 +368,57 @@ export default function BookmarksDrawer({ onClose }) {
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
+                  <button
+                    onClick={(event) => startEdit(bm, event)}
+                    aria-label={`Edit bookmark: ${bm.name || bm.highlighted_text || `Page ${bm.page_number}`}`}
+                    title="Edit bookmark name and notes"
+                    className="absolute right-14 top-3 grid min-h-11 min-w-11 place-items-center rounded-lg text-ivory/55 transition hover:bg-primary/15 hover:text-secondary"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  {editingId === bm.id && (
+                    <form onSubmit={saveEdit} onClick={(event) => event.stopPropagation()} className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                      <label className="block text-[10px] text-ivory/60">
+                        Name
+                        <input
+                          value={editDraft.name}
+                          onChange={(event) => setEditDraft((draft) => ({ ...draft, name: event.target.value }))}
+                          maxLength={120}
+                          className="mt-1 min-h-10 w-full rounded-lg border border-glass-borderDark bg-black/20 px-2 text-xs text-ivory focus:border-secondary focus:outline-none"
+                        />
+                      </label>
+                      <label className="block text-[10px] text-ivory/60">
+                        Notes
+                        <textarea
+                          value={editDraft.notes}
+                          onChange={(event) => setEditDraft((draft) => ({ ...draft, notes: event.target.value }))}
+                          maxLength={1000}
+                          rows={3}
+                          className="mt-1 w-full rounded-lg border border-glass-borderDark bg-black/20 p-2 text-xs text-ivory focus:border-secondary focus:outline-none"
+                        />
+                      </label>
+                      <label className="block text-[10px] text-ivory/60">
+                        Linked highlight (optional)
+                        <select
+                          value={editDraft.highlightId}
+                          disabled={loadingEditHighlights}
+                          onChange={(event) => setEditDraft((draft) => ({ ...draft, highlightId: event.target.value }))}
+                          className="mt-1 min-h-10 w-full rounded-lg border border-glass-borderDark bg-midnight-deep px-2 text-xs text-ivory focus:border-secondary focus:outline-none disabled:opacity-50"
+                        >
+                          <option value="">{loadingEditHighlights ? 'Loading highlights…' : 'Not linked'}</option>
+                          {editHighlights.map((highlight) => (
+                            <option key={highlight.id} value={highlight.id}>{highlight.text.slice(0, 90)}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => setEditingId(null)} className="min-h-10 rounded-lg px-3 text-xs text-ivory/60">Cancel</button>
+                        <button type="submit" disabled={savingEdit || loadingEditHighlights} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-white disabled:opacity-50">
+                          <Check className="size-3.5" /> {savingEdit ? 'Saving…' : 'Save'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
                 </motion.article>
               );
             })}

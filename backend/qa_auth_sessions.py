@@ -138,6 +138,10 @@ class LegacyAuthSessionTests(unittest.TestCase):
         self.assertIn("httponly", cookie)
         self.assertIn("path=/api/auth", cookie)
         self.assertEqual(data["user"]["email"], "reader@example.com")
+        public_id = self.db.execute(
+            "SELECT knoprix_id FROM users WHERE id = ?", (data["user"]["id"],)
+        ).fetchone()["knoprix_id"]
+        self.assertRegex(public_id, r"^KP-[0-9A-HJKMNP-TV-Z]{10}$")
 
     def test_refresh_rotates_token_and_replay_revokes_the_session(self):
         data, response = self.register()
@@ -278,14 +282,15 @@ class LegacyAuthSessionTests(unittest.TestCase):
 
     def test_login_errors_do_not_reveal_firebase_account_type(self):
         self.db.execute(
-            "INSERT INTO users (id, email, password_hash, full_name, firebase_uid) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO users (id, email, password_hash, full_name, firebase_uid, knoprix_id) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
             (
                 "firebase-account",
                 "firebase@example.com",
                 security.hash_password("wrong-password"),
                 "Firebase User",
                 "firebase-uid",
+                database.new_knoprix_id(self.db),
             ),
         )
         self.db.commit()
@@ -309,6 +314,12 @@ class LegacyAuthSessionTests(unittest.TestCase):
         self.assertTrue(second.allow(self.db, "client", now=121))
         self.assertFalse(first.allow(self.db, "client", now=122))
         self.assertTrue(first.allow(self.db, "client", now=180))
+
+    def test_long_rate_limit_retains_its_bucket_for_the_full_window(self):
+        limiter = security.DatabaseRateLimiter(2, 86400, "qa-long-window")
+        self.assertTrue(limiter.allow(self.db, "client", now=100000))
+        self.assertTrue(limiter.allow(self.db, "client", now=100001))
+        self.assertFalse(limiter.allow(self.db, "client", now=100002))
 
     def test_production_config_rejects_default_or_short_jwt_secrets(self):
         production = type("ConfigStub", (), {

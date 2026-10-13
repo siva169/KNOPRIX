@@ -149,6 +149,7 @@ class FirebaseAuthTests(unittest.TestCase):
             conn = sqlite3.connect(database_path)
             conn.row_factory = sqlite3.Row
             conn.executescript(database.SCHEMA)
+            conn.execute("ALTER TABLE users ADD COLUMN knoprix_id TEXT")
             conn.commit()
             conn.close()
 
@@ -438,7 +439,7 @@ class FirebaseAuthTests(unittest.TestCase):
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row
         conn.execute(
-            "CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, password_hash TEXT, full_name TEXT, firebase_uid TEXT)"
+            "CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, password_hash TEXT, full_name TEXT, firebase_uid TEXT, knoprix_id TEXT)"
         )
         user = _get_or_create_firebase_user(
             conn,
@@ -456,7 +457,7 @@ class FirebaseAuthTests(unittest.TestCase):
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row
         conn.execute(
-            "CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, password_hash TEXT, full_name TEXT, firebase_uid TEXT)"
+            "CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, password_hash TEXT, full_name TEXT, firebase_uid TEXT, knoprix_id TEXT)"
         )
         user = _get_or_create_firebase_user(
             conn,
@@ -503,7 +504,7 @@ class FirebaseAuthTests(unittest.TestCase):
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row
         conn.execute(
-            "CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT UNIQUE, password_hash TEXT, full_name TEXT, firebase_uid TEXT UNIQUE)"
+            "CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT UNIQUE, password_hash TEXT, full_name TEXT, firebase_uid TEXT UNIQUE, knoprix_id TEXT)"
         )
         claims = {
             "sub": "firebase-user-1",

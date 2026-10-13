@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from ..database import get_db
 from ..dsa.bookmark_collection import BookmarkCollection
 from ..security import get_current_user, get_owned_document, get_owned_project
+from .social import revoke_resource_shares
 
 router = APIRouter(prefix="/api", tags=["bookmarks"])
 
@@ -27,13 +28,25 @@ class BookmarkBody(BaseModel):
     selectionEnd: int | None = Field(default=None, ge=0)
 
 
+class BookmarkUpdateBody(BaseModel):
+    name: str | None = Field(default=None, max_length=120)
+    highlightedText: str | None = Field(default=None, max_length=2000)
+    notes: str | None = Field(default=None, max_length=1000)
+    colorTag: str | None = Field(default=None, max_length=30)
+    tags: list[str] | None = None
+    highlightId: str | None = Field(default=None, max_length=128)
+
+
 def _load_bookmarks(
     db, project_id: str, user_id: str, query: str = ""
 ) -> BookmarkCollection:
     """Load persisted rows oldest-first, then insert each at the collection head."""
     sql = """
-        SELECT * FROM bookmarks
-        WHERE project_id = ? AND user_id = ?
+        SELECT b.*,
+               (SELECT l.highlight_id FROM bookmark_highlight_links l
+                WHERE l.bookmark_id = b.id) AS linked_highlight_id
+        FROM bookmarks b
+        WHERE b.project_id = ? AND b.user_id = ?
     """
     params = [project_id, user_id]
     if query:
@@ -100,6 +113,87 @@ def create_bookmark(body: BookmarkBody, user=Depends(get_current_user), db=Depen
     return {"id": bookmark_id}
 
 
+@router.patch("/bookmarks/{bookmark_id}")
+def update_bookmark(
+    bookmark_id: str,
+    body: BookmarkUpdateBody,
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+):
+    bookmark = db.execute(
+        "SELECT id, document_id, page_number FROM bookmarks WHERE id = ? AND user_id = ?",
+        (bookmark_id, user["id"]),
+    ).fetchone()
+    if bookmark is None:
+        raise HTTPException(404, "Bookmark not found")
+    updates = body.model_dump(exclude_unset=True)
+    link_requested = "highlightId" in updates
+    highlight_id = updates.pop("highlightId", None)
+    if not updates and not link_requested:
+        raise HTTPException(422, "Provide at least one bookmark field to update")
+    columns = {
+        "name": "name",
+        "highlightedText": "highlighted_text",
+        "notes": "notes",
+        "colorTag": "color_tag",
+        "tags": "tags_json",
+    }
+    assignments = []
+    values = []
+    for key, value in updates.items():
+        if value is None:
+            raise HTTPException(422, f"{key} cannot be null")
+        assignments.append(f"{columns[key]} = ?")
+        values.append(json.dumps(value) if key == "tags" else (value.strip() if isinstance(value, str) else value))
+    values.extend((bookmark_id, user["id"]))
+    if assignments:
+        db.execute(
+            f"UPDATE bookmarks SET {', '.join(assignments)} WHERE id = ? AND user_id = ?",
+            tuple(values),
+        )
+    if link_requested:
+        if highlight_id is None:
+            db.execute(
+                "DELETE FROM bookmark_highlight_links "
+                "WHERE bookmark_id = ? AND user_id = ?",
+                (bookmark_id, user["id"]),
+            )
+        else:
+            highlight = db.execute(
+                """SELECT id FROM highlights
+                   WHERE id = ? AND user_id = ? AND document_id = ? AND page_number = ?""",
+                (
+                    highlight_id,
+                    user["id"],
+                    bookmark["document_id"],
+                    bookmark["page_number"],
+                ),
+            ).fetchone()
+            if highlight is None:
+                raise HTTPException(422, "Highlight must belong to this user and page")
+            other_link = db.execute(
+                "SELECT bookmark_id FROM bookmark_highlight_links WHERE highlight_id = ?",
+                (highlight_id,),
+            ).fetchone()
+            if other_link is not None and other_link["bookmark_id"] != bookmark_id:
+                raise HTTPException(409, "Highlight is already linked to another bookmark")
+            db.execute(
+                """INSERT INTO bookmark_highlight_links
+                   (bookmark_id, highlight_id, user_id, document_id, page_number)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(bookmark_id) DO UPDATE SET
+                     highlight_id = excluded.highlight_id""",
+                (
+                    bookmark_id,
+                    highlight_id,
+                    user["id"],
+                    bookmark["document_id"],
+                    bookmark["page_number"],
+                ),
+            )
+    return {"id": bookmark_id}
+
+
 @router.delete("/bookmarks/{bookmark_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_bookmark(bookmark_id: str, user=Depends(get_current_user), db=Depends(get_db)):
     row = db.execute(
@@ -108,5 +202,6 @@ def delete_bookmark(bookmark_id: str, user=Depends(get_current_user), db=Depends
     ).fetchone()
     if row is None:
         raise HTTPException(404, "Bookmark not found")
+    revoke_resource_shares(db, user["id"], "bookmark", bookmark_id)
     db.execute("DELETE FROM bookmarks WHERE id = ?", (bookmark_id,))
     return None

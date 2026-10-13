@@ -6,7 +6,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app import database
-from app.routers.bookmarks import BookmarkBody, create_bookmark, list_bookmarks
+from app.routers.bookmarks import (
+    BookmarkBody,
+    BookmarkUpdateBody,
+    create_bookmark,
+    list_bookmarks,
+    update_bookmark,
+)
 
 
 USER = {"id": "user-1"}
@@ -20,10 +26,14 @@ class BookmarkApiTests(unittest.TestCase):
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys = ON")
         self.db.executescript(database.SCHEMA)
+        self.database_url_patch = patch.object(database, "DATABASE_URL", "")
+        self.database_url_patch.start()
+        self.addCleanup(self.database_url_patch.stop)
+        database._create_contacts_sharing_schema(self.db)
         self.db.execute(
-            "INSERT INTO users (id, email, password_hash, full_name) "
-            "VALUES (?, ?, ?, ?)",
-            (USER["id"], "user@example.com", "hash", "Test User"),
+            "INSERT INTO users (id, email, password_hash, full_name, knoprix_id) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (USER["id"], "user@example.com", "hash", "Test User", "KP-AAAAAAAAAA"),
         )
         self.db.execute(
             "INSERT INTO projects (id, user_id, name) VALUES (?, ?, ?)",
@@ -69,6 +79,40 @@ class BookmarkApiTests(unittest.TestCase):
         self.assertEqual(rows[1]["name"], "Key idea")
         self.assertEqual(rows[1]["anchor_start"], 12)
         self.assertEqual(rows[1]["anchor_end"], 25)
+
+    def test_bookmark_can_update_its_name_and_notes_without_affecting_highlight(self):
+        bookmark = self.create()
+        self.db.execute(
+            """INSERT INTO highlights
+               (id, user_id, project_id, document_id, page_number, text)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            ("highlight-1", USER["id"], PROJECT_ID, DOCUMENT_ID, 1, "Selected passage"),
+        )
+        update_bookmark(
+            bookmark["id"],
+            BookmarkUpdateBody(
+                name="  Key idea ",
+                notes="  Revisit this  ",
+                highlightId="highlight-1",
+            ),
+            USER,
+            self.db,
+        )
+        updated = list_bookmarks(
+            PROJECT_ID, user=USER, db=self.db, q=""
+        )["bookmarks"][0]
+        self.assertEqual(updated["name"], "Key idea")
+        self.assertEqual(updated["notes"], "Revisit this")
+        self.assertEqual(updated["linked_highlight_id"], "highlight-1")
+        update_bookmark(
+            bookmark["id"],
+            BookmarkUpdateBody(highlightId=None),
+            USER,
+            self.db,
+        )
+        self.assertEqual(
+            self.db.execute("SELECT COUNT(*) FROM highlights").fetchone()[0], 1
+        )
 
     def test_search_matches_name_selected_text_and_notes_case_insensitively(self):
         named = self.create(name="Quantum Notes", highlightedText="Entanglement")

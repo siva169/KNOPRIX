@@ -220,7 +220,7 @@ class DatabaseRateLimiter:
         ).hexdigest()
         db.execute(
             "DELETE FROM auth_rate_limits WHERE window_start < ?",
-            (now - 3600,),
+            (now - max(self.window, 3600),),
         )
         db.execute(
             """

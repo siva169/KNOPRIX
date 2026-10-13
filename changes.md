@@ -1,5 +1,42 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-13 — Minimize shared-resource response data
+
+- Changed accepted share responses to allowlist only the fields needed for
+  document reader metadata or the selected bookmark/highlight. Annotation
+  responses no longer include internal owner or project IDs.
+- Shared documents now load their content through the existing owner/share
+  authorization route. Its read-only response excludes storage paths and
+  project IDs but includes extracted text required by the reader.
+- Added regression tests for response fields, authorized read-only document
+  content, and the rule that sharing an annotation does not grant source
+  document access.
+- Retained rate-limit counters for their configured window so the daily
+  contact-request cap cannot be reset by one-hour cleanup. Blocking now cancels
+  accepted and pending requests before deleting the contact, preventing an
+  in-flight acceptance from restoring a relationship after unblocking.
+- Verification: the focused social suite passed (8 tests), and the broader
+  backend regression command passed (68 tests). `cd frontend && npm run build`
+  passed with the existing large-chunk warning. PostgreSQL runtime and
+  authenticated browser flows remain unverified.
+
+## 2026-10-12 — Implement bookmarks, contacts, and consent-based sharing
+
+- Added migration 4 for unique public Knoprix IDs, privacy preferences,
+  contact/block/share state, inbox events, and independently-lifecycle-managed
+  bookmark/highlight links.
+- Added authenticated contact, request, block, resource-share, inbox, and
+  annotation-link APIs. Accepted document shares authorize read-only document,
+  slides, pages, and stream access; mutations stay owner-only. Revoked streams
+  are not cached by clients.
+- Added the Contacts workflow, shared-resource viewer, bookmark editing/link
+  controls, and read-only document UI. Email delivery remains unavailable;
+  no email provider was configured.
+- Verification: focused migration, bookmark, legacy/Firebase auth, and social
+  suites passed (55 tests before the final cache-header assertion); current
+  tests/build are being rerun. PostgreSQL runtime and authenticated browser
+  flows remain unverified.
+
 ## 2026-10-12 — Add privacy-safe Firebase token rejection diagnostics
 
 - Log only the exception class when Firebase ID-token verification rejects a

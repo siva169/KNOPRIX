@@ -6,7 +6,7 @@ import re
 import uuid
 
 from .config import DATABASE_URL, UPLOAD_DIR, cfg
-from .database import connect
+from .database import connect, new_knoprix_id
 from .security import hash_password
 from .services.indexer import rebuild_project_indices
 from .services.pdf_parser import extract_document
@@ -34,12 +34,14 @@ def seed() -> None:
         if demo is None:
             demo_id = "user-demo-1"
             conn.execute(
-                "INSERT INTO users (id, email, password_hash, full_name) VALUES (?, ?, ?, ?)",
+                "INSERT INTO users (id, email, password_hash, full_name, knoprix_id) "
+                "VALUES (?, ?, ?, ?, ?)",
                 (
                     demo_id,
                     cfg.DEMO_ACCOUNT_EMAIL,
                     hash_password(cfg.DEMO_PASSWORD),
                     "Alex Mercer",
+                    new_knoprix_id(conn),
                 ),
             )
         else:

@@ -15,6 +15,7 @@ import KnowledgeMap from './components/KnowledgeMap.jsx';
 import ChatPanel from './components/ChatPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
+import ContactsPage from './components/ContactsPage.jsx';
 
 const BrowserPDFViewer = lazy(() => import('./components/BrowserPDFViewer.jsx'));
 
@@ -24,11 +25,13 @@ export default function App() {
     toast, notify,
     fetchProjects, selectProject, resetWorkspace,
     projects, activeProject, activeDocument,
+    openDocument,
   } = useApp();
   const [authMode, setAuthMode] = useState('login');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
+  const [isContactsOpen, setIsContactsOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [mobileSidebar, setMobileSidebar] = useState(false);
@@ -46,6 +49,12 @@ export default function App() {
       localStorage.setItem('knoprix_sidebar_collapsed', String(next));
       return next;
     });
+  };
+
+  const openContacts = () => {
+    setIsChatOpen(false);
+    setIsMapOpen(false);
+    setIsContactsOpen(true);
   };
 
   useEffect(() => {
@@ -122,6 +131,7 @@ export default function App() {
         onUpload={() => setIsUploadOpen(true)}
         onStats={() => setIsStatsOpen(true)}
         onBookmarks={() => setIsBookmarksOpen(true)}
+        onContacts={openContacts}
         onOpenPalette={() => setIsPaletteOpen(true)}
         onToggleSidebar={() => setMobileSidebar((v) => !v)}
         mobileSidebar={mobileSidebar}
@@ -132,6 +142,7 @@ export default function App() {
           onUpload={() => setIsUploadOpen(true)}
           onStats={() => setIsStatsOpen(true)}
           onBookmarks={() => setIsBookmarksOpen(true)}
+          onContacts={openContacts}
           mobileOpen={mobileSidebar}
           onClose={() => setMobileSidebar(false)}
           collapsed={sidebarCollapsed}
@@ -153,7 +164,27 @@ export default function App() {
               </div>
             }
           >
-            {activeDocument ? <BrowserPDFViewer focusMode={focusMode} onToggleFocusMode={() => setFocusMode((value) => !value)} onOpenChat={() => setIsChatOpen(true)} /> : <DashboardOverview loading={projectsLoading || documentsLoading} onUpload={() => setIsUploadOpen(true)} onOpenMap={() => setIsMapOpen(true)} />}
+            {isContactsOpen ? (
+              <ContactsPage
+                onClose={() => setIsContactsOpen(false)}
+                activeDocument={activeDocument}
+                activeProject={activeProject}
+                openDocument={openDocument}
+                notify={notify}
+              />
+            ) : activeDocument ? (
+              <BrowserPDFViewer
+                focusMode={focusMode}
+                onToggleFocusMode={() => setFocusMode((value) => !value)}
+                onOpenChat={() => setIsChatOpen(true)}
+              />
+            ) : (
+              <DashboardOverview
+                loading={projectsLoading || documentsLoading}
+                onUpload={() => setIsUploadOpen(true)}
+                onOpenMap={() => setIsMapOpen(true)}
+              />
+            )}
           </Suspense>
           </ErrorBoundary>
         </main>

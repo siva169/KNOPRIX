@@ -3,13 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Folder, FolderOpen, Plus, FileText, ChevronRight, ChevronDown,
   Bookmark, BarChart3, UploadCloud, X, Check, Clock3, LibraryBig,
-  Network, ArrowUpRight, PanelLeftClose, PanelLeftOpen
+  Network, ArrowUpRight, PanelLeftClose, PanelLeftOpen, UsersRound
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import api from '../api';
 
 export default function Sidebar({
-  onUpload, onStats, onBookmarks, mobileOpen = false, onClose,
+  onUpload, onStats, onBookmarks, onContacts, mobileOpen = false, onClose,
   collapsed = false, onToggleCollapse,
 }) {
   const {
@@ -293,6 +293,10 @@ export default function Sidebar({
         <button onClick={onBookmarks} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-ivory/70 hover:bg-white/5 hover:text-ivory transition">
           <Bookmark className="w-4 h-4 text-secondary shrink-0" />
           <span className={collapsed ? 'lg:hidden' : ''}>Bookmarks Drawer</span>
+        </button>
+        <button onClick={onContacts} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-ivory/70 hover:bg-white/5 hover:text-ivory transition">
+          <UsersRound className="w-4 h-4 text-secondary shrink-0" />
+          <span className={collapsed ? 'lg:hidden' : ''}>Contacts & sharing</span>
         </button>
         <button onClick={onStats} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-ivory/70 hover:bg-white/5 hover:text-ivory transition">
           <BarChart3 className="w-4 h-4 text-accent shrink-0" />

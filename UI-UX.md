@@ -333,6 +333,32 @@ No visual choice is treated as approved until it is selected here.
   reduced-motion mode, contrast target.
 - Reference URLs: _add here_
 
+## H. Contacts and resource sharing — approved 2026-10-12
+
+### H1. `ContactsPage` — manage Knoprix relationships and exact resource shares
+- Entry points: Navbar and Sidebar; open as the main content surface.
+- Visual direction: preserve the existing dark/gold Knoprix style.
+- Page order: own Knoprix ID/copy and ID lookup; privacy controls; incoming
+  and sent contact requests; contact list; per-resource share form; incoming
+  and sent share statuses; blocked IDs.
+- Discovery: Knoprix ID only. Do not show email lookup, Gmail import, or email
+  as a contact identifier.
+- Share form: select one document, bookmark, or highlight and one or more
+  accepted contacts. Each recipient gets an independent pending state.
+- Shared document view: show a clear read-only banner and suppress
+  owner-changing annotation/bookmark/chat controls. The backend remains the
+  authorization boundary.
+- Confirmation: confirm contact removal, blocking, share revocation, and
+  recipient leave; explain that removal/block revokes active shares.
+- Email: show email notifications as unavailable until a delivery provider is
+  separately approved and configured. Keep in-app requests usable.
+- Responsive: stack all cards and controls on mobile; no horizontal overflow;
+  target 390px and 425px mobile, 768px tablet, and 1024px desktop.
+- States: initial loading, empty contact/request/share lists, per-action
+  loading, success toasts, actionable API errors, and unavailable email state.
+- Approval: dedicated Contacts page, page order, entry points, and visual
+  direction approved by boss 2026-10-12.
+
 ## Screenshot/reference submission format
 
 Paste references under the relevant component using:
@@ -358,3 +384,5 @@ Boss choice: [selected option / changes requested]
 - Search/DSA: Not selected
 - Settings/BYOK AI: Not selected
 - Shared states/accessibility: Not selected
+- Contacts and resource sharing page: approved 2026-10-12; implemented in the
+  existing Knoprix shell.

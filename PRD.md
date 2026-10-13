@@ -71,8 +71,8 @@ your documents.
   Contact acceptance and every resource-share acceptance are separate.
   Contacts are mutual; each share can be revoked. Email is an optional
   notification only.
-- **Public identity:** Users may be discoverable by verified email or a
-  randomly generated public Knoprix ID distinct from internal database IDs.
+- **Public identity:** Contact discovery uses only the random public Knoprix ID;
+  email addresses are never a discovery mechanism.
 - **Data lifecycle:** User content and derived data remain until the user
   deletes them. Encrypted backups may retain deleted data for up to 30 days
   before purge; actual deletion/export behavior must be implemented and
@@ -118,19 +118,22 @@ your documents.
 - Provider failure, invalid key, rate limit, and unsupported model errors are
   visible and actionable.
 
-### Sharing — later slice
+### Sharing — first implementation slice
 
-- A user can discover and request a mutual contact relationship using verified
-  email or public Knoprix ID.
+- Contact requests use discoverable Knoprix IDs only; privacy settings govern
+  lookup and incoming requests. Email is never a discovery key.
 - Contact status alone never grants access to a project, document, bookmark,
   or highlight.
-- A recipient sees a share request in Knoprix and must accept before access is
-  granted; the sender can revoke it.
-- Shared content is read-only. AI use of a shared document requires sender
-  opt-in, the recipient's own document grant, and provider/model consent before
-  any external transfer.
-- Email can notify users of in-app events, but cannot deliver a private file or
-  bypass Knoprix authentication and share acceptance.
+- A recipient sees each resource-share request in Knoprix and must accept it.
+  The current resource scopes are an individual document, bookmark, or
+  highlight; project snapshots are not supported.
+- Accepted document shares provide read-only access to that document's
+  existing reader endpoints. Bookmark/highlight shares expose only the selected
+  annotation. Contact removal, blocking, owner revocation, recipient leave, or
+  source deletion removes future access.
+- Email preference fields are present, but email delivery is not configured.
+  Do not claim that email notifications are sent. Email cannot deliver private
+  files or bypass Knoprix authentication and share acceptance.
 
 ## 5. API Contract Direction
 
@@ -190,7 +193,7 @@ Required responsive checks: 390px, 425px, 768px, and 1024px.
 - **Never:** commit API keys, expose provider credentials to React, silently
   upload documents, delete user data, or present unverified AI output as fact.
 
-## 9. Product decisions recorded 2026-10-04
+## 9. Product decisions recorded 2026-10-04 and 2026-10-12
 
 - Mode names: **Reading Desk** (document-first) and **AI Wing** (AI-first).
   Names are approved; their visual layouts and interactions are not.
@@ -200,12 +203,16 @@ Required responsive checks: 390px, 425px, 768px, and 1024px.
 - Provider keys: browser-local only; do not send them to or store them in the
   backend.
 - Sharing: mutual contacts; each resource share is separately accepted and
-  appears in the recipient's Knoprix inbox. Optional email is notification
-  only. V1 shares are read-only snapshots; pending requests expire after 30
-  days, accepted shares remain until revoked/left, and removing a contact
-  cancels pending shares and revokes accepted shares. A project snapshot
-  includes current documents, bookmarks, and highlights; new items require a
-  new share.
+  appears in the recipient's Knoprix inbox. Pending requests expire after 30
+  days; accepted shares remain until revoked/left. Contact removal or blocking
+  revokes pending and accepted shares.
+- 2026-10-12: Public IDs use `KP-` plus 10 random Crockford Base32 characters;
+  database uniqueness and ID-only discovery are required. Users can control
+  lookup and incoming contact requests. Share only individual documents,
+  bookmarks, and highlights; do not implement project snapshots. Approve the
+  dedicated dark/gold Contacts page and proposed sections/entry points. Defer
+  connecting an email-delivery provider; email preference remains unavailable
+  until that service is approved and configured.
 - Shared-document AI: sender explicitly enables AI access; the recipient
   separately grants document AI access and gives provider/model consent for
   external transfer.

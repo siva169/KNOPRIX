@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from ..database import get_db
 from ..security import get_current_user, get_owned_document, get_owned_project
+from .social import revoke_resource_shares
 
 router = APIRouter(prefix="/api", tags=["highlights"])
 
@@ -73,5 +74,6 @@ def delete_highlight(highlight_id: str, user=Depends(get_current_user), db=Depen
     ).fetchone()
     if row is None:
         raise HTTPException(404, "Highlight not found")
+    revoke_resource_shares(db, user["id"], "highlight", highlight_id)
     db.execute("DELETE FROM highlights WHERE id = ?", (highlight_id,))
     return None

@@ -2,13 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Sun, Moon, BarChart3, Bookmark, LogOut, UploadCloud, Folder, TrendingUp,
-  Menu, FileText, X, MapPin, Command
+  Menu, FileText, X, MapPin, Command, UsersRound
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import api from '../api';
 
-export default function Navbar({ onUpload, onStats, onBookmarks, onOpenPalette, onToggleSidebar, mobileSidebar }) {
+export default function Navbar({ onUpload, onStats, onBookmarks, onContacts, onOpenPalette, onToggleSidebar, mobileSidebar }) {
   const { activeProject, theme, toggleTheme, notify, openDocument } = useApp();
   const { user, logout } = useAuth();
   const [query, setQuery] = useState('');
@@ -239,6 +239,14 @@ export default function Navbar({ onUpload, onStats, onBookmarks, onOpenPalette, 
           className="p-1.5 sm:p-2 rounded-lg bg-white/5 border border-glass-borderDark text-ivory/70 hover:text-secondary hover:bg-white/10 transition"
         >
           <Bookmark className="w-4 h-4" />
+        </button>
+        <button
+          onClick={onContacts}
+          title="Contacts and sharing"
+          aria-label="Contacts and sharing"
+          className="p-1.5 sm:p-2 rounded-lg bg-white/5 border border-glass-borderDark text-ivory/70 hover:text-secondary hover:bg-white/10 transition"
+        >
+          <UsersRound className="w-4 h-4" />
         </button>
         <button
           onClick={toggleTheme}

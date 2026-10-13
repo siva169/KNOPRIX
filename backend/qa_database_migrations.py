@@ -23,6 +23,7 @@ class DatabaseMigrationTests(unittest.TestCase):
     def connect(self):
         conn = sqlite3.connect(self.database_path)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
     def test_fresh_database_records_version_and_startup_is_idempotent(self):
@@ -46,6 +47,7 @@ class DatabaseMigrationTests(unittest.TestCase):
                 (1, "baseline-schema"),
                 (2, "legacy-schema-compatibility"),
                 (3, "auth-session-and-rate-limit-state"),
+                (4, "contacts-sharing-and-annotation-links"),
             ],
         )
         self.assertTrue({
@@ -56,7 +58,22 @@ class DatabaseMigrationTests(unittest.TestCase):
             "auth_sessions",
             "auth_refresh_tokens",
             "auth_rate_limits",
+            "contacts",
+            "contact_requests",
+            "user_blocks",
+            "shares",
+            "inbox_items",
+            "bookmark_highlight_links",
         } <= tables)
+        with closing(self.connect()) as conn:
+            self.assertTrue(
+                {
+                    "knoprix_id",
+                    "allow_id_lookup",
+                    "allow_contact_requests",
+                    "email_notifications_enabled",
+                }.issubset(database._table_columns(conn, "users"))
+            )
 
     def test_legacy_upgrade_preserves_records_and_cleans_old_filename_once(self):
         conn = self.connect()
@@ -187,6 +204,56 @@ class DatabaseMigrationTests(unittest.TestCase):
                     "SELECT COUNT(*) FROM schema_migrations WHERE version = 2"
                 ).fetchone()[0],
                 1,
+            )
+            migrated_user = upgraded.execute(
+                "SELECT knoprix_id, allow_id_lookup, allow_contact_requests, "
+                "email_notifications_enabled FROM users WHERE id = ?",
+                ("user-1",),
+            ).fetchone()
+            self.assertRegex(migrated_user["knoprix_id"], r"^KP-[0-9A-HJKMNP-TV-Z]{10}$")
+            self.assertEqual(
+                tuple(migrated_user[1:]),
+                (1, 1, 0),
+            )
+            with self.assertRaises(sqlite3.IntegrityError):
+                upgraded.execute(
+                    """INSERT INTO users
+                       (id, email, password_hash, full_name, knoprix_id)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        "user-2",
+                        "second@example.com",
+                        "hash-2",
+                        "Reader Two",
+                        migrated_user["knoprix_id"],
+                    ),
+                )
+            with self.assertRaises(sqlite3.IntegrityError):
+                upgraded.execute(
+                    "UPDATE users SET knoprix_id = NULL WHERE id = ?", ("user-1",)
+                )
+            upgraded.execute(
+                """
+                INSERT INTO bookmark_highlight_links
+                    (bookmark_id, highlight_id, user_id, document_id, page_number)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                ("bookmark-1", "highlight-1", "user-1", "document-1", 1),
+            )
+            upgraded.execute(
+                "DELETE FROM highlights WHERE id = ?", ("highlight-1",)
+            )
+            self.assertEqual(
+                upgraded.execute(
+                    "SELECT COUNT(*) FROM bookmarks WHERE id = ?", ("bookmark-1",)
+                ).fetchone()[0],
+                1,
+            )
+            self.assertEqual(
+                upgraded.execute(
+                    "SELECT COUNT(*) FROM bookmark_highlight_links"
+                ).fetchone()[0],
+                0,
             )
 
     def test_failed_migration_rolls_back_changes_and_is_not_recorded(self):

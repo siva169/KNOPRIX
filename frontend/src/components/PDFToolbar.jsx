@@ -22,7 +22,7 @@ export default function PDFToolbar({
   eraseMode = false, setEraseMode, highlightCount = 0, onOpenChat,
   focusMode = false, onToggleFocusMode, browseMode, setBrowseMode,
   annotationTool, setAnnotationTool, thumbnailsOpen, onToggleThumbnails,
-  matchAllMode = false, setMatchAllMode,
+  matchAllMode = false, setMatchAllMode, readOnly = false,
 }) {
   const { currentPage, setCurrentPage, zoomLevel, setZoomLevel, activeDocument } = useApp();
   const [annotationMenuOpen, setAnnotationMenuOpen] = React.useState(false);
@@ -100,7 +100,7 @@ export default function PDFToolbar({
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-        <button
+        {!readOnly && <button
           onClick={() => setBrowseMode(!browseMode)}
           className={`p-1.5 rounded-xl border transition flex items-center gap-1.5 font-semibold ${
             browseMode
@@ -112,8 +112,8 @@ export default function PDFToolbar({
         >
           {browseMode ? <MousePointer2 className="w-3.5 h-3.5" /> : <ScanText className="w-3.5 h-3.5" />}
           <span className="hidden xl:inline text-[10px]">{browseMode ? 'Browse' : 'Text Selection'}</span>
-        </button>
-        <div className="relative">
+        </button>}
+        {!readOnly && <div className="relative">
           <button
             onClick={() => setAnnotationMenuOpen((open) => !open)}
             className="p-1.5 rounded-xl bg-midnight-panel hover:bg-white/10 text-ivory/80 border border-glass-borderDark transition flex items-center gap-1.5 font-semibold"
@@ -180,8 +180,8 @@ export default function PDFToolbar({
               </div>
             </div>
           )}
-        </div>
-        <button
+        </div>}
+        {!readOnly && <button
           onClick={onBookmarkPage}
           title={currentPageSaved ? 'This page is bookmarked — click to remove it' : 'Bookmark this page'}
           className={`p-1.5 rounded-xl border transition flex items-center gap-1.5 font-semibold ${
@@ -192,8 +192,8 @@ export default function PDFToolbar({
         >
           {currentPageSaved ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
           <span className="hidden md:inline text-[10px]">{currentPageSaved ? 'Saved' : 'Bookmark page'}</span>
-        </button>
-        {setEraseMode && highlightCount > 0 && (
+        </button>}
+        {!readOnly && setEraseMode && highlightCount > 0 && (
           <button
             onClick={() => setEraseMode(!eraseMode)}
             title={eraseMode ? 'Click a highlight to remove it (eraser ON)' : 'Toggle eraser to remove highlights'}

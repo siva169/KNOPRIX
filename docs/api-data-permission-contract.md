@@ -1,6 +1,7 @@
 # Knoprix API, Data, and Permission Contract
 
-**Status:** Approved target contract; implementation has not started.
+**Status:** Target contract with a first contacts/sharing slice implemented;
+remaining deviations are listed below.
 **Date:** 2026-10-04
 **Scope:** New extraction, AI, mind-map, contacts, sharing, inbox, and
 notification APIs. This document specifies behavior, not UI layout.
@@ -94,6 +95,51 @@ notification APIs. This document specifies behavior, not UI layout.
   pending contact/share relationships. For multipart upload, the request hash
   covers file bytes and normalized metadata, not multipart boundaries.
 
+### Implemented contacts/sharing slice (2026-10-12)
+
+The current implementation is narrower than the full target contract above.
+It exposes authenticated, unwrapped FastAPI JSON responses under `/api/v1`:
+
+- `GET /profile`, `PATCH /profile/privacy`
+- `GET /contacts/lookup/{knoprixId}`, `GET /contacts`,
+  `GET /contact-requests/sent`, `POST /contact-requests`,
+  `POST /contact-requests/{id}/accept|decline`,
+  `DELETE /contact-requests/{id}`, `GET /inbox`
+- `GET /blocks`, `POST /blocks`, `DELETE /blocks/{knoprixId}`,
+  `DELETE /contacts/{knoprixId}`
+- `POST /shares`, `GET /shares/sent`, `GET /shares/received`,
+  `POST /shares/{id}/accept|decline|leave`, `DELETE /shares/{id}`,
+  `GET /shared-resources/{shareId}`
+- `PUT /bookmarks/{bookmarkId}/highlight`,
+  `DELETE /bookmarks/{bookmarkId}/highlight`
+
+Public identity and contact discovery use Knoprix IDs only; IDs have the
+`KP-` + 10-character Crockford Base32 form. Email is not a lookup key.
+Lookup is opt-in by privacy setting and rate-limited. Contact and share
+requests are in-app only, per-recipient, expire after 30 days while pending,
+and require recipient acceptance. Accepted shares last until revocation,
+contact removal/block, recipient leave, or source deletion. Supported scopes
+are one document, bookmark, or highlight; project snapshots are not supported.
+Only accepted document shares unlock the existing document GET, slides, pages,
+and stream routes. Those reads remain owner-owned; writes stay owner-only.
+Bookmark/highlight shares are exposed only through their accepted
+`/shared-resources/{shareId}` response. That response uses an allowlist and
+omits internal user/project identifiers. For document shares, it returns
+reader metadata only; the reader fetches content from the owner/share-checked
+`GET /documents/{documentId}` route, whose shared response omits storage paths
+and project identifiers while preserving the document text needed by the
+read-only viewer.
+
+Email notification preferences are stored, but no delivery provider/outbox
+is connected; the profile response explicitly reports email notifications as
+unavailable. In-app request lists remain authoritative.
+
+Not yet implemented from the target contract: response envelopes, strict
+unknown-field rejection, cursor pagination, idempotency-key replay, durable
+email delivery, sender/recipient auditing UI beyond request/share status, and
+shared-resource integration with AI routes. Do not infer that these are
+available from the broader target sections below.
+
 ## 2. Data model and relationships
 
 Use relational rows for ownership, permissions, state transitions, and
@@ -102,7 +148,7 @@ metadata or bounded parser-specific details, not relationship lists.
 
 | Entity | Relationship and required behavior |
 |---|---|
-| `users` | Existing account identity. A verified email or public Knoprix ID may identify a contact target. |
+| `users` | Existing account identity plus unique public Knoprix ID and privacy/notification preferences. Contact discovery uses Knoprix ID only. |
 | `projects` | Owned by one user; has many documents. |
 | `documents` | Belongs to one project; owner is derived through that project. Deletion removes live source and derived content. |
 | `extraction_jobs` | Belongs to the initiating user and document; tracks one extraction attempt and optional `retryOfJobId`. Terminal job metadata expires 30 days after completion. |
@@ -114,8 +160,8 @@ metadata or bounded parser-specific details, not relationship lists.
 | `mind_map_pins` | User/project/normalized concept unique tuple. Nodes and edges are derived from current document blocks and are not treated as factual relationships beyond their labeled evidence. |
 | `contact_requests` | Directed requester-to-recipient request with one pending request per canonical pair. Status is `pending`, `accepted`, `declined`, `canceled`, or `expired`. Accepted requests create a mutual contact relationship. |
 | `contacts` | One canonical unordered user pair; both users see the relationship. |
-| `shares` | One sender-to-recipient request per recipient, even for a multi-recipient send. Status is `pending`, `accepted`, `declined`, `revoked`, `expired`, or `left`; each has its own acceptance. |
-| `share_resources` | Normalized child rows listing exact resources captured by a share; a project snapshot records its included project, documents, bookmarks, and highlights at creation time. |
+| `shares` | One sender-to-recipient request per exact document, bookmark, or highlight. Status is `pending`, `accepted`, `declined`, `revoked`, `expired`, or `left`; each recipient accepts independently. No project/folder snapshot shares. |
+| `bookmark_highlight_links` | Optional same-owner, same-document, same-page association; deleting either annotation clears only the link and leaves the other annotation intact. |
 | `inbox_items` | Per-recipient in-app events for contact/share requests and state changes. Hiding an inbox item does not change the underlying request or share. |
 | `notification_preferences` | Per-user opt-in settings for email notices. In-app events are always available; email never carries a file or document content. |
 | `idempotency_records` | Unique key per user/method/route, request hash, response status/body, and expiry. |
@@ -137,18 +183,15 @@ this document-only task.
 ## 3. Authorization invariants
 
 1. Every request is authenticated, then checks that the caller owns the
-   resource or has an active, accepted, unexpired share covering that exact
-   resource. Contact status alone never grants resource access.
+   resource or has an active, accepted share covering that exact document.
+   Contact status alone never grants resource access.
 2. A pending share grants no content access. A recipient gains access only
    after accepting that recipient's own share request.
 3. Shared resources are read-only. Recipients cannot change or delete the
    sender's source, bookmarks, or highlights. Sharing a bookmark or highlight
-   alone exposes only that annotation and its excerpt, not the full document.
-4. A project share is a read-only snapshot taken when the sender creates the
-   request. It includes that project's then-current documents, bookmarks, and
-   highlights. Later additions/changes are not included automatically.
-   Project/document listing endpoints must filter to the exact snapshot
-   resources; a shared project ID must never expose later or unshared items.
+   alone exposes only that annotation; it does not grant access to its source
+   document or project.
+4. Project/folder snapshots are not a supported share scope.
 5. AI retrieval requires the caller's active per-document AI grant. For a
    shared document, the sender must also have explicitly enabled AI access in
    that share. If document content will be sent to an external provider, the
@@ -157,8 +200,8 @@ this document-only task.
 6. The provider key stays in browser-local storage and is sent directly to
    the provider. It must never be accepted, returned, proxied, logged, or
    stored by Knoprix.
-7. Removing a mutual contact revokes pending and accepted shares between
-   those users.
+7. Removing or blocking a mutual contact revokes pending and accepted shares
+   between those users.
    Independently, the sender may revoke an accepted share and its recipient
    may leave it. Any of these actions immediately removes access and revokes
    share-scoped AI permission.
@@ -513,6 +556,11 @@ proposal requires a separate retention and privacy decision.
 
 ## 8. Contacts, resource shares, inbox, and notifications
 
+> **Target design only:** This section describes the broader planned v1
+> contract, not the currently shipped API. The implemented subset documented
+> above is authoritative. In particular, email-based discovery, project
+> snapshots, and email delivery are not supported.
+
 ### Contacts
 
 - `POST /api/v1/contact-requests` requires `Idempotency-Key` and accepts
@@ -654,11 +702,12 @@ Contract tests must cover these behaviors before claiming implementation:
 
 ## 10. Legacy compatibility and implementation boundary
 
-The current routes such as `/api/projects`, `/api/documents/...`,
-`/api/chat/ask`, and `/api/providers/allowlist` remain unchanged until a
-separate implementation/migration task. In particular, current document
-content routes are owner-scoped but do not yet implement accepted-share or
-AI-grant checks; current upload is synchronous; and current chat is mocked.
-Do not advertise the v1 behaviors as available until backend authorization,
-database migrations, frontend wiring, and the cases above are implemented
-and verified.
+Existing routes such as `/api/projects`, `/api/documents/...`,
+`/api/chat/ask`, and `/api/providers/allowlist` remain available. The current
+document GET, slides, pages, and stream routes permit read-only access to an
+accepted, active document share; document mutations remain owner-only. See
+the implemented-slice section above for the exact contact/share routes and
+known limits. Upload remains synchronous and chat remains the existing
+mocked/owner-workspace feature; the broader v1 contracts above are design
+references, not shipped endpoints. Do not infer AI access, email delivery,
+project snapshots, or the additional v1 behaviors from this document.

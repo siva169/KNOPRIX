@@ -131,6 +131,13 @@ sharing policy is in `PRD.md`. No application code changed.
 `tasks/todo.md`, `changes.md`
 **Estimated scope:** Medium
 
+**Additional sharing decisions (boss-approved 2026-10-12):** Knoprix-ID-only
+discovery; `KP-` plus 10 Crockford Base32 characters; lookup enabled by
+default with privacy controls; individual document/bookmark/highlight sharing
+only (no project snapshots); blocking and contact removal revoke pending and
+accepted shares; dedicated Contacts page in the existing dark/gold style.
+Email provider setup is deferred.
+
 ### [x] 0.2 Define API, data, and permission contracts
 
 **Priority:** P0
@@ -153,13 +160,14 @@ relationships before any schema or UI work.
 **Decision record (boss-approved 2026-10-04):**
 - API: new routes use `/api/v1`; existing `/api/...` routes stay unchanged.
 - Conversation history: browser-local only; no server sync in v1.
-- Shares: read-only; project shares are snapshots; pending requests expire
-  after 30 days; accepted access lasts until sender revocation or recipient
-  leaves.
+- Shares (revised 2026-10-12): read-only, individual documents/bookmarks/
+  highlights only; no project snapshots. Pending requests expire after 30
+  days; accepted access lasts until sender revocation, recipient leave,
+  contact removal/block, or source deletion.
 - Removing a mutual contact cancels pending shares and revokes accepted
   shares; terminal extraction job metadata expires 30 days after completion.
-- AI on shared documents: sender must explicitly enable it; recipient still
-  needs their own AI grant and provider/model consent.
+- Shared-resource AI access is not implemented by this slice and is not
+  implied by an accepted share or contact relationship.
 - Provider keys remain browser-local and are never part of API payloads.
 **Verification:** `docs/api-data-permission-contract.md` defines request and
 response shapes, relationships, authorization, error, retry, pagination,
@@ -735,15 +743,20 @@ IDs, deletion on either side, and collection-order regression.
 ### [ ] 7.1 Define stable public Knoprix IDs and contact discovery
 
 **Priority:** P1
-**Description:** Let users discover contacts by verified email or a separate
-random public Knoprix ID; never expose internal database identifiers as the
-public identity.
+**Description:** Let users discover contacts only by their non-sequential
+public Knoprix ID; never expose internal database identifiers or use email as
+the discovery mechanism.
+
+**Implementation status (2026-10-12):** Migration 4 backfills IDs and applies
+database uniqueness/non-empty constraints; registration/Firebase creation,
+lookup privacy, lookup throttling, the profile settings endpoint, and the
+Contacts page are wired. Final browser and PostgreSQL verification remains.
 
 **Acceptance criteria**
 - [ ] Public IDs are unique, non-sequential, rate-limited for lookup, and
   distinct from internal primary keys.
-- [ ] Privacy settings control discoverability; email lookup does not reveal
-  whether an account exists to unauthorized callers.
+- [ ] Privacy settings control discoverability; email is not a lookup path and
+  hidden IDs return the same not-found response.
 - [ ] Users can copy/share their ID and change/revoke discoverability safely.
 
 **Verification:** Collision, enumeration, rate-limit, normalization, and
@@ -758,6 +771,11 @@ privacy tests.
 **Priority:** P1
 **Description:** A share attempt to a non-contact must clearly explain that a
 contact is not established and offer a request workflow.
+
+**Implementation status (2026-10-12):** In-app send/receive/accept/decline/
+cancel/block/unblock/remove endpoints and basic Contacts-page controls are
+implemented and covered by focused two-account-style route tests. Browser
+acceptance and abuse-load/concurrency verification remain.
 
 **Acceptance criteria**
 - [ ] Contact states cover pending, accepted, declined, blocked, and removed;
@@ -778,17 +796,28 @@ duplicate, block, and no-implicit-resource-access.
 ### [ ] 7.3 Implement per-resource share requests and recipient inbox
 
 **Priority:** P1
-**Description:** Share documents, project folders, bookmarks, and optionally
-selected evidence into the recipient's Knoprix inbox. Contact status and
-resource authorization stay separate.
+**Description:** Share individual documents, bookmarks, and highlights into
+the recipient's Knoprix inbox. Project snapshots are excluded. Contact status
+and resource authorization stay separate.
+
+**Implementation status (2026-10-12):** Migration 4, recipient-level share
+states, acceptance/decline/leave/revoke, read-only document retrieval and
+stream authorization, annotation-only retrieval, owner-only writes, deletion
+revocation, and UI workflows are implemented. PostgreSQL runtime, browser
+flows, and broader authorization-route coverage remain unverified.
+
+**Security correction (2026-10-13):** Shared-resource responses now use
+resource-specific field allowlists and omit internal owner/project IDs.
+Shared-document content is loaded through the owner/share-authorized document
+read endpoint; its shared response omits storage paths and project IDs.
 
 **Acceptance criteria**
 - [ ] Share records identify sender, recipient, resource, allowed actions,
   creation/expiry, recipient decision, and revocation status.
 - [ ] Recipients see an in-app pending-share notification and must accept
   before the API grants read access.
-- [ ] Every list/read/download route enforces active accepted share permission;
-  project-folder shares do not become public links.
+- [ ] Every supported document read/stream route enforces active accepted
+  share permission; project/folder shares are not supported.
 - [ ] Sender can revoke; recipient loses access immediately; deleted resources
   resolve safely; multi-recipient sharing tracks each recipient independently.
 - [ ] Sharing bookmarks preserves source ownership/attribution and only exposes
@@ -806,6 +835,10 @@ expired, revoked, deleted resource, multiple recipients, and IDOR attempts.
 **Priority:** P2
 **Description:** Notify users of contact/share requests by email only as an
 optional channel; the authoritative request and content stay inside Knoprix.
+
+**Implementation status (2026-10-12):** The user preference column and
+unavailable-state UI exist, but provider/outbox/delivery work is intentionally
+deferred; no email is sent.
 
 **Acceptance criteria**
 - [ ] Notification email contains minimal information and a safe Knoprix link;

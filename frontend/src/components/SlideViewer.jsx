@@ -360,7 +360,7 @@ function SlidePage({ slide, pageNum, designW, designH, zoom, saved, onBookmarkPa
               <span className="text-[9px] font-bold text-secondary">{pageHighlights.length} highlight{pageHighlights.length > 1 ? 's' : ''}</span>
             </div>
           )}
-          <div className="absolute top-2 left-3 z-10">
+          {onBookmarkPage && <div className="absolute top-2 left-3 z-10">
             <button
               onClick={() => onBookmarkPage(pageNum)}
               title={saved ? `Slide ${pageNum} bookmarked — click to remove it` : `Bookmark slide ${pageNum}`}
@@ -373,7 +373,7 @@ function SlidePage({ slide, pageNum, designW, designH, zoom, saved, onBookmarkPa
               {saved ? <BookmarkCheck className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
               {saved ? 'Saved' : 'Bookmark'}
             </button>
-          </div>
+          </div>}
         </div>
       </div>
     </motion.div>

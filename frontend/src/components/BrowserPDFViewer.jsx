@@ -75,6 +75,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     highlightSnippet, notify, activeProject, fetchBookmarks,
     getReadingProgress, saveReadingProgress, locationRequest,
   } = useApp();
+  const readOnly = Boolean(activeDocument?.readOnly);
 
   const [numPages, setNumPages] = useState(0);
   const [pdfDoc, setPdfDoc] = useState(null);
@@ -149,6 +150,10 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   // ── Track which pages of this document are bookmarked ─────────────────────
   const refreshSavedPages = useCallback(async () => {
     if (!activeProject || !activeDocument) return;
+    if (activeDocument.readOnly) {
+      setSavedPages(new Set());
+      return;
+    }
     try {
       const { data } = await api.get(`/projects/${activeProject.id}/bookmarks`);
       const pages = new Set(
@@ -170,6 +175,10 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   // ── Saved highlight markers for this document (separate from bookmarks) ──
   const refreshHighlights = useCallback(async () => {
     if (!activeDocument) {
+      setHighlights([]);
+      return;
+    }
+    if (activeDocument.readOnly) {
       setHighlights([]);
       return;
     }
@@ -387,7 +396,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
 
   // ── Per-page bookmarking ──────────────────────────────────────────────────
   const bookmarkPage = async (pageNum) => {
-    if (!activeProject || !activeDocument) return;
+    if (readOnly || !activeProject || !activeDocument) return;
     const existing = savedPages.has(pageNum);
     try {
       if (existing) {
@@ -418,6 +427,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   };
 
   const renderPageBookmarkButton = (pageNum) => {
+    if (readOnly) return null;
     const saved = savedPages.has(pageNum);
     return (
       <button
@@ -438,7 +448,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
 
   // ── Selection → action popover ─────────────────────────────────────────────
   const handleMouseUp = (e) => {
-    if (browseMode) return;
+    if (readOnly || browseMode) return;
     if (e?.target?.closest?.('button, a, input, textarea, select, [role="button"]')) return;
     // Clicking an existing highlight marker opens the remove menu instead of
     // the selection popover.
@@ -487,7 +497,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   };
 
   const saveBookmark = (sel) => {
-    if (!activeProject || !activeDocument) return;
+    if (readOnly || !activeProject || !activeDocument) return;
     setBookmarkDraft({
       id: ++bookmarkDraftSequence.current,
       pageNumber: sel.page || currentPage,
@@ -499,7 +509,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   };
 
   const saveBookmarkDraft = async (name) => {
-    if (!activeProject || !activeDocument || !bookmarkDraft) return false;
+    if (readOnly || !activeProject || !activeDocument || !bookmarkDraft) return false;
     setBookmarkSaving(true);
     try {
       await api.post('/bookmarks', {
@@ -568,7 +578,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
 
   // ── Highlight save / remove ────────────────────────────────────────────────
   const saveHighlight = async (sel, color) => {
-    if (!activeProject || !activeDocument) return;
+    if (readOnly || !activeProject || !activeDocument) return;
     // Collapse newlines / repeated spaces to a single space so selections
     // that span a line break still match when the mark is rendered.
     const text = sel.text.replace(/\s+/g, ' ').trim();
@@ -605,6 +615,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   };
 
   const removeHighlight = async (id) => {
+    if (readOnly) return;
     const removed = highlights.find((h) => h.id === id);
     if (!removed) return;
     try {
@@ -638,6 +649,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   // Clicking a highlighted <mark>: open a small remove menu, or erase right
   // away when the eraser toggle is on.
   const handleMarkClick = (e) => {
+    if (readOnly) return;
     const mark = e.target.closest?.('mark[data-hlid]');
     if (!mark) {
       setMarkMenu(null);
@@ -933,7 +945,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       documentId={activeDocument.id}
       onSlidesLoaded={setNumPages}
       savedPages={savedPages}
-      onBookmarkPage={bookmarkPage}
+      onBookmarkPage={readOnly ? undefined : bookmarkPage}
       onMouseUp={handleMouseUp}
       onMarkClick={handleMarkClick}
       viewMode={viewMode}
@@ -1034,20 +1046,26 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         onToggleThumbnails={() => setThumbnailsOpen((open) => !open)}
         matchAllMode={matchAllMode}
         setMatchAllMode={setMatchAllMode}
+        readOnly={readOnly}
         currentPageSaved={savedPages.has(currentPage)}
         onBookmarkPage={() => bookmarkPage(currentPage)}
         eraseMode={eraseMode}
         setEraseMode={setEraseMode}
         highlightCount={highlights.length}
-        onOpenChat={onOpenChat}
+        onOpenChat={readOnly ? undefined : onOpenChat}
         focusMode={focusMode}
         onToggleFocusMode={onToggleFocusMode}
       />
+      {readOnly && (
+        <div role="status" className="border-b border-secondary/20 bg-secondary/5 px-3 py-2 text-center text-xs text-secondary">
+          Read-only shared resource — changes to the owner’s original are disabled.
+        </div>
+      )}
       {isPdf ? renderPDFViewer() : isSlideshow ? renderSlidesViewer() : renderTextViewer()}
 
       {/* Selection → action popover (shared across PDF / text / slides) */}
       <AnimatePresence>
-        {selection && (
+        {selection && !readOnly && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -1132,7 +1150,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
 
       {/* Clicked highlight → remove menu */}
       <AnimatePresence>
-        {markMenu && (
+        {markMenu && !readOnly && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -1170,7 +1188,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       </AnimatePresence>
 
       <AnimatePresence>
-        {bookmarkDraft && (
+        {bookmarkDraft && !readOnly && (
           <BookmarkNameDialog
             key={bookmarkDraft.id}
             draft={bookmarkDraft}
