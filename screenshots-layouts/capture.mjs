@@ -130,7 +130,7 @@ const blockedExternalRequests = [];
 const unmappedApiRequests = [];
 const pageErrors = [];
 const captures = [];
-const projectReadProbe = { enabled: false, requests: [] };
+const projectReadProbe = { enabled: false, failBookmarksNext: false, requests: [] };
 const bookmarkDeleteProbe = { failNext: false, lastStartedAt: null };
 const shareRefreshProbe = { enabled: false, requests: [] };
 const shareCreateProbe = { failNext: false, startedAt: null };
@@ -313,6 +313,10 @@ const apiRoute = async (route) => {
     if (projectReadProbe.enabled && id === projectId && !query) {
       projectReadProbe.requests.push({ path: 'bookmarks', startedAt: Date.now() });
       await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+    if (projectReadProbe.failBookmarksNext && id === projectId && !query) {
+      projectReadProbe.failBookmarksNext = false;
+      return ok(route, { detail: 'Synthetic bookmark load failure' }, 503);
     }
     const list = id === projectId ? bookmarkList : [];
     return ok(route, {
@@ -704,6 +708,7 @@ try {
   await page.getByRole('heading', { name: 'Enter quietly.' }).waitFor();
   if (process.env.PERF_REGRESSION_ONLY === 'true') {
     projectReadProbe.enabled = true;
+    projectReadProbe.failBookmarksNext = true;
     await page.getByLabel('Email address').fill(previewEmail);
     await page.getByLabel('Password', { exact: true }).fill('synthetic-preview-password');
     await page.getByRole('button', { name: /sign in/i }).click();
@@ -722,9 +727,12 @@ try {
       projectReadStartGap < 80,
       `project document and bookmark reads should overlap; observed a ${projectReadStartGap}ms start gap`,
     );
-
+    await page.getByText('Could not fully load project data', { exact: true }).waitFor();
+    await page.getByText('Research Brief.txt').first().waitFor();
+    await page.getByRole('button', { name: /Research Library/ }).first().click();
     await page.getByTitle('Bookmark collection').click();
     await page.getByText('Bookmark Collection').waitFor();
+    await page.getByRole('button', { name: /Open bookmark: Reading workflow/i }).waitFor();
     await page.getByRole('button', { name: /Open bookmark: Reading workflow/i }).click();
     await page.getByText('Patterns across sources', { exact: true }).waitFor();
     await page.locator('[data-page="2"]').waitFor();

@@ -93,7 +93,7 @@ export default function App() {
     const best = [...projects].sort((a, b) => (b.file_count || 0) - (a.file_count || 0))[0];
     setDocumentsLoading(true);
     selectProject(best.id)
-      .catch(() => notify('Could not load documents', 'error'))
+      .catch(() => notify('Could not fully load project data', 'error'))
       .finally(() => setDocumentsLoading(false));
   }, [user, projects, activeProject, selectProject, notify]);
 

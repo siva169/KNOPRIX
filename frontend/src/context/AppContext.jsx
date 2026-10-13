@@ -64,13 +64,19 @@ export function AppProvider({ children }) {
     setLocationRequest(null);
     setDocuments([]);
     setBookmarks([]);
-    const [documentsResponse, bookmarksResponse] = await Promise.all([
+    const [documentsResult, bookmarksResult] = await Promise.allSettled([
       api.get(`/projects/${projectId}/documents`),
       api.get(`/projects/${projectId}/bookmarks`),
     ]);
     if (requestSequence !== projectRequestSequence.current) return;
-    setDocuments(documentsResponse.data.documents);
-    setBookmarks(bookmarksResponse.data.bookmarks);
+    if (documentsResult.status === 'fulfilled') {
+      setDocuments(documentsResult.value.data.documents);
+    }
+    if (bookmarksResult.status === 'fulfilled') {
+      setBookmarks(bookmarksResult.value.data.bookmarks);
+    }
+    if (documentsResult.status === 'rejected') throw documentsResult.reason;
+    if (bookmarksResult.status === 'rejected') throw bookmarksResult.reason;
   }, [projects]);
 
   const fetchDocuments = useCallback(async (projectId) => {

@@ -1,5 +1,22 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-13 — Preserve project data when one parallel read fails
+
+- A review found that `selectProject` used `Promise.all` for documents and
+  bookmarks, so either request failing discarded both successful and failed
+  results. It now keeps each successful response independently, ignores stale
+  project selections as before, and still rejects with the failed request so
+  the existing error notification is shown.
+- Added a browser regression that makes the bookmarks endpoint fail during
+  project selection, verifies documents still load and the error is visible,
+  then retries selection and opens a bookmark. The regression failed before
+  the fix when the document list remained empty.
+- Verification: focused mocked-browser regressions pass, including parallel
+  project reads, bookmark deletion failure/retry, share failure/retry, and
+  partial project-load recovery. Login motion/reduced-motion and 390/425/768/
+  1024px overflow checks pass; `npm run build` passes with the existing
+  >500 kB chunk warning. Backend sharing/bookmark tests pass (15 tests).
+
 ## 2026-10-13 — Batch document-share eligibility checks
 
 - Replaced per-recipient user, block, and contact reads in share creation with
