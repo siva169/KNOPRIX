@@ -6,23 +6,31 @@ import BlackMirror from '../BlackMirror.jsx';
 import BrandWordmark from './BrandWordmark.jsx';
 
 export default function LoginPage({ onSwitch }) {
-  const { login, authError } = useAuth();
+  const { login, authError, sendVerificationEmail, retryAccountLink } = useAuth();
   const prefersReducedMotion = useReducedMotion();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [verificationRequired, setVerificationRequired] = useState(false);
+  const [verificationBusy, setVerificationBusy] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState('');
 
   const submit = async (e) => {
     e.preventDefault();
     setError('');
+    setVerificationRequired(false);
+    setVerificationMessage('');
     setBusy(true);
     try {
       await login(email.trim(), password);
     } catch (err) {
       const data = err.response?.data;
-      if (err.message?.startsWith('Firebase is not configured')) {
+      if (data?.detail === 'Verify your email before linking this existing Knoprix account') {
+        setVerificationRequired(true);
+        setError('This Firebase email is not verified yet. Verify it to link your existing Knoprix account.');
+      } else if (err.message?.startsWith('Firebase is not configured')) {
         setError(err.message);
       } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
         setError('Email or password is incorrect.');
@@ -42,6 +50,53 @@ export default function LoginPage({ onSwitch }) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const requestVerification = async () => {
+    setVerificationBusy(true);
+    setVerificationMessage('');
+    setError('');
+    try {
+      await sendVerificationEmail();
+      setVerificationMessage('Verification email sent. Check your inbox and spam folder.');
+    } catch (err) {
+      if (err.code === 'auth/too-many-requests') {
+        setError('Firebase is temporarily limiting verification emails. Wait a few minutes before trying again.');
+      } else if (err.code === 'auth/network-request-failed') {
+        setError("Can't reach Firebase Authentication. Check your internet connection and try again.");
+      } else {
+        setError(err.code?.startsWith('auth/')
+          ? `Firebase couldn't send the verification email (${err.code}).`
+          : err.message || 'Could not send the verification email.');
+      }
+    } finally {
+      setVerificationBusy(false);
+    }
+  };
+
+  const confirmVerification = async () => {
+    setVerificationBusy(true);
+    setVerificationMessage('');
+    setError('');
+    try {
+      await retryAccountLink();
+      setVerificationMessage('Email verified. Your Knoprix account is connected.');
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      if (detail === 'Verify your email before linking this existing Knoprix account') {
+        setError('Firebase still reports this email as unverified. Open the verification link, then try again.');
+      } else {
+        setError(detail || err.message || 'Could not connect your Knoprix account.');
+      }
+    } finally {
+      setVerificationBusy(false);
+    }
+  };
+
+  const clearVerificationState = () => {
+    setError('');
+    setVerificationRequired(false);
+    setVerificationMessage('');
   };
 
   return (
@@ -91,7 +146,10 @@ export default function LoginPage({ onSwitch }) {
                 autoComplete="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  clearVerificationState();
+                }}
                 placeholder="you@company.com"
                 className="h-14 w-full rounded-lg border border-[#d7b579]/65 bg-white/[0.075] px-4 text-base text-[#f4efe6] placeholder:text-[#dfd8ce]/40 focus:border-[#f2d49b] focus:outline-none focus:ring-2 focus:ring-[#e3bc77]/15"
               />
@@ -108,7 +166,10 @@ export default function LoginPage({ onSwitch }) {
                   autoComplete="current-password"
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    clearVerificationState();
+                  }}
                   placeholder="••••••••"
                   className="h-14 w-full rounded-lg border border-[#d7b579]/65 bg-white/[0.075] pl-4 pr-14 text-base text-[#f4efe6] placeholder:text-[#dfd8ce]/40 focus:border-[#f2d49b] focus:outline-none focus:ring-2 focus:ring-[#e3bc77]/15"
                 />
@@ -132,6 +193,37 @@ export default function LoginPage({ onSwitch }) {
               >
                 {error || authError}
               </motion.p>
+            )}
+
+            {verificationRequired && (
+              <div className="space-y-3 rounded-lg border border-[#d7b579]/30 bg-white/[0.035] p-3">
+                <p className="text-sm text-[#e3ded6]/75">
+                  Send Firebase a verification email, open its link, then return here to finish connecting your existing account.
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={requestVerification}
+                    disabled={busy || verificationBusy}
+                    className="min-h-11 rounded-lg border border-[#d7b579]/45 px-4 text-sm font-medium text-[#f1d49a] hover:bg-white/[0.06] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {verificationBusy ? 'Please wait…' : 'Send verification email'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmVerification}
+                    disabled={busy || verificationBusy}
+                    className="min-h-11 rounded-lg px-4 text-sm text-[#e3ded6]/75 hover:bg-white/[0.04] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    I've verified my email
+                  </button>
+                </div>
+                {verificationMessage && (
+                  <p role="status" className="text-sm text-emerald-200">
+                    {verificationMessage}
+                  </p>
+                )}
+              </div>
             )}
 
             <div className="pt-1">

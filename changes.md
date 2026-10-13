@@ -1,5 +1,17 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-13 — Restore Firebase email verification for account linking
+
+- When Firebase rejects an existing Knoprix account link because the email is
+  unverified, the sign-in page now offers to send Firebase's verification
+  email and retry linking after the user opens its link.
+- Kept the backend verification requirement intact; sending failures are shown
+  in the UI instead of leaving the user with an unusable error.
+- Added a mocked Playwright regression covering the unverified block, email
+  request, verified retry, and layout at 390/425/768/1024px.
+- Verification: focused browser QA and frontend build pass. A real Firebase
+  email delivery/account sign-in still requires deployment and live account QA.
+
 ## 2026-10-13 — Refresh Firebase verification claims before session sync
 
 - Reload the Firebase user and force-refresh its ID token before creating a

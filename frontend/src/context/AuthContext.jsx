@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendEmailVerification,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
@@ -144,6 +145,23 @@ export function AuthProvider({ children }) {
     setAuthError('');
   };
 
+  const sendVerificationEmail = async () => {
+    const currentUser = requireFirebase().currentUser;
+    if (!currentUser) throw new Error('Sign in again before requesting email verification.');
+    setAuthError('');
+    await sendEmailVerification(currentUser);
+  };
+
+  const retryAccountLink = async () => {
+    const currentUser = requireFirebase().currentUser;
+    if (!currentUser) throw new Error('Sign in again after verifying your email.');
+    setAuthError('');
+    const session = await syncFirebaseUser(currentUser);
+    clearLegacyTokens();
+    setUser(session);
+    setAuthError('');
+  };
+
   const register = async (fullName, email, password) => {
     const auth = requireFirebase();
     registrationInProgress.current = true;
@@ -179,7 +197,16 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, authError, login, register, logout }}
+      value={{
+        user,
+        loading,
+        authError,
+        login,
+        register,
+        logout,
+        sendVerificationEmail,
+        retryAccountLink,
+      }}
     >
       {children}
     </AuthContext.Provider>

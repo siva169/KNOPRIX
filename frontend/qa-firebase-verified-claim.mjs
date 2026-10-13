@@ -30,6 +30,8 @@ try {
   const page = await context.newPage();
   const sessionClaims = [];
   const pageErrors = [];
+  const verificationRequests = [];
+  let isVerified = false;
   let refreshCount = 0;
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('requestfailed', (request) => {
@@ -102,6 +104,19 @@ try {
     }
 
     if (
+      url.hostname === 'identitytoolkit.googleapis.com' &&
+      url.pathname.endsWith('/accounts:sendOobCode')
+    ) {
+      verificationRequests.push(JSON.parse(route.request().postData() || '{}'));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ email: 'preview@example.invalid' }),
+      });
+      return;
+    }
+
+    if (
       url.hostname === 'securetoken.googleapis.com' &&
       url.pathname.endsWith('/token')
     ) {
@@ -110,11 +125,11 @@ try {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          access_token: verified(true),
+          access_token: verified(isVerified),
           expires_in: '3600',
           token_type: 'Bearer',
           refresh_token: 'preview-refresh-token',
-          id_token: verified(true),
+          id_token: verified(isVerified),
           user_id: 'preview-user',
           project_id: 'knoprix-a64b7',
         }),
@@ -134,7 +149,7 @@ try {
             {
               localId: 'preview-user',
               email: 'preview@example.invalid',
-              emailVerified: true,
+              emailVerified: isVerified,
               displayName: '',
               lastLoginAt: String(Date.now()),
               createdAt: String(Date.now()),
@@ -168,11 +183,39 @@ try {
     `Firebase session sync should be attempted; errors=${JSON.stringify(pageErrors)}; alerts=${JSON.stringify(await page.getByRole('alert').allTextContents())}`,
   );
   assert.ok(
-    sessionClaims.every((claim) => claim === true),
-    `session sync must use verified ID tokens; received ${JSON.stringify(sessionClaims)}`,
+    sessionClaims.every((claim) => claim === false),
+    `unverified Firebase claims must not link the Knoprix session; received ${JSON.stringify(sessionClaims)}`,
   );
   assert.ok(refreshCount > 0, 'login must force-refresh the Firebase ID token');
-  console.log('PASS: verified Firebase claims reach the Knoprix session endpoint');
+  for (const width of [390, 425, 768, 1024]) {
+    await page.setViewportSize({ width, height: 900 });
+    assert.equal(
+      await page.getByRole('button', { name: /send verification email/i }).isVisible(),
+      true,
+      `verification action should remain visible at ${width}px`,
+    );
+    assert.ok(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      `login should not overflow horizontally at ${width}px`,
+    );
+  }
+  await page.getByRole('button', { name: /send verification email/i }).click();
+  await page.getByText(/verification email sent/i).waitFor();
+  assert.equal(verificationRequests.length, 1, 'one verification email should be requested');
+  assert.equal(
+    verificationRequests[0].requestType,
+    'VERIFY_EMAIL',
+    'Firebase must receive a verify-email request',
+  );
+
+  isVerified = true;
+  await page.getByRole('button', { name: /i've verified my email/i }).click();
+  await page.getByRole('button', { name: /sign in/i }).waitFor({ state: 'hidden' });
+  assert.ok(
+    sessionClaims.some((claim) => claim === true),
+    `verified Firebase claims should link the Knoprix session; received ${JSON.stringify(sessionClaims)}`,
+  );
+  console.log('PASS: unverified account can request verification and link after verifying');
 } finally {
   await browser.close();
 }
