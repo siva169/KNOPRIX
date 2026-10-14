@@ -10,7 +10,21 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import cfg, validate_security_config
 from .database import init_db
-from .routers import auth, bookmarks, chat, documents, dsa, graph, highlights, projects, search, social, summary
+from .routers import (
+    account,
+    artifacts,
+    auth,
+    bookmarks,
+    chat,
+    documents,
+    dsa,
+    graph,
+    highlights,
+    projects,
+    search,
+    social,
+    summary,
+)
 from .seed import seed
 
 
@@ -50,6 +64,8 @@ app.include_router(dsa.router)
 app.include_router(bookmarks.router)
 app.include_router(highlights.router)
 app.include_router(social.router)
+app.include_router(artifacts.router)
+app.include_router(account.router)
 
 
 @app.get("/api/health")

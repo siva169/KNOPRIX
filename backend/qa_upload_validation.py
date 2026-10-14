@@ -77,6 +77,7 @@ class UploadValidationTests(unittest.TestCase):
         self.database_url_patch.start()
         self.addCleanup(self.database_url_patch.stop)
         database._create_contacts_sharing_schema(self.db)
+        database._create_production_backlog_schema(self.db)
         self.db.execute(
             "INSERT INTO users (id, email, password_hash, full_name, knoprix_id) "
             "VALUES (?, ?, ?, ?, ?)",

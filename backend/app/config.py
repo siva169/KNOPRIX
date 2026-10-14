@@ -69,6 +69,11 @@ class Config:
         )
     )
 
+    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+    TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "").strip()
+    RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+    EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@knoprix.io").strip()
+
 
 # Optional persistent Postgres (Supabase/Render Postgres). When set, the backend
 # uses Postgres instead of the local SQLite file — required on hosts whose

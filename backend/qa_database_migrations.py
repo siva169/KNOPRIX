@@ -48,6 +48,7 @@ class DatabaseMigrationTests(unittest.TestCase):
                 (2, "legacy-schema-compatibility"),
                 (3, "auth-session-and-rate-limit-state"),
                 (4, "contacts-sharing-and-annotation-links"),
+                (5, "production-backlog-foundations"),
             ],
         )
         self.assertTrue({
@@ -64,6 +65,12 @@ class DatabaseMigrationTests(unittest.TestCase):
             "shares",
             "inbox_items",
             "bookmark_highlight_links",
+            "password_reset_tokens",
+            "ai_document_grants",
+            "ingestion_jobs",
+            "document_chunks",
+            "study_artifacts",
+            "data_export_jobs",
         } <= tables)
         with closing(self.connect()) as conn:
             self.assertTrue(
@@ -72,7 +79,17 @@ class DatabaseMigrationTests(unittest.TestCase):
                     "allow_id_lookup",
                     "allow_contact_requests",
                     "email_notifications_enabled",
+                    "google_id",
+                    "avatar_url",
                 }.issubset(database._table_columns(conn, "users"))
+            )
+            self.assertTrue(
+                {
+                    "ocr_text",
+                    "ocr_status",
+                    "tables_json",
+                    "reading_order_json",
+                }.issubset(database._table_columns(conn, "documents"))
             )
 
     def test_legacy_upgrade_preserves_records_and_cleans_old_filename_once(self):

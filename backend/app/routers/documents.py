@@ -1,5 +1,6 @@
 """Document routes — upload / list / stream / get / delete (owner-scoped)."""
 import codecs
+import json
 import logging
 import os
 import re
@@ -26,6 +27,7 @@ from ..security import get_current_user, get_owned_document, get_owned_project
 from .social import has_active_document_share, revoke_resource_shares
 from ..services import storage
 from ..services.indexer import rebuild_project_indices
+from ..services.ingestion import create_ingestion_job, process_document_ingestion
 from ..services.pdf_parser import extract_document, extract_pptx_slides
 
 router = APIRouter(prefix="/api", tags=["documents"])
@@ -346,12 +348,17 @@ async def upload_document(project_id: str, file: UploadFile = File(...),
                 """
                 INSERT INTO documents (id, project_id, file_name, file_type, file_path,
                                        file_size, page_count, extracted_text,
-                                       extraction_method, is_scanned)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                       extraction_method, is_scanned, ocr_text,
+                                       ocr_status, tables_json, reading_order_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (doc_id, project_id, original, ext.lstrip("."), file_path,
                  size, parsed["page_count"], parsed["text"], parsed["method"],
-                 1 if parsed["is_scanned"] else 0),
+                 1 if parsed["is_scanned"] else 0,
+                 parsed.get("ocr_text", ""),
+                 parsed.get("ocr_status", "none"),
+                 json.dumps(parsed.get("tables", [])),
+                 json.dumps(parsed.get("reading_order", []))),
             )
             for i, page_text in enumerate(parsed["pages"], start=1):
                 db.execute(
@@ -359,7 +366,21 @@ async def upload_document(project_id: str, file: UploadFile = File(...),
                     (str(uuid.uuid4()), doc_id, i, page_text),
                 )
 
-            rebuild_project_indices(db, project_id)
+            job = create_ingestion_job(db, user["id"], doc_id)
+            process_document_ingestion(
+                db, job["id"], doc_id, project_id, parsed, index_fn=rebuild_project_indices
+            )
+
+            # Grant default AI access to owner for this document
+            existing_grant = db.execute(
+                "SELECT id FROM ai_document_grants WHERE user_id = ? AND document_id = ? AND purpose = ?",
+                (user["id"], doc_id, "all"),
+            ).fetchone()
+            if not existing_grant:
+                db.execute(
+                    "INSERT INTO ai_document_grants (id, user_id, document_id, purpose) VALUES (?, ?, ?, 'all')",
+                    (str(uuid.uuid4()), user["id"], doc_id),
+                )
 
             row = db.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
         except Exception:
@@ -372,7 +393,7 @@ async def upload_document(project_id: str, file: UploadFile = File(...),
                     )
             raise
         keep_local_file = not use_object_storage
-        return {"document": dict(row)}
+        return {"document": dict(row), "jobId": job["id"]}
     finally:
         if not keep_local_file:
             dest.unlink(missing_ok=True)
@@ -476,3 +497,118 @@ def delete_document(document_id: str, user=Depends(get_current_user), db=Depends
     db.execute("DELETE FROM documents WHERE id = ?", (document_id,))
     rebuild_project_indices(db, doc["project_id"])
     return None
+
+
+@router.get("/documents/{document_id}/status")
+def get_document_status(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
+    _get_readable_document(db, user["id"], document_id)
+    job = db.execute(
+        "SELECT * FROM ingestion_jobs WHERE document_id = ? ORDER BY created_at DESC LIMIT 1",
+        (document_id,),
+    ).fetchone()
+    if job is None:
+        return {
+            "job": {
+                "id": None,
+                "status": "ready",
+                "progress": 100,
+                "stepDetail": "Document ready",
+                "ocrStatus": "none",
+                "ocrEngine": "none",
+                "ocrConfidence": 0.0,
+                "errorMessage": "",
+            }
+        }
+    return {
+        "job": {
+            "id": job["id"],
+            "status": job["status"],
+            "progress": job["progress"],
+            "stepDetail": job["step_detail"],
+            "ocrStatus": job["ocr_status"],
+            "ocrEngine": job["ocr_engine"],
+            "ocrConfidence": job["ocr_confidence"],
+            "errorMessage": job["error_message"],
+            "createdAt": job["created_at"],
+            "updatedAt": job["updated_at"],
+        }
+    }
+
+
+@router.get("/documents/{document_id}/chunks")
+def get_document_chunks(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
+    _get_readable_document(db, user["id"], document_id)
+    rows = db.execute(
+        "SELECT id, page_number, chunk_index, content, metadata_json FROM document_chunks WHERE document_id = ? ORDER BY chunk_index ASC",
+        (document_id,),
+    ).fetchall()
+    return {"chunks": [dict(r) for r in rows]}
+
+
+@router.get("/documents/{document_id}/tables")
+def get_document_tables(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
+    doc, _ = _get_readable_document(db, user["id"], document_id)
+    raw = doc.get("tables_json") or "[]"
+    try:
+        tables = json.loads(raw)
+    except Exception:
+        tables = []
+    return {"tables": tables}
+
+
+@router.get("/documents/{document_id}/reading-order")
+def get_document_reading_order(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
+    doc, _ = _get_readable_document(db, user["id"], document_id)
+    raw = doc.get("reading_order_json") or "[]"
+    try:
+        reading_order = json.loads(raw)
+    except Exception:
+        reading_order = []
+    return {"readingOrder": reading_order}
+
+
+@router.post("/documents/{document_id}/grant")
+def grant_ai_access(document_id: str, body: dict = None, user=Depends(get_current_user), db=Depends(get_db)):
+    _get_readable_document(db, user["id"], document_id)
+    purpose = (body or {}).get("purpose", "all")
+    existing = db.execute(
+        "SELECT id, revoked_at FROM ai_document_grants WHERE user_id = ? AND document_id = ? AND purpose = ?",
+        (user["id"], document_id, purpose),
+    ).fetchone()
+    if existing:
+        if existing["revoked_at"]:
+            db.execute("UPDATE ai_document_grants SET revoked_at = NULL WHERE id = ?", (existing["id"],))
+        grant_id = existing["id"]
+    else:
+        grant_id = str(uuid.uuid4())
+        db.execute(
+            "INSERT INTO ai_document_grants (id, user_id, document_id, purpose) VALUES (?, ?, ?, ?)",
+            (grant_id, user["id"], document_id, purpose),
+        )
+    return {"granted": True, "grantId": grant_id, "documentId": document_id, "purpose": purpose}
+
+
+@router.delete("/documents/{document_id}/grant")
+def revoke_ai_access(document_id: str, purpose: str = "all", user=Depends(get_current_user), db=Depends(get_db)):
+    _get_readable_document(db, user["id"], document_id)
+    db.execute(
+        "UPDATE ai_document_grants SET revoked_at = datetime('now') WHERE user_id = ? AND document_id = ? AND purpose = ?",
+        (user["id"], document_id, purpose),
+    )
+    return {"revoked": True, "documentId": document_id, "purpose": purpose}
+
+
+@router.get("/chat/grants")
+def list_ai_grants(user=Depends(get_current_user), db=Depends(get_db)):
+    rows = db.execute(
+        """
+        SELECT g.id, g.document_id, g.purpose, g.granted_at, d.file_name, d.file_type
+        FROM ai_document_grants g
+        JOIN documents d ON d.id = g.document_id
+        WHERE g.user_id = ? AND g.revoked_at IS NULL
+        ORDER BY g.granted_at DESC
+        """,
+        (user["id"],),
+    ).fetchall()
+    return {"grants": [dict(r) for r in rows]}
+

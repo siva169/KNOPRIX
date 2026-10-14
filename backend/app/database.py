@@ -507,12 +507,116 @@ def _create_contacts_sharing_schema(conn) -> None:
         )
 
 
+def _create_production_backlog_schema(conn) -> None:
+    user_columns = _table_columns(conn, "users")
+    for name, definition in (
+        ("google_id", "TEXT"),
+        ("avatar_url", "TEXT"),
+    ):
+        if name not in user_columns:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {name} {definition}")
+
+    doc_columns = _table_columns(conn, "documents")
+    for name, definition in (
+        ("ocr_text", "TEXT DEFAULT ''"),
+        ("ocr_status", "TEXT DEFAULT 'none'"),
+        ("tables_json", "TEXT DEFAULT '[]'"),
+        ("reading_order_json", "TEXT DEFAULT '[]'"),
+    ):
+        if name not in doc_columns:
+            conn.execute(f"ALTER TABLE documents ADD COLUMN {name} {definition}")
+
+    for statement in (
+        """CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            token_hash TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL,
+            used_at INTEGER
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_password_reset_user
+            ON password_reset_tokens(user_id)""",
+        """CREATE TABLE IF NOT EXISTS ai_document_grants (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+            purpose TEXT NOT NULL DEFAULT 'all',
+            granted_at TEXT NOT NULL DEFAULT (datetime('now')),
+            revoked_at TEXT,
+            UNIQUE(user_id, document_id, purpose)
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_ai_document_grants_user_doc
+            ON ai_document_grants(user_id, document_id)""",
+        """CREATE TABLE IF NOT EXISTS ingestion_jobs (
+            id TEXT PRIMARY KEY,
+            document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            status TEXT NOT NULL CHECK (
+                status IN ('queued', 'extracting', 'indexing', 'ready', 'failed')
+            ),
+            progress INTEGER NOT NULL DEFAULT 0,
+            step_detail TEXT DEFAULT '',
+            error_message TEXT DEFAULT '',
+            ocr_engine TEXT DEFAULT 'none',
+            ocr_status TEXT DEFAULT 'none',
+            ocr_confidence REAL DEFAULT 0.0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_ingestion_jobs_doc
+            ON ingestion_jobs(document_id)""",
+        """CREATE INDEX IF NOT EXISTS idx_ingestion_jobs_user
+            ON ingestion_jobs(user_id)""",
+        """CREATE TABLE IF NOT EXISTS document_chunks (
+            id TEXT PRIMARY KEY,
+            document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+            page_number INTEGER NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            embedding_json TEXT,
+            metadata_json TEXT DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_document_chunks_doc_page
+            ON document_chunks(document_id, page_number)""",
+        """CREATE TABLE IF NOT EXISTS study_artifacts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            artifact_type TEXT NOT NULL CHECK (
+                artifact_type IN ('flashcards', 'quiz', 'analogy')
+            ),
+            title TEXT NOT NULL,
+            content_json TEXT NOT NULL,
+            citations_json TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_study_artifacts_user_proj
+            ON study_artifacts(user_id, project_id, artifact_type)""",
+        """CREATE TABLE IF NOT EXISTS data_export_jobs (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            status TEXT NOT NULL CHECK (
+                status IN ('queued', 'processing', 'ready', 'failed')
+            ),
+            download_token TEXT,
+            file_path TEXT,
+            expires_at INTEGER,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_data_export_jobs_user
+            ON data_export_jobs(user_id)""",
+    ):
+        conn.execute(statement)
+
+
 # Migration versions are append-only; never edit a migration after it is released.
 MIGRATIONS = (
     (1, "baseline-schema", _create_base_schema),
     (2, "legacy-schema-compatibility", _migrate_legacy_schema),
     (3, "auth-session-and-rate-limit-state", _create_auth_session_schema),
     (4, "contacts-sharing-and-annotation-links", _create_contacts_sharing_schema),
+    (5, "production-backlog-foundations", _create_production_backlog_schema),
 )
 
 

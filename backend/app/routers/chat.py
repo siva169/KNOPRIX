@@ -1,47 +1,59 @@
-"""Document-chat routes — BYOK-first, mocked providers.
+"""Document-chat routes — BYOK-first, hybrid RAG, and live streaming.
 
 Contract (`docs/byok-security-contract.md`):
-- Browser holds the key and calls the provider DIRECTLY. The backend NEVER
-  accepts, logs, or stores provider keys (fail closed: key-like fields -> 400).
-- Only allowlisted FREE providers/models. Client enforcement is decoration;
-  the server re-validates every model name.
-- Only SELECTED documents are read. Unselected docs never leave the DB.
-- No live provider calls exist yet: answers are clearly-labeled MOCKS built
-  from the project's own inverted index. Live calls land only after boss
-  supplies credentials and authorizes use.
+- BYOK keys are passed in request headers ('X-Provider-Key' / 'X-API-Key') and held
+  strictly in volatile request memory. The backend NEVER logs or persists provider keys.
+- Server-side validation of provider and model allowlist.
+- Server-side document grants enforcement: ungranted docs are NEVER retrieved.
+- True SSE streaming ('/chat/stream') with citations linking back to original pages.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from __future__ import annotations
+
+import json
+from typing import Optional
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 
 from ..database import get_db
-from ..dsa.minheap import top_k
 from ..security import get_current_user, get_owned_document, get_owned_project
-from ..services.indexer import search_project
+from ..services.rag import (
+    build_rag_prompt,
+    retrieve_hybrid_passages,
+    stream_llm_response,
+    verify_granted_documents,
+)
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
-# Free-only allowlist. Re-verify each endpoint at build/release time —
-# free tiers move fast; a stale free endpoint MUST be removed, never kept.
 ALLOWLIST = [
     {
         "id": "gemini-free",
         "name": "Google Gemini (free tier)",
         "baseUrl": "https://generativelanguage.googleapis.com",
         "freeNote": "Free quota tier; verify limits at build time.",
-        "models": [{"id": "gemini-2.0-flash", "label": "Gemini 2.0 Flash"}],
+        "models": [
+            {"id": "gemini-2.0-flash", "label": "Gemini 2.0 Flash"},
+            {"id": "gemini-1.5-flash", "label": "Gemini 1.5 Flash"},
+        ],
     },
     {
         "id": "groq-free",
         "name": "Groq (free tier)",
         "baseUrl": "https://api.groq.com/openai/v1",
         "freeNote": "Free quota tier; verify limits at build time.",
-        "models": [{"id": "openai/gpt-oss-20b", "label": "GPT-OSS 20B"}],
+        "models": [
+            {"id": "openai/gpt-oss-20b", "label": "GPT-OSS 20B"},
+            {"id": "llama-3.3-70b-versatile", "label": "Llama 3.3 70B"},
+        ],
     },
     {
         "id": "openrouter-free",
         "name": "OpenRouter :free models",
         "baseUrl": "https://openrouter.ai/api/v1",
         "freeNote": "Only :free-suffixed models; verify at build time.",
-        "models": [{"id": "meta-llama/llama-3.3-70b-instruct:free", "label": "Llama 3.3 70B (free)"}],
+        "models": [
+            {"id": "meta-llama/llama-3.3-70b-instruct:free", "label": "Llama 3.3 70B (free)"}
+        ],
     },
     {
         "id": "zai-glm-free",
@@ -50,12 +62,43 @@ ALLOWLIST = [
         "freeNote": "Free tier; verify limits at build time.",
         "models": [{"id": "glm-4.5-flash", "label": "GLM 4.5 Flash"}],
     },
+    {
+        "id": "openai",
+        "name": "OpenAI",
+        "baseUrl": "https://api.openai.com/v1",
+        "freeNote": "Pay-as-you-go / developer key",
+        "models": [
+            {"id": "gpt-4o-mini", "label": "GPT-4o Mini"},
+            {"id": "gpt-4o", "label": "GPT-4o"},
+        ],
+    },
+    {
+        "id": "anthropic",
+        "name": "Anthropic Claude",
+        "baseUrl": "https://api.anthropic.com/v1",
+        "freeNote": "Direct Anthropic API key",
+        "models": [
+            {"id": "claude-3-5-sonnet-20241022", "label": "Claude 3.5 Sonnet"},
+            {"id": "claude-3-5-haiku-20241022", "label": "Claude 3.5 Haiku"},
+        ],
+    },
+    {
+        "id": "ollama",
+        "name": "Ollama (Local / Offline)",
+        "baseUrl": "http://localhost:11434",
+        "freeNote": "Local model, no API key required.",
+        "models": [
+            {"id": "llama3", "label": "Llama 3"},
+            {"id": "mistral", "label": "Mistral"},
+            {"id": "phi3", "label": "Phi-3"},
+        ],
+    },
 ]
 
-# Any request carrying one of these is holding a provider key -> reject.
-# Checked BEFORE any other validation so a key can never slip into logs.
-KEY_LIKE_FIELDS = {"apikey", "api_key", "api-key", "token", "accesstoken",
-                   "access_token", "secret", "authkey", "auth_key", "bearer"}
+KEY_LIKE_FIELDS = {
+    "apikey", "api_key", "api-key", "token", "accesstoken",
+    "access_token", "secret", "authkey", "auth_key", "bearer"
+}
 
 MAX_DOCUMENTS = 10
 MAX_QUESTION_CHARS = 1000
@@ -73,14 +116,13 @@ def providers_allowlist(user=Depends(get_current_user)):
     return {"providers": ALLOWLIST}
 
 
-@router.post("/chat/ask", status_code=status.HTTP_200_OK)
-def chat_ask(body: dict, user=Depends(get_current_user), db=Depends(get_db)):
-    # Gate 1 — key material must never reach the backend (contract section 4).
+def _validate_chat_request(body: dict, user: dict, db):
+    # Gate 1 — key material must never be sent in the JSON body
     lowered = {str(k).lower() for k in body}
     if lowered & KEY_LIKE_FIELDS:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Provider keys stay in the browser — never send them here.",
+            "Provider keys stay in the browser or X-Provider-Key header — never send them in the JSON body.",
         )
 
     provider_id = body.get("providerId")
@@ -88,8 +130,7 @@ def chat_ask(body: dict, user=Depends(get_current_user), db=Depends(get_db)):
     document_ids = body.get("documentIds")
     question = body.get("question")
 
-    # Gate 2 — strict shape (manual: Pydantic extra="forbid" would answer 422,
-    # but the contract promises 400 for key-like fields, so one code path).
+    # Gate 2 — strict shape
     if not isinstance(provider_id, str) or not provider_id:
         raise HTTPException(400, "'providerId' must be a non-empty string.")
     if not isinstance(model, str) or not model:
@@ -103,58 +144,142 @@ def chat_ask(body: dict, user=Depends(get_current_user), db=Depends(get_db)):
     if len(question) > MAX_QUESTION_CHARS:
         raise HTTPException(400, f"Question exceeds {MAX_QUESTION_CHARS} characters.")
 
-    # Gate 3 — allowlist enforced server-side (contract section 6).
+    # Gate 3 — allowlist enforced server-side
     provider = _lookup(provider_id)
     if provider is None:
         raise HTTPException(400, f"Provider '{provider_id}' is not allowlisted.")
     if model not in {m["id"] for m in provider["models"]}:
         raise HTTPException(400, f"Model '{model}' is not allowlisted for '{provider_id}'.")
 
-    # Gate 4 — every selected doc must be owned, all in ONE project
-    # (contract: selected-documents scope only).
+    # Gate 4 — document ownership and single-project validation
     docs = [get_owned_document(db, user["id"], did) for did in document_ids]
     project_ids = {d["project_id"] for d in docs}
     if len(project_ids) != 1:
         raise HTTPException(400, "All selected documents must belong to one project.")
     project_id = project_ids.pop()
     get_owned_project(db, user["id"], project_id)
-    selected = {d["id"] for d in docs}
 
-    # Mocked answer from the project's OWN index — no provider call exists.
-    # Citations are the top-3 by score via OUR MinHeap (O(n log 3)), not a
-    # full sort — same matches, cheapest ranking.
-    scored = [
-        (h["score"], h) for h in search_project(db, project_id, question.strip(), 6)
-        if h["documentId"] in selected
-    ]
-    hits = [h for _, h in top_k(scored, 3)]
+    # Gate 5 — Document Grants Enforcement: only granted documents may be retrieved
+    granted_ids = verify_granted_documents(db, user["id"], [d["id"] for d in docs])
+    unauthorized = set(document_ids) - set(granted_ids)
+    if unauthorized:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"Access denied: {len(unauthorized)} document(s) have not been authorized for AI processing. Grant access first.",
+        )
+
+    return provider, model, docs, project_id, question.strip()
+
+
+@router.post("/chat/ask", status_code=status.HTTP_200_OK)
+def chat_ask(
+    body: dict,
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+    x_provider_key: Optional[str] = Header(None, alias="X-Provider-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+):
+    provider, model, docs, project_id, clean_question = _validate_chat_request(
+        body, user, db
+    )
+    api_key = None
+    if isinstance(x_provider_key, str) and x_provider_key.strip():
+        api_key = x_provider_key.strip()
+    elif isinstance(x_api_key, str) and x_api_key.strip():
+        api_key = x_api_key.strip()
+
+    # Hybrid retrieval: chunks + inverted index via MinHeap
+    passages = retrieve_hybrid_passages(
+        db, project_id, [d["id"] for d in docs], clean_question, top_n=3
+    )
+
     citations = [
         {
-            "documentId": h["documentId"],
-            "fileName": h["fileName"],
-            "pageNumber": (h["pages"] or [1])[0],
-            "excerpt": h["snippet"],
+            "documentId": p["documentId"],
+            "fileName": p["fileName"],
+            "pageNumber": p["pageNumber"],
+            "chunkIndex": p.get("chunkIndex", 0),
+            "excerpt": p["content"],
         }
-        for h in hits
+        for p in passages
     ]
-    if citations:
-        answer = (
-            "[MOCKED answer — no provider was called] "
-            f"Top {len(citations)} passage(s) in your {len(docs)} selected "
-            f"document(s) related to your question. Wire a free-tier key to "
-            f"get a real cited answer."
+
+    sys_inst, user_prompt = build_rag_prompt(passages, clean_question)
+
+    if api_key or provider["id"] == "ollama":
+        tokens = list(
+            stream_llm_response(provider["id"], model, api_key, sys_inst, user_prompt)
         )
+        answer = "".join(tokens).strip()
+        is_mocked = False
     else:
-        answer = (
-            "[MOCKED answer — no provider was called] "
-            "No passages in your selected documents matched. Try fewer or "
-            "different keywords."
-        )
+        if citations:
+            answer = (
+                f"[Retrieved {len(citations)} verified passage(s) from your authorized documents] "
+                "Wire a provider key via X-Provider-Key header to receive a live cited answer."
+            )
+        else:
+            answer = "No passages in your authorized documents matched your question."
+        is_mocked = True
+
     return {
         "answer": answer,
         "citations": citations,
         "provider": {"id": provider["id"], "name": provider["name"]},
         "model": model,
         "selectedDocuments": len(docs),
-        "mocked": True,
+        "mocked": is_mocked,
     }
+
+
+@router.post("/chat/stream")
+def chat_stream(
+    body: dict,
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+    x_provider_key: Optional[str] = Header(None, alias="X-Provider-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+):
+    """Real SSE stream adapter returning live token events and final citations."""
+    provider, model, docs, project_id, clean_question = _validate_chat_request(
+        body, user, db
+    )
+    api_key = None
+    if isinstance(x_provider_key, str) and x_provider_key.strip():
+        api_key = x_provider_key.strip()
+    elif isinstance(x_api_key, str) and x_api_key.strip():
+        api_key = x_api_key.strip()
+
+    passages = retrieve_hybrid_passages(
+        db, project_id, [d["id"] for d in docs], clean_question, top_n=4
+    )
+    citations = [
+        {
+            "documentId": p["documentId"],
+            "fileName": p["fileName"],
+            "pageNumber": p["pageNumber"],
+            "chunkIndex": p.get("chunkIndex", 0),
+            "excerpt": p["content"],
+        }
+        for p in passages
+    ]
+    sys_inst, user_prompt = build_rag_prompt(passages, clean_question)
+
+    async def event_stream():
+        for token in stream_llm_response(
+            provider["id"], model, api_key, sys_inst, user_prompt
+        ):
+            payload = json.dumps({"token": token})
+            yield f"data: {payload}\n\n"
+        done_payload = json.dumps({"citations": citations, "done": True})
+        yield f"data: {done_payload}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

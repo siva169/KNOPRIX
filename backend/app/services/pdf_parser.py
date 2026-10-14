@@ -5,25 +5,110 @@ from __future__ import annotations
 from pathlib import Path
 
 
+import re
+import shutil
+import subprocess
+
+def _detect_text_tables(text: str, page_number: int = 1) -> list[dict]:
+    """Detect simple markdown or pipe/tab delimited tables in extracted plain text."""
+    tables = []
+    lines = (text or "").splitlines()
+    current_table: list[list[str]] = []
+    for line in lines:
+        stripped = line.strip()
+        if "|" in stripped:
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            if len(cells) >= 2 and any(cells):
+                # Skip markdown separator rows like |---|---|
+                if all(re.match(r"^:?-+:?$", c) for c in cells if c):
+                    continue
+                current_table.append(cells)
+                continue
+        elif "\t" in stripped:
+            cells = [c.strip() for c in stripped.split("\t") if c.strip()]
+            if len(cells) >= 2:
+                current_table.append(cells)
+                continue
+        if current_table:
+            if len(current_table) >= 2:
+                tables.append({"page": page_number, "rows": current_table})
+            current_table = []
+    if len(current_table) >= 2:
+        tables.append({"page": page_number, "rows": current_table})
+    return tables
+
+
+def _extract_reading_order(pages: list[str]) -> list[dict]:
+    """Break pages into structured reading blocks: headings, paragraphs, and lists."""
+    blocks: list[dict] = []
+    block_idx = 0
+    for page_num, page_text in enumerate(pages, start=1):
+        raw_paras = [p.strip() for p in (page_text or "").split("\n\n") if p.strip()]
+        for para in raw_paras:
+            lines = [l.strip() for l in para.splitlines() if l.strip()]
+            if not lines:
+                continue
+            first_line = lines[0]
+            # Classify block type
+            if first_line.startswith("#") or (len(first_line) < 65 and not first_line.endswith(".") and len(lines) == 1):
+                block_type = "heading"
+            elif first_line.startswith(("-", "*", "•")) or re.match(r"^\d+[\.\)]", first_line):
+                block_type = "list_item"
+            elif "|" in first_line:
+                block_type = "table_row"
+            else:
+                block_type = "paragraph"
+
+            blocks.append({
+                "index": block_idx,
+                "page": page_num,
+                "type": block_type,
+                "text": para,
+            })
+            block_idx += 1
+    return blocks
+
+
+def _check_ocr_status(is_scanned: bool) -> tuple[str, str]:
+    """Truth-first OCR detection: check if OCR engine is genuinely available."""
+    if not is_scanned:
+        return "none", ""
+    tesseract_bin = shutil.which("tesseract")
+    if not tesseract_bin:
+        return "unavailable", ""
+    return "scanned_ocr_required", ""
+
+
 def extract_pdf(path: str | Path) -> dict:
-    """Return {text, pages: [str], method, is_scanned}."""
+    """Return {text, pages: [str], method, is_scanned, tables, reading_order, ocr_status, ocr_text}."""
     from pypdf import PdfReader
 
     reader = PdfReader(str(path))
     pages: list[str] = []
-    for page in reader.pages:
+    tables: list[dict] = []
+    for i, page in enumerate(reader.pages, start=1):
         try:
-            pages.append((page.extract_text() or "").strip())
+            page_text = (page.extract_text() or "").strip()
+            pages.append(page_text)
+            page_tables = _detect_text_tables(page_text, page_number=i)
+            tables.extend(page_tables)
         except Exception:
             pages.append("")
     full = "\n\n".join(p for p in pages if p).strip()
     is_scanned = len(full) < 50  # image-only PDFs yield no text layer
+    ocr_status, ocr_text = _check_ocr_status(is_scanned)
+    reading_order = _extract_reading_order(pages)
+
     return {
         "text": full,
         "pages": pages,
         "method": "pypdf",
         "is_scanned": is_scanned,
         "page_count": max(len(pages), 1),
+        "tables": tables,
+        "reading_order": reading_order,
+        "ocr_status": ocr_status,
+        "ocr_text": ocr_text,
     }
 
 
@@ -32,7 +117,8 @@ def extract_pptx(path: str | Path) -> dict:
 
     prs = Presentation(str(path))
     pages: list[str] = []
-    for slide in prs.slides:
+    tables: list[dict] = []
+    for i, slide in enumerate(prs.slides, start=1):
         lines: list[str] = []
         for shape in slide.shapes:
             if shape.has_text_frame:
@@ -40,14 +126,29 @@ def extract_pptx(path: str | Path) -> dict:
                     text = "".join(run.text for run in para.runs).strip()
                     if text:
                         lines.append(text)
+            if getattr(shape, "has_table", False) and shape.has_table:
+                table_rows = []
+                for row in shape.table.rows:
+                    row_cells = [c.text.strip() for c in row.cells]
+                    table_rows.append(row_cells)
+                if table_rows:
+                    tables.append({"page": i, "rows": table_rows})
         pages.append("\n".join(lines))
     full = "\n\n".join(p for p in pages if p).strip()
+    is_scanned = len(full) < 20
+    ocr_status, ocr_text = _check_ocr_status(is_scanned)
+    reading_order = _extract_reading_order(pages)
+
     return {
         "text": full,
         "pages": pages,
         "method": "python-pptx",
-        "is_scanned": len(full) < 20,
+        "is_scanned": is_scanned,
         "page_count": max(len(pages), 1),
+        "tables": tables,
+        "reading_order": reading_order,
+        "ocr_status": ocr_status,
+        "ocr_text": ocr_text,
     }
 
 
@@ -57,20 +158,33 @@ def extract_docx(path: str | Path) -> dict:
 
     doc = Document(str(path))
     paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+    tables: list[dict] = []
     table_lines: list[str] = []
     for table in doc.tables:
+        rows_data = []
         for row in table.rows:
             cells = [c.text.strip() for c in row.cells if c.text.strip()]
             if cells:
+                rows_data.append(cells)
                 table_lines.append(" | ".join(cells))
+        if rows_data:
+            tables.append({"page": 1, "rows": rows_data})
     pages: list[str] = ["\n".join(paragraphs + table_lines)]
     full = "\n\n".join(p for p in pages if p).strip()
+    is_scanned = len(full) < 20
+    ocr_status, ocr_text = _check_ocr_status(is_scanned)
+    reading_order = _extract_reading_order(pages)
+
     return {
         "text": full,
         "pages": pages,
         "method": "python-docx",
-        "is_scanned": len(full) < 20,
+        "is_scanned": is_scanned,
         "page_count": max(len(pages), 1),
+        "tables": tables,
+        "reading_order": reading_order,
+        "ocr_status": ocr_status,
+        "ocr_text": ocr_text,
     }
 
 
@@ -226,12 +340,17 @@ def extract_pptx_slides(path: str | Path) -> dict:
 def extract_document(path: str | Path, file_type: str) -> dict:
     file_type = (file_type or "").lower()
     if file_type in {"png", "jpg", "jpeg", "svg"}:
+        ocr_status, ocr_text = _check_ocr_status(is_scanned=True)
         return {
             "text": "",
             "pages": [""],
             "method": "none",
             "is_scanned": True,
             "page_count": 1,
+            "tables": [],
+            "reading_order": [],
+            "ocr_status": ocr_status,
+            "ocr_text": ocr_text,
         }
     if file_type == "pdf":
         return extract_pdf(path)
@@ -242,13 +361,27 @@ def extract_document(path: str | Path, file_type: str) -> dict:
     # txt / md / other plain text
     try:
         text = Path(path).read_text(encoding="utf-8", errors="ignore")
+        pages = [text.strip()]
         return {
             "text": text.strip(),
-            "pages": [text.strip()],
+            "pages": pages,
             "method": "plaintext",
             "is_scanned": False,
             "page_count": 1,
+            "tables": _detect_text_tables(text, page_number=1),
+            "reading_order": _extract_reading_order(pages),
+            "ocr_status": "none",
+            "ocr_text": "",
         }
     except Exception:
-        return {"text": "", "pages": [], "method": "none",
-                "is_scanned": True, "page_count": 1}
+        return {
+            "text": "",
+            "pages": [],
+            "method": "none",
+            "is_scanned": True,
+            "page_count": 1,
+            "tables": [],
+            "reading_order": [],
+            "ocr_status": "unavailable",
+            "ocr_text": "",
+        }

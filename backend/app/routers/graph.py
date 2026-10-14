@@ -172,3 +172,53 @@ def unpin_word(project_id: str, word: str,
         (user["id"], project_id, word.strip().lower()),
     )
     return None
+
+
+@router.get("/projects/{project_id}/mindmap")
+def get_hierarchical_mindmap(project_id: str, user=Depends(get_current_user), db=Depends(get_db)):
+    """Hierarchical Evidence-Linked Mind Map: Project -> Documents -> Topics -> Passages."""
+    project = get_owned_project(db, user["id"], project_id)
+    rows = db.execute(
+        "SELECT id, file_name, file_type FROM documents WHERE project_id = ?",
+        (project_id,),
+    ).fetchall()
+    page_map = _project_page_map(db, project_id)
+
+    doc_nodes = []
+    for doc in rows:
+        counts = _doc_concepts(page_map, doc["id"])
+        top_concepts = [w for w, _ in counts.most_common(5)]
+        topic_nodes = []
+        for concept in top_concepts:
+            evidences = _evidence_for_word(page_map, doc["id"], concept, cap=2)
+            passage_nodes = [
+                {
+                    "id": f"passage-{doc['id']}-{ev['page']}-{idx}",
+                    "type": "passage",
+                    "page": ev["page"],
+                    "excerpt": ev["excerpt"],
+                }
+                for idx, ev in enumerate(evidences)
+            ]
+            topic_nodes.append({
+                "id": f"topic-{doc['id']}-{concept}",
+                "type": "topic",
+                "label": concept,
+                "passages": passage_nodes,
+            })
+        doc_nodes.append({
+            "id": f"doc-{doc['id']}",
+            "type": "document",
+            "fileName": doc["file_name"],
+            "fileType": doc["file_type"],
+            "topics": topic_nodes,
+        })
+
+    return {
+        "mindmap": {
+            "id": f"project-{project['id']}",
+            "type": "project",
+            "name": project["name"],
+            "documents": doc_nodes,
+        }
+    }
