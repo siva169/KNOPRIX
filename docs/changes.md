@@ -1,5 +1,27 @@
 # 📝 Knoprix — Mid Review Build · Change Log
 
+## Oct 15, 2026 — Linked Workspaces: Reading Desk & AI Wing Workspace Switcher
+
+### What changed
+
+- Added top Navbar segmented workspace switcher `[📖 Reading Desk | ✦ AI Wing]`
+  with responsive mobile chips (`[📖 Desk | ✦ AI]` at 390px) and explicit `aria-label`s.
+- Created `AIWingView.jsx` as a first-class grounded AI workspace:
+  - **Document Grants Manager:** Real-time authorization toggles per document (`POST /api/documents/{id}/grant`).
+  - **Grounded Chat:** Live token streaming via SSE (`POST /api/chat/stream`), thought transparency, and clickable citations.
+  - **Study Artifacts:** Interactive 3D flip Flashcards, Quiz self-assessment with instant feedback, and verified Analogy explainer.
+  - **Knowledge Map Integration:** Embedded evidence graph linking directly back to the source passages.
+- Linked workspaces: Clicking any citation from the AI Wing automatically navigates
+  to that document in the Reading Desk at the exact cited page and snippet.
+- Responsive validation: Passed 100% across 390px, 425px, 768px, and 1024px viewports.
+
+### Verification
+
+- `npm run build` — Clean build with 0 errors.
+- `node frontend/qa/workspace-switcher.spec.mjs` — 4/4 passing breakpoint suites (390px, 425px, 768px, 1024px).
+
+---
+
 ## Oct 03, 2026 — Named bookmark search and exact passage navigation
 
 ### What changed

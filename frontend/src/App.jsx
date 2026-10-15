@@ -16,6 +16,7 @@ import ChatPanel from './components/ChatPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import ContactsPage from './components/ContactsPage.jsx';
+import AIWingView from './components/AIWingView.jsx';
 
 const BrowserPDFViewer = lazy(() => import('./components/BrowserPDFViewer.jsx'));
 
@@ -39,6 +40,7 @@ export default function App() {
   const [documentsLoading, setDocumentsLoading] = useState(false);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [workspaceMode, setWorkspaceMode] = useState('reading-desk');
   const [loginEmail, setLoginEmail] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem('knoprix_sidebar_collapsed') === 'true',
@@ -147,6 +149,8 @@ export default function App() {
         onOpenPalette={() => setIsPaletteOpen(true)}
         onToggleSidebar={() => setMobileSidebar((v) => !v)}
         mobileSidebar={mobileSidebar}
+        workspaceMode={workspaceMode}
+        onSelectWorkspace={setWorkspaceMode}
       />}
 
       <div className="flex-1 flex overflow-hidden relative">
@@ -184,11 +188,18 @@ export default function App() {
                 openDocument={openDocument}
                 notify={notify}
               />
+            ) : workspaceMode === 'ai-wing' ? (
+              <AIWingView
+                onNavigateToDocument={(doc, page) => {
+                  openDocument(doc);
+                  setWorkspaceMode('reading-desk');
+                }}
+              />
             ) : activeDocument ? (
               <BrowserPDFViewer
                 focusMode={focusMode}
                 onToggleFocusMode={() => setFocusMode((value) => !value)}
-                onOpenChat={() => setIsChatOpen(true)}
+                onOpenChat={() => setWorkspaceMode('ai-wing')}
               />
             ) : (
               <DashboardOverview

@@ -2,13 +2,23 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Sun, Moon, BarChart3, Bookmark, LogOut, UploadCloud, Folder, TrendingUp,
-  Menu, FileText, X, MapPin, Command, UsersRound
+  Menu, FileText, X, MapPin, Command, UsersRound, BookOpen, Sparkles
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import api from '../api';
 
-export default function Navbar({ onUpload, onStats, onBookmarks, onContacts, onOpenPalette, onToggleSidebar, mobileSidebar }) {
+export default function Navbar({
+  onUpload,
+  onStats,
+  onBookmarks,
+  onContacts,
+  onOpenPalette,
+  onToggleSidebar,
+  mobileSidebar,
+  workspaceMode = 'reading-desk',
+  onSelectWorkspace,
+}) {
   const { activeProject, theme, toggleTheme, notify, openDocument } = useApp();
   const { user, logout } = useAuth();
   const [query, setQuery] = useState('');
@@ -98,10 +108,42 @@ export default function Navbar({ onUpload, onStats, onBookmarks, onContacts, onO
           <span className="block text-[9px] text-secondary/80 font-semibold tracking-widest uppercase">DSA Engine</span>
         </div>
         {activeProject && (
-          <span className="ml-1 hidden lg:inline-flex text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-secondary border border-primary/40 items-center gap-1">
+          <span className="ml-1 hidden xl:inline-flex text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-secondary border border-primary/40 items-center gap-1">
             <Folder className="w-3 h-3" /> {activeProject.name}
           </span>
         )}
+      </div>
+
+      {/* Segmented Workspace Switcher: Reading Desk | AI Wing */}
+      <div className="flex items-center p-0.5 sm:p-1 rounded-xl bg-midnight-deep/90 border border-glass-borderDark shadow-inner shrink-0">
+        <button
+          onClick={() => onSelectWorkspace?.('reading-desk')}
+          aria-label="Reading Desk"
+          title="Reading Desk — distraction-free document study"
+          className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 rounded-lg text-xs font-semibold transition ${
+            workspaceMode === 'reading-desk'
+              ? 'bg-accent/20 text-accent border border-accent/40 shadow-sm'
+              : 'text-ivory/60 hover:text-ivory hover:bg-white/5'
+          }`}
+        >
+          <BookOpen className="w-3.5 h-3.5 text-accent shrink-0" />
+          <span className="hidden sm:inline">Reading Desk</span>
+          <span className="sm:hidden text-[10px]">Desk</span>
+        </button>
+        <button
+          onClick={() => onSelectWorkspace?.('ai-wing')}
+          aria-label="AI Wing"
+          title="AI Wing — grounded research, artifacts & mind map"
+          className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 rounded-lg text-xs font-semibold transition ${
+            workspaceMode === 'ai-wing'
+              ? 'bg-gradient-to-r from-primary/30 to-accent/30 text-accent border border-accent/40 shadow-sm shadow-primary/20'
+              : 'text-ivory/60 hover:text-ivory hover:bg-white/5'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5 text-accent shrink-0" />
+          <span className="hidden sm:inline">AI Wing</span>
+          <span className="sm:hidden text-[10px]">AI</span>
+        </button>
       </div>
 
       {/* Autocomplete + full-text search */}
