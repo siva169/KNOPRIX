@@ -91,20 +91,18 @@ def _resolve_generation(
         ):
             raise HTTPException(
                 400,
-                "NVIDIA API keys must be sent directly from the browser to NVIDIA, not to Knoprix.",
+                "NVIDIA uses the backend-managed key; client-supplied NVIDIA keys are not accepted.",
             )
         if model != NVIDIA_MODEL_ID:
             raise HTTPException(400, f"Model '{model}' is not allowlisted for '{provider_id}'.")
-        return provider_id, model, None
+        api_key = resolve_api_key(provider_id)
+        if not api_key:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "NVIDIA NIM is not configured. Set NVIDIA_API_KEY in the backend environment.",
+            )
+        return provider_id, model, api_key
     return provider_id, model, resolve_api_key(provider_id, header_key)
-
-
-def _client_generated_content(body: dict, provider_id: str):
-    """Accept provider output from the browser without receiving its API key."""
-    if provider_id != "nvidia-nim":
-        return None, False
-    generated = body.get("generatedContent")
-    return (generated, isinstance(generated, dict))
 
 
 def _passage_source(p: dict) -> dict:
@@ -173,17 +171,15 @@ def generate_flashcards(
     provider_id, model, api_key = _resolve_generation(body, x_provider_key, x_api_key)
 
     cards: list[dict] = []
-    generated, used_llm = _client_generated_content(body, provider_id)
-    if not used_llm:
-        generated, used_llm = _generate(
-            passages,
-            topic,
-            provider_id,
-            model,
-            api_key,
-            instruction="Write revision flashcards for the topic.",
-            shape_hint='{"cards": [{"question": "...", "answer": "...", "source": {...}}]}',
-        )
+    generated, used_llm = _generate(
+        passages,
+        topic,
+        provider_id,
+        model,
+        api_key,
+        instruction="Write revision flashcards for the topic.",
+        shape_hint='{"cards": [{"question": "...", "answer": "...", "source": {...}}]}',
+    )
     if generated and isinstance(generated, dict) and isinstance(generated.get("cards"), list):
         for i, item in enumerate(generated["cards"][:10], start=1):
             if not isinstance(item, dict):
@@ -260,20 +256,18 @@ def generate_quiz(
     provider_id, model, api_key = _resolve_generation(body, x_provider_key, x_api_key)
 
     questions: list[dict] = []
-    generated, used_llm = _client_generated_content(body, provider_id)
-    if not used_llm:
-        generated, used_llm = _generate(
-            passages,
-            topic,
-            provider_id,
-            model,
-            api_key,
-            instruction="Write multiple-choice comprehension questions for the topic.",
-            shape_hint=(
-                '{"questions": [{"question": "...", "options": ["...","...","...","..."], '
-                '"correctIndex": 0, "explanation": "...", "source": {...}}]}'
-            ),
-        )
+    generated, used_llm = _generate(
+        passages,
+        topic,
+        provider_id,
+        model,
+        api_key,
+        instruction="Write multiple-choice comprehension questions for the topic.",
+        shape_hint=(
+            '{"questions": [{"question": "...", "options": ["...","...","...","..."], '
+            '"correctIndex": 0, "explanation": "...", "source": {...}}]}'
+        ),
+    )
     if generated and isinstance(generated, dict) and isinstance(generated.get("questions"), list):
         for i, item in enumerate(generated["questions"][:10], start=1):
             if not isinstance(item, dict):
@@ -372,17 +366,15 @@ def generate_analogy(
     analogy_text: str | None = None
     explanation: str | None = None
 
-    generated, used_llm = _client_generated_content(body, provider_id)
-    if not used_llm:
-        generated, used_llm = _generate(
-            passages,
-            concept,
-            provider_id,
-            model,
-            api_key,
-            instruction="Explain the concept using one clear everyday analogy grounded in the passages.",
-            shape_hint='{"analogy": "...", "explanation": "...", "source": {...}}',
-        )
+    generated, used_llm = _generate(
+        passages,
+        concept,
+        provider_id,
+        model,
+        api_key,
+        instruction="Explain the concept using one clear everyday analogy grounded in the passages.",
+        shape_hint='{"analogy": "...", "explanation": "...", "source": {...}}',
+    )
     if generated and isinstance(generated, dict):
         candidate = str(generated.get("analogy") or "").strip()
         if candidate:

@@ -86,14 +86,21 @@ class ProviderAdapterTests(unittest.TestCase):
             [model["id"] for model in provider["models"]],
             ["nvidia/nemotron-3.5-lightning-30b-a3b"],
         )
-        self.assertFalse(provider["hasServerKey"])
-        self.assertFalse(provider["browserAvailable"])
-        self.assertIn("CORS", provider["availabilityNote"])
+        self.assertEqual(provider["models"][0]["id"], rag.NVIDIA_MODEL_ID)
 
-    def test_nvidia_credentials_are_not_loaded_by_the_backend(self):
-        keys = _load_provider_api_keys({"NVIDIA_API_KEY": "browser-only-key"})
+    def test_nvidia_credentials_load_from_backend_environment(self):
+        keys = _load_provider_api_keys({"NVIDIA_API_KEY": "server-test-key"})
 
-        self.assertNotIn("nvidia-nim", keys)
+        self.assertEqual(keys["nvidia-nim"], "server-test-key")
+
+    def test_nvidia_allowlist_reports_only_server_key_presence(self):
+        with patch.dict(chat.cfg.PROVIDER_API_KEYS, {"nvidia-nim": "server-test-key"}):
+            result = chat.providers_allowlist(user=USER)
+
+        provider = next(item for item in result["providers"] if item["id"] == "nvidia-nim")
+        self.assertTrue(provider["hasServerKey"])
+        self.assertTrue(provider["browserAvailable"])
+        self.assertNotIn("server-test-key", json.dumps(result))
 
     def test_openai_compatible_streams_send_bearer_key_to_provider_endpoint(self):
         endpoints = {
@@ -101,6 +108,7 @@ class ProviderAdapterTests(unittest.TestCase):
             "openrouter-free": "https://openrouter.ai/api/v1/chat/completions",
             "zai-glm-free": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
             "openai": "https://api.openai.com/v1/chat/completions",
+            "nvidia-nim": "https://integrate.api.nvidia.com/v1/chat/completions",
         }
         response_body = (
             b'data: {"choices":[{"delta":{"content":"grounded"}}]}\n\n'
@@ -114,7 +122,7 @@ class ProviderAdapterTests(unittest.TestCase):
                     tokens = list(
                         rag.stream_llm_response(
                             provider_id,
-                            "test-model",
+                            rag.NVIDIA_MODEL_ID if provider_id == "nvidia-nim" else "test-model",
                             "test-provider-key",
                             "Use only verified passages.",
                             "What does the document say?",
@@ -155,6 +163,7 @@ class ProviderAdapterTests(unittest.TestCase):
             "https://openrouter.ai/api/v1/chat/completions",
             "https://open.bigmodel.cn/api/paas/v4/chat/completions",
             "https://api.openai.com/v1/chat/completions",
+            "https://integrate.api.nvidia.com/v1/chat/completions",
         )
         response_body = b'{"choices":[{"message":{"content":"grounded"}}]}'
 
@@ -168,8 +177,9 @@ class ProviderAdapterTests(unittest.TestCase):
                             "https://openrouter.ai/api/v1/chat/completions": "openrouter-free",
                             "https://open.bigmodel.cn/api/paas/v4/chat/completions": "zai-glm-free",
                             "https://api.openai.com/v1/chat/completions": "openai",
+                            "https://integrate.api.nvidia.com/v1/chat/completions": "nvidia-nim",
                         }[endpoint],
-                        "test-model",
+                        rag.NVIDIA_MODEL_ID if endpoint == "https://integrate.api.nvidia.com/v1/chat/completions" else "test-model",
                         "test-provider-key",
                         "Use only verified passages.",
                         "What does the document say?",
@@ -310,7 +320,7 @@ class BacklogRAGTests(unittest.TestCase):
         ))
         self.assertIn("powerful and luminous explosion", stream.call_args.args[4])
 
-    def test_nvidia_keys_are_rejected_by_backend_chat_routes(self):
+    def test_nvidia_chat_routes_reject_client_keys_and_use_server_key(self):
         doc_res = self.upload_doc("nvidia.txt", b"NVIDIA test passage for chat.")
         body = {
             "providerId": "nvidia-nim",
@@ -324,7 +334,7 @@ class BacklogRAGTests(unittest.TestCase):
                 body, user=USER, db=self.db, x_provider_key="must-not-reach-backend"
             )
         self.assertEqual(ctx.exception.status_code, 400)
-        self.assertIn("directly from the browser to NVIDIA", ctx.exception.detail)
+        self.assertIn("backend-managed key", ctx.exception.detail)
 
         with self.assertRaises(HTTPException) as stream_ctx:
             chat.chat_stream(
@@ -332,27 +342,81 @@ class BacklogRAGTests(unittest.TestCase):
             )
         self.assertEqual(stream_ctx.exception.status_code, 400)
 
-    def test_nvidia_chat_without_key_returns_only_authorized_citations(self):
+        with patch.dict(chat.cfg.PROVIDER_API_KEYS, {"nvidia-nim": "server-test-key"}), \
+             patch("app.routers.chat.stream_llm_response", return_value=["NVIDIA grounded"] ) as stream:
+            result = chat.chat_ask(
+                body,
+                user=USER,
+                db=self.db,
+                x_provider_key=None,
+                x_api_key=None,
+            )
+
+        self.assertFalse(result["mocked"])
+        self.assertEqual(result["answer"], "NVIDIA grounded")
+        self.assertNotIn("server-test-key", json.dumps(result))
+        self.assertEqual(stream.call_args.args[:3], (
+            "nvidia-nim",
+            rag.NVIDIA_MODEL_ID,
+            "server-test-key",
+        ))
+
+        async def read_stream(response):
+            return "".join([chunk async for chunk in response.body_iterator])
+
+        with patch.dict(chat.cfg.PROVIDER_API_KEYS, {"nvidia-nim": "server-test-key"}), \
+             patch("app.routers.chat.stream_llm_response", return_value=iter(["NVIDIA streamed"] )) as stream:
+            response = chat.chat_stream(
+                body,
+                user=USER,
+                db=self.db,
+                x_provider_key=None,
+                x_api_key=None,
+            )
+            event_text = asyncio.run(read_stream(response))
+
+        self.assertIn("NVIDIA streamed", event_text)
+        self.assertEqual(stream.call_args.args[:3], (
+            "nvidia-nim",
+            rag.NVIDIA_MODEL_ID,
+            "server-test-key",
+        ))
+
+    def test_nvidia_chat_without_server_key_returns_503(self):
         doc_res = self.upload_doc(
             "nvidia.txt",
             b"Nemotron is NVIDIA's family of open models.",
         )
         doc_id = doc_res["document"]["id"]
-        result = chat.chat_ask(
-            {
-                "providerId": "nvidia-nim",
-                "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
-                "documentIds": [doc_id],
-                "question": "What is Nemotron?",
-            },
-            user=USER,
-            db=self.db,
-            x_provider_key=None,
-            x_api_key=None,
-        )
-
-        self.assertTrue(result["mocked"])
-        self.assertEqual(result["citations"][0]["documentId"], doc_id)
+        with patch.dict(chat.cfg.PROVIDER_API_KEYS, {}, clear=True):
+            with self.assertRaises(HTTPException) as ctx:
+                chat.chat_ask(
+                    {
+                        "providerId": "nvidia-nim",
+                        "model": rag.NVIDIA_MODEL_ID,
+                        "documentIds": [doc_id],
+                        "question": "What is Nemotron?",
+                    },
+                    user=USER,
+                    db=self.db,
+                    x_provider_key=None,
+                    x_api_key=None,
+                )
+            with self.assertRaises(HTTPException) as stream_ctx:
+                chat.chat_stream(
+                    {
+                        "providerId": "nvidia-nim",
+                        "model": rag.NVIDIA_MODEL_ID,
+                        "documentIds": [doc_id],
+                        "question": "What is Nemotron?",
+                    },
+                    user=USER,
+                    db=self.db,
+                    x_provider_key=None,
+                    x_api_key=None,
+                )
+        self.assertEqual(ctx.exception.status_code, 503)
+        self.assertEqual(stream_ctx.exception.status_code, 503)
 
     def test_nvidia_generated_flashcards_are_saved_with_verified_citations(self):
         doc_res = self.upload_doc(
@@ -366,7 +430,8 @@ class BacklogRAGTests(unittest.TestCase):
             ]
         }
 
-        with patch(
+        with patch.dict(artifacts.cfg.PROVIDER_API_KEYS, {"nvidia-nim": "server-test-key"}), \
+             patch(
             "app.routers.artifacts.retrieve_hybrid_passages",
             return_value=[{
                 "documentId": doc_id,
@@ -374,14 +439,20 @@ class BacklogRAGTests(unittest.TestCase):
                 "pageNumber": 1,
                 "content": "A supernova is a powerful and luminous explosion of a star.",
             }],
-        ):
+        ), \
+             patch("app.routers.artifacts.complete_llm", return_value=json.dumps(generated)) as complete:
             result = artifacts.generate_flashcards(
                 {
                     "documentIds": [doc_id],
                     "topic": "supernova",
                     "providerId": "nvidia-nim",
                     "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
-                    "generatedContent": generated,
+                    "generatedContent": {
+                        "cards": [{
+                            "question": "client-supplied content",
+                            "answer": "must be ignored",
+                        }]
+                    },
                 },
                 user=USER,
                 db=self.db,
@@ -392,6 +463,30 @@ class BacklogRAGTests(unittest.TestCase):
         self.assertEqual(result["generatedBy"], "llm")
         self.assertEqual(result["provider"], "nvidia-nim")
         self.assertEqual(result["cards"][0]["source"]["documentId"], doc_id)
+        self.assertNotIn("server-test-key", json.dumps(result))
+        self.assertEqual(complete.call_args.args[:3], (
+            "nvidia-nim",
+            rag.NVIDIA_MODEL_ID,
+            "server-test-key",
+        ))
+
+    def test_nvidia_artifact_without_server_key_returns_503(self):
+        doc_res = self.upload_doc("nvidia.txt", b"NVIDIA test passage.")
+        with patch.dict(artifacts.cfg.PROVIDER_API_KEYS, {}, clear=True):
+            with self.assertRaises(HTTPException) as ctx:
+                artifacts.generate_flashcards(
+                    {
+                        "documentIds": [doc_res["document"]["id"]],
+                        "topic": "NVIDIA",
+                        "providerId": "nvidia-nim",
+                        "model": rag.NVIDIA_MODEL_ID,
+                    },
+                    user=USER,
+                    db=self.db,
+                    x_provider_key=None,
+                    x_api_key=None,
+                )
+        self.assertEqual(ctx.exception.status_code, 503)
 
     def test_nvidia_artifact_route_rejects_a_backend_key(self):
         doc_res = self.upload_doc("nvidia.txt", b"NVIDIA test passage.")
@@ -462,19 +557,26 @@ class BacklogRAGTests(unittest.TestCase):
             "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
         }
 
-        with patch("app.routers.artifacts.retrieve_hybrid_passages", return_value=[passage]):
+        with patch.dict(artifacts.cfg.PROVIDER_API_KEYS, {"nvidia-nim": "server-test-key"}), \
+             patch("app.routers.artifacts.retrieve_hybrid_passages", return_value=[passage]), \
+             patch("app.routers.artifacts.complete_llm", side_effect=[
+                 json.dumps({
+                     "questions": [{
+                         "question": "What is Nemotron?",
+                         "options": ["A model family", "A database"],
+                         "correctIndex": 0,
+                         "explanation": "The source calls it an open model family.",
+                     }]
+                 }),
+                 json.dumps({
+                     "analogy": "A toolkit of specialized machines.",
+                     "explanation": "The source describes a family of models.",
+                 }),
+             ]):
             quiz = artifacts.generate_quiz(
                 {
                     **base,
                     "topic": "Nemotron",
-                    "generatedContent": {
-                        "questions": [{
-                            "question": "What is Nemotron?",
-                            "options": ["A model family", "A database"],
-                            "correctIndex": 0,
-                            "explanation": "The source calls it an open model family.",
-                        }]
-                    },
                 },
                 user=USER,
                 db=self.db,
@@ -485,10 +587,6 @@ class BacklogRAGTests(unittest.TestCase):
                 {
                     **base,
                     "concept": "Nemotron",
-                    "generatedContent": {
-                        "analogy": "A toolkit of specialized machines.",
-                        "explanation": "The source describes a family of models.",
-                    },
                 },
                 user=USER,
                 db=self.db,

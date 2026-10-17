@@ -1,6 +1,5 @@
-export function isBrowserProviderAvailable(provider) {
-  // Keep NVIDIA blocked if an older API deployment omits availability metadata.
-  return Boolean(provider)
-    && provider.id !== 'nvidia-nim'
-    && provider.browserAvailable !== false;
+export function isProviderAvailable(provider) {
+  if (!provider) return false;
+  if (provider.id === 'nvidia-nim') return provider.hasServerKey === true;
+  return provider.browserAvailable !== false;
 }

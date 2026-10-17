@@ -35,6 +35,7 @@ _OPENAI_COMPATIBLE_URLS = {
     "openrouter-free": "https://openrouter.ai/api/v1/chat/completions",
     "zai-glm-free": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
     "openai": "https://api.openai.com/v1/chat/completions",
+    "nvidia-nim": "https://integrate.api.nvidia.com/v1/chat/completions",
 }
 NVIDIA_MODEL_ID = "nvidia/nemotron-3.5-lightning-30b-a3b"
 _NATIVE_PROVIDERS = {"gemini-free", "anthropic", "ollama"}

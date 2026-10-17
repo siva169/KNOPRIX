@@ -1,28 +1,29 @@
 # BYOK Provider Security Contract — Knoprix Final Project
 
 **Status:** Approved policy. Chat and study-artifact routes enforce persisted
-per-document grants, and NVIDIA BYOK is browser-direct. Provider-key handling
-and the remaining consent controls are not yet uniform across all providers.
-**Decisions (2026-10-04; NVIDIA addition 2026-10-17):** user-supplied
-trial/free-tier providers only · keys browser-local only
+per-document grants. NVIDIA uses a shared backend-managed key; other provider
+key paths remain mixed and are not yet uniform across providers.
+**Decisions (2026-10-04; NVIDIA relay approved 2026-10-17):** user-supplied
+trial/free-tier providers plus one deployment-managed NVIDIA key
 · selected documents only · Knoprix backend processing and third-party AI
 transfer are separate consent boundaries.
 **Scope:** This contract covers document chat and AI study tools. The frontend
-stores provider keys in browser localStorage; NVIDIA calls go directly from the
-browser, while other provider flows may use Knoprix routes. Do not treat this
+stores user-supplied provider keys in browser localStorage; NVIDIA calls use
+the server key and pass through Knoprix backend routes. Do not treat this
 partial implementation as proof that all consent controls are implemented.
 
 ## 1. Assumptions (explicit)
 
-- A1. The user brings their OWN free-tier key (BYOK). Knoprix ships NO key.
+- A1. Users bring their own keys for BYOK providers. NVIDIA's key is supplied
+  privately by the deployment operator, not shipped in source code.
 - A2. Browsers are untrusted-shared environments (extensions CAN read
   localStorage) — keys are convenience-stored, not vault-stored. Stated
   openly in the privacy notice, not hidden.
 - A3. Free-tier provider terms change fast. The allowlist is re-verified
   at implementation time and every release — a stale free endpoint MUST be
   removed, never grandfathered.
-- A4. Backend NEVER needs the provider key. Any backend code path that receives,
-  logs, or stores a key is a DEFECT, not a feature.
+- A4. The backend may use the NVIDIA environment key, but MUST NOT log, return,
+  persist, or accept a client-supplied NVIDIA key.
 - A5. Current deployment direction is Render + Vercel + Supabase. "Knoprix
   processing" means the service's controlled backend/storage, not processing
   on the user's device.
@@ -31,8 +32,8 @@ partial implementation as proof that all consent controls are implemented.
 
 ## 2. Out of scope (not promised)
 
-- Paid providers, team/shared keys, server-side key vaults, and on-device LLM
-  execution in the initial release.
+- Paid provider plans, key-vault features, and on-device LLM execution in the
+  initial release. The shared NVIDIA key may incur usage charges.
 - Protection against malicious browser extensions (impossible client-side).
 - Provider-side data retention (governed by each provider's own policy —
   linked in the privacy notice, not ours to enforce).
@@ -41,7 +42,7 @@ partial implementation as proof that all consent controls are implemented.
 
 | Class | Examples | Handling |
 |---|---|---|
-| Provider keys | API keys/tokens | MUST live in browser localStorage ONLY. MUST NEVER be sent to backend, written to logs, or included in error reports. |
+| Provider keys | User BYOK keys; shared NVIDIA API key | BYOK keys may be browser-local or held in volatile backend request memory on existing routes. NVIDIA key MUST be configured only in the deployment secret environment. No key may be logged, returned to clients, or included in error reports. |
 | Knoprix document processing | Uploaded source files, extracted text, indexes | Stored/processed by Knoprix-controlled backend and storage after upload; disclose this at upload. Derived records must be deleted with their source, subject to the documented backup purge window. |
 | AI access grant | User, document, purpose, state, expiry/revocation | MUST be checked for every AI content read. A frontend checkbox alone is not authorization. |
 | Third-party AI content | Selected document chunks, question, answer | Requires a separate provider/model-specific opt-in and active document grant. MUST contain selected, authorized documents only; MUST NEVER include whole-project or unselected docs. |
@@ -54,21 +55,23 @@ partial implementation as proof that all consent controls are implemented.
    parsing/indexing by Knoprix services, which must be disclosed. Any AI
    operation must separately have an active per-document grant. The backend
    must authorize content reads before returning chunks.
-2. **Browser → Provider (direct BYOK):** only after the user selects the
-   documents and separately consents to sending their content to the named
-   provider/model. The browser sends the user's key directly to that provider;
-   the Knoprix backend MUST NOT proxy or receive the key.
+2. **Browser → Provider (BYOK):** only after the user selects the documents
+   and separately consents to sending their content to the named provider/model.
+   Provider flows may be direct or routed through Knoprix; the UI MUST describe
+   the actual path and the Knoprix backend MUST NOT log or persist keys.
 3. **Browser → Backend chat metadata:** backend may validate provider/model,
    authorization, scope, and retrieve citation metadata, but MUST reject
    key-like request fields (fail closed: `400 + "keys stay in browser"`).
-4. **Backend → Provider:** no key-bearing provider calls are permitted under
-   this contract. Build-time checks and examples MUST use placeholder keys.
+4. **Backend → NVIDIA:** the backend may use `NVIDIA_API_KEY` from its private
+   environment. It MUST send only allowlisted requests containing retrieved
+   passages from selected documents with active grants. The key MUST never be
+   returned or logged. No client-supplied NVIDIA key may be accepted.
 
 ## 5. Auth / session policy
 
 - App login is distinct from document access and AI consent.
-- Provider identity = the user's own key, entered once per provider, stored
-  browser-local. No Knoprix account linkage to provider identity.
+- BYOK provider identity uses the user's own key, entered per provider. NVIDIA
+  uses one shared deployment account and is not individually attributable.
 - `localStorage` is convenience storage, not a secure vault. Browser extensions
   or anyone with access to the browser profile may read it; state this clearly.
 
@@ -85,16 +88,16 @@ partial implementation as proof that all consent controls are implemented.
   OpenRouter, Z.AI GLM free tier, and NVIDIA NIM hosted trial endpoints. NVIDIA
   API terms, model availability, and usage limits can change; do not promise
   unlimited or permanently free access.
-- NVIDIA BYOK MUST be sent directly from the browser to
-  `https://integrate.api.nvidia.com/v1/chat/completions`. The key MUST NOT be
-  configured as a Knoprix backend secret or sent in a Knoprix request header.
-- The NVIDIA endpoint's current CORS response does not authorize the Knoprix
-  web origin. NVIDIA is therefore disabled in the web UI until that browser
-  origin is allowed; a backend relay is not an approved workaround.
-- For NVIDIA study artifacts, the browser obtains authorized citations from
-  Knoprix, calls NVIDIA directly with those passages, then sends only the
-  generated structured artifact back for persistence. Knoprix re-retrieves
-  authorized passages and normalizes citations before saving.
+- NVIDIA uses `NVIDIA_API_KEY` configured privately in the backend environment.
+  The browser MUST NOT send a key in headers or body and MUST NOT call NVIDIA
+  directly. The allowlist reports only whether the server key exists; the UI
+  MUST disable NVIDIA when the key is absent.
+- NVIDIA chat and study artifacts MUST use Knoprix backend routes. The backend
+  re-validates the provider/model and document grants, retrieves only
+  authorized passages, and normalizes artifact citations before persistence.
+- NVIDIA's key is shared across users of a deployment; operators MUST consider
+  quota and billing exposure. NVIDIA terms and limits can change; do not promise
+  unlimited or permanently free access.
 - SHOULD: per-day app-side call budget per provider (protects the user's
   free quota from runaway loops — agents retry, quotas don't).
 
@@ -107,8 +110,10 @@ partial implementation as proof that all consent controls are implemented.
 
 ## 8. Retention / deletion
 
-- Keys: deleted by the user via "Clear keys" (wipes localStorage entries).
-  Uninstalling/clearing site data removes them implicitly — stated in notice.
+- BYOK keys: deleted by the user via "Clear keys" (wipes localStorage entries).
+  Obsolete browser-saved NVIDIA keys can be removed from the NVIDIA provider
+  panel. The deployment operator manages `NVIDIA_API_KEY` in the hosting
+  provider's secret settings and must rotate/revoke it there.
 - Chat history: browser-local only in v1; user-deletable per chat + "delete
   all". The API/data/permission contract defines the local conversation shape.
 - Documents and derived data: retained until user deletion; deleting a source

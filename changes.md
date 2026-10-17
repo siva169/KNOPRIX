@@ -1,5 +1,24 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-17 — Route NVIDIA through the shared backend key
+
+- Added `NVIDIA_API_KEY` as a private backend environment setting and routed
+  NVIDIA chat plus flashcard/quiz/analogy generation through existing Knoprix
+  routes. Keys are server-only; requests with NVIDIA client key material are
+  rejected, and provider metadata exposes only key presence.
+- Replaced direct browser calls with backend calls in AI Wing and Document
+  Chat. NVIDIA stays unavailable until the API reports the server key; old
+  browser-stored keys are ignored and can be removed in the UI.
+- Updated Render, local environment, README, and security-contract guidance.
+  The shared NVIDIA account is visible to users of the deployment and may
+  incur NVIDIA usage charges. Add the actual key privately in the Render API
+  service environment; no live NVIDIA request or hosting-dashboard change was
+  performed.
+- Added mocked route, credential-loading, key-redaction, and availability
+  coverage. After approval, backend QA passed (22 tests); frontend
+  availability tests, production build, and 390/425/768/1024px browser checks
+  also passed.
+
 ## 2026-10-17 — Disable NVIDIA in browser UI while CORS is blocked
 
 - The deployed NVIDIA preflight returned no `Access-Control-Allow-Origin` for

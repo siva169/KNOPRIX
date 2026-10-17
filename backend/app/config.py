@@ -25,6 +25,7 @@ _PROVIDER_KEY_ENV = {
     "gemini-free": ("GOOGLE_API_KEY", "GEMINI_API_KEY"),
     "groq-free": ("GROQ_API_KEY",),
     "openrouter-free": ("OPENROUTER_API_KEY",),
+    "nvidia-nim": ("NVIDIA_API_KEY",),
     "openai": ("OPENAI_API_KEY",),
     "anthropic": ("ANTHROPIC_API_KEY",),
 }

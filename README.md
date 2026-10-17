@@ -71,21 +71,24 @@ deployment; the hosted database may contain real user data.
 Document chat sends only retrieved passages from user-owned documents with an
 active AI grant to the selected provider. Live generation requires a key for
 that provider. Server-side provider keys can be configured in `backend/.env`
-using the names in `backend/.env.example`; NVIDIA is browser-only BYOK and is
-never configured or forwarded through the backend.
+using the names in `backend/.env.example`. NVIDIA NIM uses the backend-managed
+`NVIDIA_API_KEY` rather than a per-user browser key. In Render, open the API
+service that serves the frontend's `VITE_API_URL`, add `NVIDIA_API_KEY` under
+**Environment**, save, and redeploy/restart the service. The provider allowlist
+reports only whether the key is configured; it never returns the value. NVIDIA
+is enabled in AI Wing and Document Chat only after the API reports that the
+server key is present. Never paste the key into chat, source files, or commits.
 
-### NVIDIA NIM (browser-only BYOK; temporarily unavailable)
+The backend sends only retrieved passages from selected documents with active
+AI grants to NVIDIA. This is a shared key for users of the deployment, so all
+users share its NVIDIA account limits and potential charges. NVIDIA controls
+trial availability, terms, and request limits; Knoprix does not promise that
+usage is always free. Previously browser-saved NVIDIA keys are ignored and can
+be removed from the provider panel.
 
-NVIDIA's chat endpoint currently omits the CORS permission needed by the
-Knoprix web origin. The browser therefore blocks direct requests, so NVIDIA is
-disabled in AI Wing and Document Chat until NVIDIA allows browser requests.
-Knoprix does not proxy NVIDIA keys through its backend. Previously saved
-NVIDIA keys remain in browser storage and are not used.
-
-NVIDIA controls trial availability, terms, and request limits; Knoprix does not
-promise that NVIDIA usage is always free. Provider keys are stored in browser
-local storage, which browser extensions can read. Local adapter tests do not
-prove a provider key or account can generate a live answer. Gemini keys must
+BYOK provider keys are stored in
+browser local storage, which browser extensions can read. Mocked adapter tests
+do not prove a provider key or account can generate a live answer. Gemini keys must
 be restricted to the Gemini API or use Google's authorization-key format.
 
 ## Verification

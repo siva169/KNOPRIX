@@ -1,8 +1,8 @@
 """Document-chat routes — BYOK-first, hybrid RAG, and live streaming.
 
 Contract (`docs/byok-security-contract.md`):
-- BYOK keys are passed in request headers ('X-Provider-Key' / 'X-API-Key') and held
-  strictly in volatile request memory. The backend NEVER logs or persists provider keys.
+- Provider keys are held strictly in volatile request memory and never logged.
+  NVIDIA uses only its server-managed environment key.
 - Server-side validation of provider and model allowlist.
 - Server-side document grants enforcement: ungranted docs are NEVER retrieved.
 - True SSE streaming ('/chat/stream') with citations linking back to original pages.
@@ -71,11 +71,6 @@ ALLOWLIST = [
         "name": "NVIDIA NIM (hosted trial)",
         "baseUrl": "https://integrate.api.nvidia.com/v1",
         "freeNote": "Hosted trial; availability and rate limits are set by NVIDIA.",
-        "browserAvailable": False,
-        "availabilityNote": (
-            "Temporarily unavailable in the Knoprix web app: NVIDIA's CORS policy "
-            "blocks browser requests from this origin."
-        ),
         "models": [
             {
                 "id": NVIDIA_MODEL_ID,
@@ -122,7 +117,6 @@ ALLOWLIST = [
 for _provider in ALLOWLIST:
     for _model in _provider["models"]:
         _model.setdefault("name", _model.get("label", _model["id"]))
-    _provider["hasServerKey"] = provider_has_server_key(_provider["id"])
 # Put the configured default provider first so it is preselected.
 ALLOWLIST.sort(key=lambda p: 0 if p["id"] == cfg.DEFAULT_AI_PROVIDER else 1)
 
@@ -144,7 +138,21 @@ def _lookup(provider_id: str):
 
 @router.get("/providers/allowlist")
 def providers_allowlist(user=Depends(get_current_user)):
-    return {"providers": ALLOWLIST}
+    providers = []
+    for provider in ALLOWLIST:
+        public_provider = {
+            **provider,
+            "hasServerKey": provider_has_server_key(provider["id"]),
+        }
+        if provider["id"] == "nvidia-nim":
+            public_provider["browserAvailable"] = public_provider["hasServerKey"]
+            public_provider["availabilityNote"] = (
+                "NVIDIA NIM is ready with the shared server-managed key."
+                if public_provider["hasServerKey"]
+                else "NVIDIA NIM requires NVIDIA_API_KEY in the Knoprix backend environment."
+            )
+        providers.append(public_provider)
+    return {"providers": providers}
 
 
 def _validate_chat_request(body: dict, user: dict, db):
@@ -216,7 +224,7 @@ def chat_ask(
     if provider["id"] == "nvidia-nim" and (x_provider_key or x_api_key):
         raise HTTPException(
             400,
-            "NVIDIA API keys must be sent directly from the browser to NVIDIA, not to Knoprix.",
+            "NVIDIA uses the backend-managed key; client-supplied NVIDIA keys are not accepted.",
         )
     api_key = resolve_api_key(
         provider["id"],
@@ -224,6 +232,11 @@ def chat_ask(
             x_provider_key if x_provider_key else x_api_key
         ),
     )
+    if provider["id"] == "nvidia-nim" and not api_key:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "NVIDIA NIM is not configured. Set NVIDIA_API_KEY in the backend environment.",
+        )
 
     # Hybrid retrieval: chunks + inverted index via MinHeap
     passages = retrieve_hybrid_passages(
@@ -287,10 +300,10 @@ def chat_stream(
     provider, model, docs, project_id, clean_question = _validate_chat_request(
         body, user, db
     )
-    if provider["id"] == "nvidia-nim":
+    if provider["id"] == "nvidia-nim" and (x_provider_key or x_api_key):
         raise HTTPException(
             400,
-            "NVIDIA requests must be made directly from the browser; use /chat/ask only to retrieve authorized citations.",
+            "NVIDIA uses the backend-managed key; client-supplied NVIDIA keys are not accepted.",
         )
     api_key = resolve_api_key(
         provider["id"],
@@ -298,6 +311,11 @@ def chat_stream(
             x_provider_key if x_provider_key else x_api_key
         ),
     )
+    if provider["id"] == "nvidia-nim" and not api_key:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "NVIDIA NIM is not configured. Set NVIDIA_API_KEY in the backend environment.",
+        )
 
     passages = retrieve_hybrid_passages(
         db, project_id, [d["id"] for d in docs], clean_question, top_n=4
