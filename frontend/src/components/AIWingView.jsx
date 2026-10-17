@@ -10,6 +10,7 @@ import { useApp } from '../context/AppContext.jsx';
 import api, { getAccessToken } from '../api';
 import KnowledgeMap from './KnowledgeMap.jsx';
 import { completeNvidiaChat, streamNvidiaChat } from '../services/nvidia.js';
+import { isBrowserProviderAvailable } from '../services/providerAvailability.js';
 
 const KEYS_KEY = 'knoprix_mr_provider_keys';
 const SIDEBAR_COLLAPSED_KEY = 'knoprix_aiwing_sidebar_collapsed';
@@ -87,14 +88,15 @@ export default function AIWingView({ onNavigateToDocument }) {
       .then(({ data }) => {
         const list = data.providers || [];
         setProviders(list);
-        if (list.length > 0) {
+        const availableProviders = list.filter(isBrowserProviderAvailable);
+        if (availableProviders.length > 0) {
           // Prefer the server default first so the browser matches the active
           // backend policy; if that provider is unavailable, fall back to a
           // server-key-backed provider and then the top allowlist entry.
           const preferred =
-            list.find((p) => p.id === DEFAULT_PROVIDER_ID) ||
-            list.find((p) => p.hasServerKey) ||
-            list[0];
+            availableProviders.find((p) => p.id === DEFAULT_PROVIDER_ID) ||
+            availableProviders.find((p) => p.hasServerKey) ||
+            availableProviders[0];
           setProviderId(preferred.id);
           setModel(preferred.models?.[0]?.id || DEFAULT_MODEL_ID);
         }
@@ -186,6 +188,11 @@ export default function AIWingView({ onNavigateToDocument }) {
   const handleSendChat = async () => {
     const q = question.trim();
     if (!q || streaming) return;
+    const selectedProvider = providers.find((provider) => provider.id === providerId);
+    if (!isBrowserProviderAvailable(selectedProvider)) {
+      notify(selectedProvider?.availabilityNote || 'Select an available AI provider.', 'error');
+      return;
+    }
     const grantedDocIds = documents.filter((d) => d.ai_granted).map((d) => d.id);
     if (grantedDocIds.length === 0) {
       notify('Please authorize at least one document for AI access first', 'error');
@@ -392,6 +399,11 @@ export default function AIWingView({ onNavigateToDocument }) {
 
   // Generate Study Artifacts
   const handleGenerateArtifact = async () => {
+    const selectedProvider = providers.find((provider) => provider.id === providerId);
+    if (!isBrowserProviderAvailable(selectedProvider)) {
+      notify(selectedProvider?.availabilityNote || 'Select an available AI provider.', 'error');
+      return;
+    }
     const grantedDocIds = documents.filter((d) => d.ai_granted).map((d) => d.id);
     if (grantedDocIds.length === 0) {
       notify('Authorize at least one document for AI access first', 'error');
@@ -594,8 +606,8 @@ export default function AIWingView({ onNavigateToDocument }) {
               className="w-full bg-midnight-panel border border-glass-borderDark rounded-lg px-2 py-1 text-xs text-ivory focus:outline-none focus:border-accent"
             >
               {providers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name || p.id}{p.hasServerKey ? ' · server key ready' : ''}
+                <option key={p.id} value={p.id} disabled={!isBrowserProviderAvailable(p)}>
+                  {p.name || p.id}{!isBrowserProviderAvailable(p) ? ' · unavailable (CORS)' : p.hasServerKey ? ' · server key ready' : ''}
                 </option>
               ))}
             </select>
@@ -609,6 +621,12 @@ export default function AIWingView({ onNavigateToDocument }) {
               )) || <option value={model}>{model}</option>}
             </select>
           </div>
+          {providers.find((p) => p.id === 'nvidia-nim') && (
+            <p role="status" className="mt-1 text-[10px] leading-relaxed text-amber-200/80">
+              NVIDIA NIM is temporarily unavailable here because its CORS policy blocks browser requests.
+              Any saved NVIDIA key stays in this browser and will not be used.
+            </p>
+          )}
           {providerId === 'nvidia-nim' && (
             <p className="text-[10px] leading-relaxed text-ivory/55">
               Your key stays in this browser. Authorized excerpts are sent directly to NVIDIA; trial limits may apply.

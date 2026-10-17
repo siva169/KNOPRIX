@@ -1,5 +1,20 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-17 — Disable NVIDIA in browser UI while CORS is blocked
+
+- The deployed NVIDIA preflight returned no `Access-Control-Allow-Origin` for
+  `https://knoprix.vercel.app`, while the configured Knoprix API preflight
+  succeeded. This is the cause of the browser's `Failed to fetch` error for
+  NVIDIA NIM.
+- Keep browser-only key handling as approved: mark NVIDIA unavailable in the
+  allowlist, disable it in both provider pickers, and guard AI Wing chat and
+  artifact actions. Existing browser keys are retained and never sent.
+- Documented that NVIDIA will remain disabled until its CORS policy allows the
+  app origin. No backend key relay or NVIDIA completion request was made.
+- Verification: 20 backend provider/RAG tests, 4 browser-adapter/availability
+  tests, frontend build, and responsive browser checks at 390/425/768/1024px
+  pass. The build retains its existing large-chunk warning.
+
 ## 2026-10-17 — Add NVIDIA browser-only BYOK
 
 - Added NVIDIA NIM provider metadata for Nemotron 3.5 Lightning and browser

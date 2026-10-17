@@ -74,14 +74,13 @@ that provider. Server-side provider keys can be configured in `backend/.env`
 using the names in `backend/.env.example`; NVIDIA is browser-only BYOK and is
 never configured or forwarded through the backend.
 
-### NVIDIA NIM (browser-only BYOK)
+### NVIDIA NIM (browser-only BYOK; temporarily unavailable)
 
-1. Create an NVIDIA API key through [NVIDIA Build](https://build.nvidia.com/).
-2. In Knoprix's AI Wing or Document Chat, select **NVIDIA NIM (hosted trial)**
-   and **Nemotron 3.5 Lightning 30B**, then save the key under Provider & BYOK.
-3. The browser sends the key and only authorized retrieved passages directly
-   to NVIDIA. Study artifacts are generated in the browser and saved without
-   sending the key to Knoprix.
+NVIDIA's chat endpoint currently omits the CORS permission needed by the
+Knoprix web origin. The browser therefore blocks direct requests, so NVIDIA is
+disabled in AI Wing and Document Chat until NVIDIA allows browser requests.
+Knoprix does not proxy NVIDIA keys through its backend. Previously saved
+NVIDIA keys remain in browser storage and are not used.
 
 NVIDIA controls trial availability, terms, and request limits; Knoprix does not
 promise that NVIDIA usage is always free. Provider keys are stored in browser

@@ -71,6 +71,11 @@ ALLOWLIST = [
         "name": "NVIDIA NIM (hosted trial)",
         "baseUrl": "https://integrate.api.nvidia.com/v1",
         "freeNote": "Hosted trial; availability and rate limits are set by NVIDIA.",
+        "browserAvailable": False,
+        "availabilityNote": (
+            "Temporarily unavailable in the Knoprix web app: NVIDIA's CORS policy "
+            "blocks browser requests from this origin."
+        ),
         "models": [
             {
                 "id": NVIDIA_MODEL_ID,

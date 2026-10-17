@@ -88,6 +88,9 @@ partial implementation as proof that all consent controls are implemented.
 - NVIDIA BYOK MUST be sent directly from the browser to
   `https://integrate.api.nvidia.com/v1/chat/completions`. The key MUST NOT be
   configured as a Knoprix backend secret or sent in a Knoprix request header.
+- The NVIDIA endpoint's current CORS response does not authorize the Knoprix
+  web origin. NVIDIA is therefore disabled in the web UI until that browser
+  origin is allowed; a backend relay is not an approved workaround.
 - For NVIDIA study artifacts, the browser obtains authorized citations from
   Knoprix, calls NVIDIA directly with those passages, then sends only the
   generated structured artifact back for persistence. Knoprix re-retrieves

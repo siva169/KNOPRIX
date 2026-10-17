@@ -85,7 +85,14 @@ async function run() {
         contentType: 'application/json',
         body: JSON.stringify({
           providers: [
-            { id: 'groq-free', name: 'Groq Cloud', models: [{ id: 'openai/gpt-oss-20b', name: 'GPT-OSS 20B' }] }
+            { id: 'groq-free', name: 'Groq Cloud', models: [{ id: 'openai/gpt-oss-20b', name: 'GPT-OSS 20B' }] },
+            {
+              id: 'nvidia-nim',
+              name: 'NVIDIA NIM (hosted trial)',
+              browserAvailable: false,
+              availabilityNote: "NVIDIA's CORS policy blocks browser requests.",
+              models: [{ id: 'nvidia/nemotron-3.5-lightning-30b-a3b', name: 'Nemotron 3.5 Lightning' }],
+            },
           ]
         }),
       });
@@ -152,6 +159,10 @@ async function run() {
 
     if (!grantsVisible || !chatVisible || !artifactsVisible || !mapVisible) {
       throw new Error(`[${bp.name}] AI Wing content elements missing! Grants: ${grantsVisible}, Chat: ${chatVisible}, Artifacts: ${artifactsVisible}, Map: ${mapVisible}`);
+    }
+    const nvidiaOption = page.getByRole('option', { name: /NVIDIA NIM.*unavailable \(CORS\)/ });
+    if (!(await nvidiaOption.isDisabled())) {
+      throw new Error(`[${bp.name}] NVIDIA provider was selectable despite browser CORS being blocked.`);
     }
 
     // Verify the AI Wing sidebar retracts, remembers its state, and reopens.

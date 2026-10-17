@@ -87,6 +87,8 @@ class ProviderAdapterTests(unittest.TestCase):
             ["nvidia/nemotron-3.5-lightning-30b-a3b"],
         )
         self.assertFalse(provider["hasServerKey"])
+        self.assertFalse(provider["browserAvailable"])
+        self.assertIn("CORS", provider["availabilityNote"])
 
     def test_nvidia_credentials_are_not_loaded_by_the_backend(self):
         keys = _load_provider_api_keys({"NVIDIA_API_KEY": "browser-only-key"})

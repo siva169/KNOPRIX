@@ -4,6 +4,7 @@ import { X, Send, Maximize2, Minimize2, KeyRound, Trash2, FileText, ChevronRight
 import { useApp } from '../context/AppContext.jsx';
 import api from '../api';
 import { streamNvidiaChat } from '../services/nvidia.js';
+import { isBrowserProviderAvailable } from '../services/providerAvailability.js';
 
 // Provider keys stay in browser storage and are sent directly to the selected
 // provider; they are never included in requests to the Knoprix backend.
@@ -50,11 +51,12 @@ export default function ChatPanel({ onClose }) {
       .then(({ data }) => {
         const list = data.providers || [];
         setProviders(list);
-        if (list.length) {
+        const availableProviders = list.filter(isBrowserProviderAvailable);
+        if (availableProviders.length) {
           const preferred =
-            list.find((p) => p.id === 'zai-glm-free') ||
-            list.find((p) => p.hasServerKey) ||
-            list[0];
+            availableProviders.find((p) => p.id === 'zai-glm-free') ||
+            availableProviders.find((p) => p.hasServerKey) ||
+            availableProviders[0];
           setProviderId(preferred.id);
           setModel(preferred.models[0]?.id || 'glm-4.5-flash');
         }
@@ -101,6 +103,10 @@ export default function ChatPanel({ onClose }) {
 
   const ask = async () => {
     if (!question.trim() || !selected.length || loading) return;
+    if (!isBrowserProviderAvailable(provider)) {
+      setError(provider?.availabilityNote || 'Select an available AI provider.');
+      return;
+    }
     setLoading(true);
     setError('');
     setAnswer(null);
@@ -261,7 +267,11 @@ export default function ChatPanel({ onClose }) {
           <label className="flex-1 text-xs text-ivory/70 flex flex-col gap-1">
             Provider
             <select value={providerId} onChange={(e) => pickProvider(e.target.value)} className="rounded-lg bg-midnight/60 border border-glass-borderDark text-ivory text-xs px-2 py-2 focus:outline-none focus:border-primary">
-              {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {providers.map((p) => (
+                <option key={p.id} value={p.id} disabled={!isBrowserProviderAvailable(p)}>
+                  {p.name}{!isBrowserProviderAvailable(p) ? ' — unavailable (CORS)' : ''}
+                </option>
+              ))}
             </select>
           </label>
           <label className="flex-1 text-xs text-ivory/70 flex flex-col gap-1">
@@ -271,6 +281,12 @@ export default function ChatPanel({ onClose }) {
             </select>
           </label>
         </div>
+        {providers.find((p) => p.id === 'nvidia-nim') && (
+          <p role="status" className="text-[10px] leading-relaxed text-amber-200/80">
+            NVIDIA NIM is temporarily unavailable here because its CORS policy blocks browser requests.
+            Any saved NVIDIA key stays in this browser and will not be used.
+          </p>
+        )}
 
         {/* Browser-local key */}
         <div className="rounded-xl border border-glass-borderDark p-2.5 flex flex-col gap-2">
