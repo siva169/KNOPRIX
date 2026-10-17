@@ -4,8 +4,10 @@ Combines:
 1. Server-side AI document grants enforcement (unauthorized docs are never read).
 2. Hybrid retrieval (DSA Inverted Index keyword search + passage chunks).
 3. MinHeap top-k passage ranking.
-4. Multi-provider streaming adapters (Gemini, OpenAI, Anthropic, Groq, Ollama)
-   with BYOK headers kept strictly in request memory.
+4. Multi-provider adapters (Gemini, OpenAI, Anthropic, Groq, GLM/Z.AI, Ollama)
+   that call the correct upstream endpoint for each provider.
+5. Key resolution: BYOK header wins, then the server-side configured key.
+   Keys are never persisted or returned to the browser.
 """
 from __future__ import annotations
 
@@ -16,10 +18,91 @@ import urllib.request
 import urllib.error
 from typing import Any, AsyncGenerator, Generator
 
+from ..config import cfg
 from ..dsa.minheap import top_k
 from .indexer import search_project, tokenize
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Provider endpoint routing
+# ---------------------------------------------------------------------------
+# Every provider MUST map to its own upstream host. Falling through to a
+# generic OpenAI URL would post a provider's key to a third party, so unknown
+# providers are rejected rather than guessed.
+_OPENAI_COMPATIBLE_URLS = {
+    "groq-free": "https://api.groq.com/openai/v1/chat/completions",
+    "openrouter-free": "https://openrouter.ai/api/v1/chat/completions",
+    "zai-glm-free": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    "openai": "https://api.openai.com/v1/chat/completions",
+}
+_NATIVE_PROVIDERS = {"gemini-free", "anthropic", "ollama"}
+
+
+def provider_is_supported(provider_id: str) -> bool:
+    pid = (provider_id or "").strip().lower()
+    return pid in _OPENAI_COMPATIBLE_URLS or pid in _NATIVE_PROVIDERS
+
+
+def resolve_api_key(provider_id: str, supplied_key: str | None = None) -> str | None:
+    """BYOK header wins; otherwise fall back to the server-side configured key."""
+    if isinstance(supplied_key, str) and supplied_key.strip():
+        return supplied_key.strip()
+    return cfg.PROVIDER_API_KEYS.get((provider_id or "").strip().lower()) or None
+
+
+def provider_has_server_key(provider_id: str) -> bool:
+    return bool(cfg.PROVIDER_API_KEYS.get((provider_id or "").strip().lower()))
+
+
+# ---------------------------------------------------------------------------
+# Retrieval
+# ---------------------------------------------------------------------------
+_SUFFIXES = (
+    "ing", "ings", "ed", "es", "s", "ly", "ment", "ments", "tion", "tions",
+    "ive", "al", "ic", "ness", "able", "ible",
+)
+
+
+def stem(word: str) -> str:
+    """Crude but effective suffix stripper.
+
+    Fixes the 'Grounding' vs 'grounded' blind spot: without stemming, a topic
+    that is merely a morphological variant of the document's wording scored
+    zero and artifact generation failed with 404.
+    """
+    if len(word) <= 4:
+        return word
+    for suffix in _SUFFIXES:
+        if word.endswith(suffix) and len(word) - len(suffix) >= 4:
+            return word[: -len(suffix)]
+    return word
+
+
+def _stem_set(words: list[str]) -> set[str]:
+    return {stem(w) for w in words if w}
+
+
+def _term_counts(haystack: str, stems: set[str]) -> int:
+    """Count stem matches in text, allowing simple prefix matching."""
+    if not stems:
+        return 0
+    tokens = tokenize(haystack)
+    total = 0
+    for token in tokens:
+        token_stem = stem(token)
+        if token_stem in stems:
+            total += 2
+            continue
+        for candidate in stems:
+            # Only match when one side is a solid prefix of the other and the
+            # shorter side is long enough to avoid noisy collisions.
+            if len(candidate) >= 5 and (
+                token_stem.startswith(candidate) or candidate.startswith(token_stem)
+            ):
+                total += 1
+                break
+    return total
 
 
 def verify_granted_documents(
@@ -53,8 +136,14 @@ def retrieve_hybrid_passages(
 
     words = tokenize(query)
     if not words:
-        return []
+        # tokenize() drops stopwords and short words. A query made entirely of
+        # those ("Core Concepts", "the key ideas") would previously return
+        # nothing at all, so fall back to raw lowercase words.
+        words = [w.lower() for w in re.findall(r"[A-Za-z][A-Za-z\-']+", query or "")]
+        if not words:
+            return []
 
+    query_stems = _stem_set(words)
     granted_set = set(granted_document_ids)
 
     # 1. Fetch document titles
@@ -77,16 +166,12 @@ def retrieve_hybrid_passages(
 
     scored_passages: list[tuple[float, dict[str, Any]]] = []
     query_lower = query.lower()
-
+    # A passage that matches nothing is still useful evidence, so when the
+    # question shares no vocabulary with the corpus we fall back to the
+    # leading passages rather than 404-ing the whole feature.
     for r in chunk_rows:
         content_lower = r["content"].lower()
-        score = 0.0
-
-        # Term frequency score for query tokens
-        for w in words:
-            count = content_lower.count(w)
-            if count > 0:
-                score += count * 2.0
+        score = float(_term_counts(content_lower, query_stems))
 
         # Bonus for contiguous phrase matches
         if len(query_lower) > 3 and query_lower in content_lower:
@@ -127,7 +212,24 @@ def retrieve_hybrid_passages(
                 "content": h["snippet"],
                 "score": float(h["score"]),
             })
-    return fallback[:top_n]
+    if fallback:
+        return fallback[:top_n]
+
+    # Last resort: the query shared no vocabulary with any chunk and the index
+    # is empty. Returning the leading authorized passages is better than
+    # 404-ing the whole AI feature — the LLM still receives grounded evidence.
+    leading = []
+    for r in chunk_rows[:top_n]:
+        leading.append({
+            "chunkId": r["id"],
+            "documentId": r["document_id"],
+            "fileName": doc_names.get(r["document_id"], "Document"),
+            "pageNumber": r["page_number"],
+            "chunkIndex": r["chunk_index"],
+            "content": r["content"][:600],
+            "score": 0.0,
+        })
+    return leading
 
 
 def build_rag_prompt(passages: list[dict[str, Any]], question: str) -> tuple[str, str]:
@@ -158,27 +260,39 @@ def stream_llm_response(
     system_instruction: str,
     user_prompt: str,
 ) -> Generator[str, None, None]:
-    """Stream response tokens from live provider via standard HTTP streaming."""
-    provider_clean = (provider_id or "").lower()
+    """Stream response tokens from the provider's own endpoint.
+
+    `api_key` is the *resolved* key (BYOK or server-side); see resolve_api_key.
+    """
+    provider_clean = (provider_id or "").strip().lower()
+
+    if not provider_is_supported(provider_clean):
+        yield (
+            f"[Unsupported provider '{provider_id}'. "
+            "Choose one of the allowlisted providers to continue.]"
+        )
+        return
 
     if not api_key and provider_clean != "ollama":
         yield (
-            f"[Live generation paused: No API key provided for '{provider_id}'. "
-            "Please pass your key in the X-Provider-Key header to stream live responses. "
-            "Showing retrieved citations below.]"
+            f"[Live generation paused: no API key is configured for '{provider_id}'. "
+            "Add one under Provider & BYOK to stream live responses.]"
         )
         return
 
     try:
         if "gemini" in provider_clean:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse&key={api_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse"
             payload = {
                 "contents": [{"parts": [{"text": f"{system_instruction}\n\n{user_prompt}"}]}]
             }
             req = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": api_key,
+                },
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=30) as resp:
@@ -261,13 +375,10 @@ def stream_llm_response(
                             continue
 
         else:
-            # OpenAI and OpenAI-compatible providers (Groq, OpenRouter)
-            if "groq" in provider_clean:
-                url = "https://api.groq.com/openai/v1/chat/completions"
-            elif "openrouter" in provider_clean:
-                url = "https://openrouter.ai/api/v1/chat/completions"
-            else:
-                url = "https://api.openai.com/v1/chat/completions"
+            # OpenAI-compatible providers. Each provider is routed to its own
+            # host — never fall through to a shared default, or one provider's
+            # key would be posted to another company's API.
+            url = _OPENAI_COMPATIBLE_URLS[provider_clean]
 
             payload = {
                 "model": model,
@@ -310,3 +421,137 @@ def stream_llm_response(
     except Exception as exc:
         logger.error("Provider stream error: %s", exc)
         yield f"[Provider connection error: {exc}]"
+
+
+# ---------------------------------------------------------------------------
+# Non-streaming completion (used by study-artifact generation)
+# ---------------------------------------------------------------------------
+def complete_llm(
+    provider_id: str,
+    model: str,
+    api_key: str | None,
+    system_instruction: str,
+    user_prompt: str,
+    max_tokens: int = 2048,
+) -> str | None:
+    """Single-shot completion against the provider's own endpoint.
+
+    Returns the assistant text, or None when the provider is unsupported, has
+    no key, or the call fails — callers then fall back to deterministic
+    extractive output rather than showing a broken artifact.
+    """
+    provider_clean = (provider_id or "").strip().lower()
+    if not provider_is_supported(provider_clean):
+        return None
+    if not api_key and provider_clean != "ollama":
+        return None
+
+    try:
+        if provider_clean == "anthropic":
+            url = "https://api.anthropic.com/v1/messages"
+            payload = {
+                "model": model,
+                "system": system_instruction,
+                "messages": [{"role": "user", "content": user_prompt}],
+                "max_tokens": max_tokens,
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            }
+        elif provider_clean == "gemini-free":
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{model}:generateContent"
+            )
+            payload = {
+                "contents": [
+                    {"parts": [{"text": f"{system_instruction}\n\n{user_prompt}"}]}
+                ]
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": api_key,
+            }
+        elif provider_clean == "ollama":
+            url = "http://localhost:11434/api/generate"
+            payload = {
+                "model": model or "llama3",
+                "system": system_instruction,
+                "prompt": user_prompt,
+                "stream": False,
+            }
+            headers = {"Content-Type": "application/json"}
+        else:
+            url = _OPENAI_COMPATIBLE_URLS[provider_clean]
+            payload = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_instruction},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "stream": False,
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            }
+
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            raw = json.loads(resp.read().decode("utf-8"))
+
+        if provider_clean == "anthropic":
+            blocks = raw.get("content", [])
+            return "".join(b.get("text", "") for b in blocks if b.get("type") == "text").strip()
+        if provider_clean == "gemini-free":
+            candidates = raw.get("candidates", [])
+            if not candidates:
+                return None
+            parts = candidates[0].get("content", {}).get("parts", [])
+            return "".join(p.get("text", "") for p in parts).strip()
+        if provider_clean == "ollama":
+            return (raw.get("response") or "").strip()
+        choices = raw.get("choices", [])
+        if not choices:
+            return None
+        return (choices[0].get("message", {}).get("content") or "").strip()
+    except urllib.error.HTTPError as err:
+        logger.error("Provider HTTP error %s: %s", err.code, err.reason)
+        return None
+    except Exception as exc:
+        logger.error("Provider completion error: %s", exc)
+        return None
+
+
+def parse_json_block(raw: str | None) -> Any | None:
+    """Extract the first JSON object/array from a model response.
+
+    Models wrap JSON in prose or ```json fences often enough that a strict
+    json.loads() fails often enough to break the whole artifact feature.
+    """
+    if not raw:
+        return None
+    text = raw.strip()
+    fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
+    if fence:
+        text = fence.group(1).strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    for opener, closer in (("{", "}"), ("[", "]")):
+        start = text.find(opener)
+        end = text.rfind(closer)
+        if start != -1 and end > start:
+            try:
+                return json.loads(text[start : end + 1])
+            except json.JSONDecodeError:
+                continue
+    return None

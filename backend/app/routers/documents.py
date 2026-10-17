@@ -275,16 +275,43 @@ def _materialize_document(doc: dict) -> tuple[Path, bool]:
     return _resolve_path(doc), False
 
 
+def _serialize_document_row(row, ai_granted: bool) -> dict:
+    """Project a document row into the shape the frontend consumes.
+
+    The AI Wing UI reads `title` / `filename` / `ai_granted`; the database only
+    stores `file_name` and keeps grants in a separate table. Serving all three
+    aliases here keeps one contract for every client.
+    """
+    doc = dict(row)
+    display = doc.get("file_name") or doc.get("filename") or doc.get("title") or "Untitled document"
+    doc["title"] = display
+    doc["filename"] = display
+    doc["fileName"] = display
+    doc["ai_granted"] = bool(ai_granted)
+    return doc
+
+
 @router.get("/projects/{project_id}/documents")
 def list_documents(project_id: str, user=Depends(get_current_user), db=Depends(get_db)):
     get_owned_project(db, user["id"], project_id)
     rows = db.execute(
-        "SELECT * FROM documents WHERE project_id = ? ORDER BY created_at DESC",
-        (project_id,),
+        """
+        SELECT d.*,
+               CASE WHEN g.id IS NULL THEN 0 ELSE 1 END AS has_grant
+        FROM documents d
+        LEFT JOIN ai_document_grants g
+               ON g.document_id = d.id
+              AND g.user_id = ?
+              AND g.purpose = 'all'
+              AND g.revoked_at IS NULL
+        WHERE d.project_id = ?
+        ORDER BY d.created_at DESC
+        """,
+        (user["id"], project_id),
     ).fetchall()
     # Full rows (incl. extracted_text) so text viewers can render without an
     # extra fetch. Typical extracted text is tens of KB — acceptable for lists.
-    docs = [dict(r) for r in rows]
+    docs = [_serialize_document_row(r, bool(r["has_grant"])) for r in rows]
     return {"documents": docs}
 
 
@@ -393,7 +420,7 @@ async def upload_document(project_id: str, file: UploadFile = File(...),
                     )
             raise
         keep_local_file = not use_object_storage
-        return {"document": dict(row), "jobId": job["id"]}
+        return {"document": _serialize_document_row(row, True), "jobId": job["id"]}
     finally:
         if not keep_local_file:
             dest.unlink(missing_ok=True)
@@ -415,7 +442,15 @@ def get_document(document_id: str, user=Depends(get_current_user), db=Depends(ge
                 "extracted_text",
             )
         }
-    return {"document": doc, "readOnly": read_only}
+    granted = db.execute(
+        "SELECT id FROM ai_document_grants WHERE user_id = ? AND document_id = ? "
+        "AND purpose = 'all' AND revoked_at IS NULL",
+        (user["id"], document_id),
+    ).fetchone()
+    return {
+        "document": _serialize_document_row(doc, granted is not None),
+        "readOnly": read_only,
+    }
 
 
 @router.get("/documents/{document_id}/slides")
@@ -569,8 +604,31 @@ def get_document_reading_order(document_id: str, user=Depends(get_current_user),
 
 @router.post("/documents/{document_id}/grant")
 def grant_ai_access(document_id: str, body: dict = None, user=Depends(get_current_user), db=Depends(get_db)):
+    """Grant or revoke AI access.
+
+    The client toggles with a single POST and a boolean `granted` flag, so this
+    endpoint honours `granted: false` by revoking. Previously the flag was
+    ignored and every call re-granted, which meant "Revoke" silently left the
+    document readable by the server.
+    """
     _get_readable_document(db, user["id"], document_id)
-    purpose = (body or {}).get("purpose", "all")
+    body = body or {}
+    purpose = body.get("purpose", "all")
+    should_grant = body.get("granted", True)
+
+    if not should_grant:
+        db.execute(
+            "UPDATE ai_document_grants SET revoked_at = datetime('now') "
+            "WHERE user_id = ? AND document_id = ? AND purpose = ?",
+            (user["id"], document_id, purpose),
+        )
+        return {
+            "granted": False,
+            "revoked": True,
+            "documentId": document_id,
+            "purpose": purpose,
+        }
+
     existing = db.execute(
         "SELECT id, revoked_at FROM ai_document_grants WHERE user_id = ? AND document_id = ? AND purpose = ?",
         (user["id"], document_id, purpose),

@@ -68,9 +68,12 @@ deployment; the hosted database may contain real user data.
 
 ## Current limitations
 
-Document chat currently returns mocked backend responses, and persisted
-per-document AI grants are not enforced. Do not treat third-party AI consent
-or AI document access as a complete production security boundary.
+Document chat sends only retrieved passages from user-owned documents with an
+active AI grant to the selected provider. Live generation requires a key for
+that provider; configure it in `backend/.env` using the names in
+`backend/.env.example`. Local adapter tests mock provider responses, so they do
+not prove a provider key or account can generate a live answer. Gemini keys
+must be restricted to the Gemini API or use Google's authorization-key format.
 
 ## Verification
 
@@ -81,6 +84,7 @@ backend/.venv/bin/python backend/qa_firebase_auth.py
 backend/.venv/bin/python backend/qa_search_batch.py
 backend/.venv/bin/python backend/qa_file_formats.py
 backend/.venv/bin/python backend/qa_storage_rest.py
+backend/.venv/bin/python backend/qa_backlog_rag.py
 npm --prefix frontend run build
 ```
 

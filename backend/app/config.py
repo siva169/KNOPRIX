@@ -20,6 +20,27 @@ def _load_dotenv():
 
 _load_dotenv()
 
+_PROVIDER_KEY_ENV = {
+    "zai-glm-free": ("GLM_API_KEY",),
+    "gemini-free": ("GOOGLE_API_KEY", "GEMINI_API_KEY"),
+    "groq-free": ("GROQ_API_KEY",),
+    "openrouter-free": ("OPENROUTER_API_KEY",),
+    "openai": ("OPENAI_API_KEY",),
+    "anthropic": ("ANTHROPIC_API_KEY",),
+}
+
+
+def _load_provider_api_keys(environ: dict[str, str] | None = None) -> dict[str, str]:
+    env = os.environ if environ is None else environ
+    keys: dict[str, str] = {}
+    for provider_id, env_names in _PROVIDER_KEY_ENV.items():
+        for env_name in env_names:
+            value = env.get(env_name, "").strip()
+            if value:
+                keys[provider_id] = value
+                break
+    return keys
+
 
 class Config:
     PORT = int(os.getenv("PORT", "8000"))
@@ -73,6 +94,15 @@ class Config:
     TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "").strip()
     RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
     EMAIL_FROM = os.getenv("EMAIL_FROM", "noreply@knoprix.io").strip()
+
+    # --- AI provider credentials (server-side defaults) -------------------
+    # BYOK (X-Provider-Key header) always wins. These are fallbacks so the
+    # product works out of the box without every user pasting a key. They are
+    # read from .env / the environment and are never returned to the browser —
+    # the allowlist endpoint only reports *whether* a server key exists.
+    PROVIDER_API_KEYS = _load_provider_api_keys()
+    DEFAULT_AI_PROVIDER = os.getenv("DEFAULT_AI_PROVIDER", "zai-glm-free").strip()
+    DEFAULT_AI_MODEL = os.getenv("DEFAULT_AI_MODEL", "glm-4.5-flash").strip()
 
 
 # Optional persistent Postgres (Supabase/Render Postgres). When set, the backend

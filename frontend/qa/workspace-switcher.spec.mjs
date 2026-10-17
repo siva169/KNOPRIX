@@ -85,7 +85,7 @@ async function run() {
         contentType: 'application/json',
         body: JSON.stringify({
           providers: [
-            { id: 'groq-free', name: 'Groq Cloud', models: [{ id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B' }] }
+            { id: 'groq-free', name: 'Groq Cloud', models: [{ id: 'openai/gpt-oss-20b', name: 'GPT-OSS 20B' }] }
           ]
         }),
       });

@@ -1,5 +1,31 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-17 — Fix and verify Google Gemini provider wiring
+
+- Send Gemini API keys through Google's `x-goog-api-key` request header for
+  both streaming chat and non-streaming study-artifact generation, instead of
+  placing secrets in request URLs.
+- Update Gemini, Groq, and Anthropic selectable/artifact models to currently
+  documented IDs, including replacing retired Groq Llama 3.3 and Anthropic
+  Claude 3.5 choices. Sync the mocked provider model used by the browser QA.
+  Accept both `GEMINI_API_KEY` and Google's `GOOGLE_API_KEY` environment
+  names; document optional provider keys.
+- Add mocked tests for provider endpoint/auth headers, Gemini key handling,
+  allowed models, authorized document passage delivery, and revoked-grant
+  blocking. Local adapter tests do not establish live account/model access.
+- Verification: provider/RAG QA passes (12 tests), artifact QA passes (3),
+  touched Python files compile, the frontend builds, and the mocked browser
+  check passes at 390/425/768/1024px. Only the GLM server key is configured
+  locally; Gemini and other providers still need keys and live checks.
+- Z.AI currently marks the GLM-4.5 family as nearing retirement. The existing
+  GLM-4.5-Flash default is retained pending live model verification and
+  approval of any replacement.
+- Provider references: [Gemini API keys](https://ai.google.dev/gemini-api/docs/api-key),
+  [Gemini models](https://ai.google.dev/gemini-api/docs/models),
+  [Groq deprecations](https://console.groq.com/docs/deprecations), and
+  [Anthropic model deprecations](https://platform.claude.com/docs/en/about-claude/model-deprecations),
+  [Z.AI GLM-4.7](https://docs.bigmodel.cn/cn/guide/models/text/glm-4.7).
+
 ## 2026-10-17 — Make the AI Wing sidebar retractable
 
 - Added a keyboard-accessible collapse control to the AI Wing document-grants

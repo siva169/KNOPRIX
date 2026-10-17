@@ -14,10 +14,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
+from ..config import cfg
 from ..database import get_db
 from ..security import get_current_user, get_owned_document, get_owned_project
 from ..services.rag import (
     build_rag_prompt,
+    provider_has_server_key,
+    resolve_api_key,
     retrieve_hybrid_passages,
     stream_llm_response,
     verify_granted_documents,
@@ -32,8 +35,8 @@ ALLOWLIST = [
         "baseUrl": "https://generativelanguage.googleapis.com",
         "freeNote": "Free quota tier; verify limits at build time.",
         "models": [
-            {"id": "gemini-2.0-flash", "label": "Gemini 2.0 Flash"},
-            {"id": "gemini-1.5-flash", "label": "Gemini 1.5 Flash"},
+            {"id": "gemini-2.5-flash", "label": "Gemini 2.5 Flash"},
+            {"id": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash-Lite"},
         ],
     },
     {
@@ -43,7 +46,7 @@ ALLOWLIST = [
         "freeNote": "Free quota tier; verify limits at build time.",
         "models": [
             {"id": "openai/gpt-oss-20b", "label": "GPT-OSS 20B"},
-            {"id": "llama-3.3-70b-versatile", "label": "Llama 3.3 70B"},
+            {"id": "openai/gpt-oss-120b", "label": "GPT-OSS 120B"},
         ],
     },
     {
@@ -78,8 +81,8 @@ ALLOWLIST = [
         "baseUrl": "https://api.anthropic.com/v1",
         "freeNote": "Direct Anthropic API key",
         "models": [
-            {"id": "claude-3-5-sonnet-20241022", "label": "Claude 3.5 Sonnet"},
-            {"id": "claude-3-5-haiku-20241022", "label": "Claude 3.5 Haiku"},
+            {"id": "claude-sonnet-5-5", "label": "Claude Sonnet 5.5"},
+            {"id": "claude-haiku-5-5", "label": "Claude Haiku 5.5"},
         ],
     },
     {
@@ -94,6 +97,16 @@ ALLOWLIST = [
         ],
     },
 ]
+
+# The provider picker renders `m.name`, so every model descriptor carries both
+# `label` and `name`. Serverside-key presence is reported (never the key) so
+# the UI can show which providers work without the user pasting anything.
+for _provider in ALLOWLIST:
+    for _model in _provider["models"]:
+        _model.setdefault("name", _model.get("label", _model["id"]))
+    _provider["hasServerKey"] = provider_has_server_key(_provider["id"])
+# Put the configured default provider first so it is preselected.
+ALLOWLIST.sort(key=lambda p: 0 if p["id"] == cfg.DEFAULT_AI_PROVIDER else 1)
 
 KEY_LIKE_FIELDS = {
     "apikey", "api_key", "api-key", "token", "accesstoken",
@@ -182,11 +195,9 @@ def chat_ask(
     provider, model, docs, project_id, clean_question = _validate_chat_request(
         body, user, db
     )
-    api_key = None
-    if isinstance(x_provider_key, str) and x_provider_key.strip():
-        api_key = x_provider_key.strip()
-    elif isinstance(x_api_key, str) and x_api_key.strip():
-        api_key = x_api_key.strip()
+    api_key = resolve_api_key(
+        provider["id"], x_provider_key if x_provider_key else x_api_key
+    )
 
     # Hybrid retrieval: chunks + inverted index via MinHeap
     passages = retrieve_hybrid_passages(
@@ -216,7 +227,8 @@ def chat_ask(
         if citations:
             answer = (
                 f"[Retrieved {len(citations)} verified passage(s) from your authorized documents] "
-                "Wire a provider key via X-Provider-Key header to receive a live cited answer."
+                "No API key is configured for this provider — add one under "
+                "Provider & BYOK to receive a live cited answer."
             )
         else:
             answer = "No passages in your authorized documents matched your question."
@@ -240,15 +252,18 @@ def chat_stream(
     x_provider_key: Optional[str] = Header(None, alias="X-Provider-Key"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
-    """Real SSE stream adapter returning live token events and final citations."""
+    """Real SSE stream: named events carrying token / thought / citation / done.
+
+    The wire format is `event: <name>` + `data: <json>` because the client's
+    parser keys off the event name. Previously only bare `data:` lines were
+    emitted, so the client matched zero frames and rendered an empty answer.
+    """
     provider, model, docs, project_id, clean_question = _validate_chat_request(
         body, user, db
     )
-    api_key = None
-    if isinstance(x_provider_key, str) and x_provider_key.strip():
-        api_key = x_provider_key.strip()
-    elif isinstance(x_api_key, str) and x_api_key.strip():
-        api_key = x_api_key.strip()
+    api_key = resolve_api_key(
+        provider["id"], x_provider_key if x_provider_key else x_api_key
+    )
 
     passages = retrieve_hybrid_passages(
         db, project_id, [d["id"] for d in docs], clean_question, top_n=4
@@ -265,14 +280,49 @@ def chat_stream(
     ]
     sys_inst, user_prompt = build_rag_prompt(passages, clean_question)
 
+    def frame(event: str, payload: dict) -> str:
+        return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
+
     async def event_stream():
+        yield frame(
+            "meta",
+            {
+                "provider": provider["id"],
+                "model": model,
+                "documents": len(docs),
+                "passages": len(passages),
+                "grounded": bool(passages),
+                "hasKey": bool(api_key) or provider["id"] == "ollama",
+            },
+        )
+        # Retrieval progress doubles as the client's reasoning indicator.
+        yield frame(
+            "thought",
+            {
+                "text": (
+                    f"Retrieved {len(passages)} authorized passage(s) from "
+                    f"{len({c['documentId'] for c in citations})} document(s)."
+                    if passages
+                    else "No authorized passages matched this question."
+                )
+            },
+        )
         for token in stream_llm_response(
             provider["id"], model, api_key, sys_inst, user_prompt
         ):
-            payload = json.dumps({"token": token})
-            yield f"data: {payload}\n\n"
-        done_payload = json.dumps({"citations": citations, "done": True})
-        yield f"data: {done_payload}\n\n"
+            if token.startswith("[Provider error") or token.startswith("[Provider connection error"):
+                yield frame("error", {"detail": token.strip("[]")})
+                continue
+            if token.startswith("[Live generation paused"):
+                yield frame("thought", {"text": token})
+                continue
+            if token.startswith("[Unsupported provider"):
+                yield frame("error", {"detail": token})
+                continue
+            yield frame("token", {"text": token})
+        for citation in citations:
+            yield frame("citation", citation)
+        yield frame("done", {"citations": citations, "done": True})
 
     return StreamingResponse(
         event_stream(),
