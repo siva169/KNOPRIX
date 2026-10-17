@@ -136,7 +136,7 @@ class ProviderAdapterTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     open_url.call_args.kwargs["timeout"],
-                    90 if provider_id == "nvidia-nim" else 30,
+                    120 if provider_id == "nvidia-nim" else 30,
                 )
                 self.assertEqual(tokens, ["grounded"])
 

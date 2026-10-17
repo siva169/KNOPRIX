@@ -399,7 +399,7 @@ def stream_llm_response(
                 },
                 method="POST",
             )
-            stream_timeout = 90 if provider_clean == "nvidia-nim" else 30
+            stream_timeout = 120 if provider_clean == "nvidia-nim" else 30
             with urllib.request.urlopen(req, timeout=stream_timeout) as resp:
                 for line in resp:
                     line_str = line.decode("utf-8").strip()

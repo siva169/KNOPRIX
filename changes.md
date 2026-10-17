@@ -2,7 +2,7 @@
 
 ## 2026-10-17 — Allow longer NVIDIA chat startup
 
-- Increased the NVIDIA streaming read timeout from 30 to 90 seconds so a
+- Increased the NVIDIA streaming read timeout from 30 to 120 seconds so a
   delayed first response does not immediately fail; other providers retain
   their existing 30-second timeout.
 - Added a regression assertion for provider-specific timeout behavior.
