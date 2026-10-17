@@ -70,10 +70,24 @@ deployment; the hosted database may contain real user data.
 
 Document chat sends only retrieved passages from user-owned documents with an
 active AI grant to the selected provider. Live generation requires a key for
-that provider; configure it in `backend/.env` using the names in
-`backend/.env.example`. Local adapter tests mock provider responses, so they do
-not prove a provider key or account can generate a live answer. Gemini keys
-must be restricted to the Gemini API or use Google's authorization-key format.
+that provider. Server-side provider keys can be configured in `backend/.env`
+using the names in `backend/.env.example`; NVIDIA is browser-only BYOK and is
+never configured or forwarded through the backend.
+
+### NVIDIA NIM (browser-only BYOK)
+
+1. Create an NVIDIA API key through [NVIDIA Build](https://build.nvidia.com/).
+2. In Knoprix's AI Wing or Document Chat, select **NVIDIA NIM (hosted trial)**
+   and **Nemotron 3.5 Lightning 30B**, then save the key under Provider & BYOK.
+3. The browser sends the key and only authorized retrieved passages directly
+   to NVIDIA. Study artifacts are generated in the browser and saved without
+   sending the key to Knoprix.
+
+NVIDIA controls trial availability, terms, and request limits; Knoprix does not
+promise that NVIDIA usage is always free. Provider keys are stored in browser
+local storage, which browser extensions can read. Local adapter tests do not
+prove a provider key or account can generate a live answer. Gemini keys must
+be restricted to the Gemini API or use Google's authorization-key format.
 
 ## Verification
 

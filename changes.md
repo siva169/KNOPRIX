@@ -1,5 +1,21 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-17 — Add NVIDIA browser-only BYOK
+
+- Added NVIDIA NIM provider metadata for Nemotron 3.5 Lightning and browser
+  direct chat/artifact calls. The NVIDIA key is not accepted by Knoprix chat
+  or artifact routes, including provider-key headers and key-like body fields.
+- AI Wing and Document Chat retrieve only authorized passages through Knoprix,
+  then call NVIDIA directly. Study artifacts return generated content only;
+  Knoprix re-retrieves passages and normalizes citations before saving.
+- Documented setup and trial limits; no server-side NVIDIA key setting was
+  added. NVIDIA browser CORS and real account/key access still require a live
+  user-side test.
+- Verification: 20 backend provider/RAG tests, 2 NVIDIA browser-adapter tests,
+  backend compilation, the frontend production build, and existing responsive
+  workspace checks at 390/425/768/1024px pass. The build keeps the existing
+  large-chunk warning.
+
 ## 2026-10-17 — Fix and verify Google Gemini provider wiring
 
 - Send Gemini API keys through Google's `x-goog-api-key` request header for

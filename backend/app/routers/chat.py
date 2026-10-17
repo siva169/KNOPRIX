@@ -24,6 +24,7 @@ from ..services.rag import (
     retrieve_hybrid_passages,
     stream_llm_response,
     verify_granted_documents,
+    NVIDIA_MODEL_ID,
 )
 
 router = APIRouter(prefix="/api", tags=["chat"])
@@ -64,6 +65,18 @@ ALLOWLIST = [
         "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
         "freeNote": "Free tier; verify limits at build time.",
         "models": [{"id": "glm-4.5-flash", "label": "GLM 4.5 Flash"}],
+    },
+    {
+        "id": "nvidia-nim",
+        "name": "NVIDIA NIM (hosted trial)",
+        "baseUrl": "https://integrate.api.nvidia.com/v1",
+        "freeNote": "Hosted trial; availability and rate limits are set by NVIDIA.",
+        "models": [
+            {
+                "id": NVIDIA_MODEL_ID,
+                "label": "Nemotron 3.5 Lightning 30B",
+            }
+        ],
     },
     {
         "id": "openai",
@@ -195,8 +208,16 @@ def chat_ask(
     provider, model, docs, project_id, clean_question = _validate_chat_request(
         body, user, db
     )
+    if provider["id"] == "nvidia-nim" and (x_provider_key or x_api_key):
+        raise HTTPException(
+            400,
+            "NVIDIA API keys must be sent directly from the browser to NVIDIA, not to Knoprix.",
+        )
     api_key = resolve_api_key(
-        provider["id"], x_provider_key if x_provider_key else x_api_key
+        provider["id"],
+        None if provider["id"] == "nvidia-nim" else (
+            x_provider_key if x_provider_key else x_api_key
+        ),
     )
 
     # Hybrid retrieval: chunks + inverted index via MinHeap
@@ -261,8 +282,16 @@ def chat_stream(
     provider, model, docs, project_id, clean_question = _validate_chat_request(
         body, user, db
     )
+    if provider["id"] == "nvidia-nim":
+        raise HTTPException(
+            400,
+            "NVIDIA requests must be made directly from the browser; use /chat/ask only to retrieve authorized citations.",
+        )
     api_key = resolve_api_key(
-        provider["id"], x_provider_key if x_provider_key else x_api_key
+        provider["id"],
+        None if provider["id"] == "nvidia-nim" else (
+            x_provider_key if x_provider_key else x_api_key
+        ),
     )
 
     passages = retrieve_hybrid_passages(

@@ -36,6 +36,7 @@ _OPENAI_COMPATIBLE_URLS = {
     "zai-glm-free": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
     "openai": "https://api.openai.com/v1/chat/completions",
 }
+NVIDIA_MODEL_ID = "nvidia/nemotron-3.5-lightning-30b-a3b"
 _NATIVE_PROVIDERS = {"gemini-free", "anthropic", "ollama"}
 
 

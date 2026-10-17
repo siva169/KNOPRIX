@@ -46,8 +46,13 @@ check("login for chat QA", s == 200 and bool(TOKEN), f"HTTP {s}")
 # 1. Allowlist shape
 s, d = call("GET", "/providers/allowlist", token=TOKEN)
 provs = d.get("providers", [])
-ok = s == 200 and len(provs) == 4 and all(p.get("models") for p in provs)
-check("GET /providers/allowlist (4 free providers)", ok, f"{len(provs)} providers")
+ok = (
+    s == 200
+    and len(provs) >= 5
+    and all(p.get("models") for p in provs)
+    and any(p.get("id") == "nvidia-nim" for p in provs)
+)
+check("GET /providers/allowlist includes NVIDIA", ok, f"{len(provs)} providers")
 
 # 2. Allowlist needs auth
 s, _ = call("GET", "/providers/allowlist")

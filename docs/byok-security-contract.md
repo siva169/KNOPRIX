@@ -1,14 +1,16 @@
 # BYOK Provider Security Contract — Knoprix Final Project
 
-**Status:** Approved policy; implementation is partial and does not yet enforce
-persisted per-document AI grants.
-**Decisions (2026-10-04):** free-tier providers only · keys browser-local only
+**Status:** Approved policy. Chat and study-artifact routes enforce persisted
+per-document grants, and NVIDIA BYOK is browser-direct. Provider-key handling
+and the remaining consent controls are not yet uniform across all providers.
+**Decisions (2026-10-04; NVIDIA addition 2026-10-17):** user-supplied
+trial/free-tier providers only · keys browser-local only
 · selected documents only · Knoprix backend processing and third-party AI
 transfer are separate consent boundaries.
-**Scope:** This contract covers document chat and future AI study tools. The
-current frontend stores keys in browser localStorage and calls some providers
-directly; the backend returns mocked citation-based chat data. Do not treat
-this partial implementation as proof that all consent and grant checks exist.
+**Scope:** This contract covers document chat and AI study tools. The frontend
+stores provider keys in browser localStorage; NVIDIA calls go directly from the
+browser, while other provider flows may use Knoprix routes. Do not treat this
+partial implementation as proof that all consent controls are implemented.
 
 ## 1. Assumptions (explicit)
 
@@ -80,7 +82,16 @@ this partial implementation as proof that all consent and grant checks exist.
   enforcement alone is decoration).
 - Initial candidates (VERIFY each at implementation — free tiers move):
   free-tier endpoints of Gemini, Groq, OpenAI-compatible `:free` models via
-  OpenRouter, Z.AI GLM free tier.
+  OpenRouter, Z.AI GLM free tier, and NVIDIA NIM hosted trial endpoints. NVIDIA
+  API terms, model availability, and usage limits can change; do not promise
+  unlimited or permanently free access.
+- NVIDIA BYOK MUST be sent directly from the browser to
+  `https://integrate.api.nvidia.com/v1/chat/completions`. The key MUST NOT be
+  configured as a Knoprix backend secret or sent in a Knoprix request header.
+- For NVIDIA study artifacts, the browser obtains authorized citations from
+  Knoprix, calls NVIDIA directly with those passages, then sends only the
+  generated structured artifact back for persistence. Knoprix re-retrieves
+  authorized passages and normalizes citations before saving.
 - SHOULD: per-day app-side call budget per provider (protects the user's
   free quota from runaway loops — agents retry, quotas don't).
 

@@ -17,7 +17,7 @@ from starlette.datastructures import Headers
 
 from app import database
 from app.config import _load_provider_api_keys
-from app.routers import chat, documents
+from app.routers import artifacts, chat, documents
 from app.services import rag
 
 USER = {"id": "user-rag-test"}
@@ -75,6 +75,23 @@ class ProviderAdapterTests(unittest.TestCase):
         self.assertEqual(
             anthropic_models, ["claude-sonnet-5-5", "claude-haiku-5-5"]
         )
+
+    def test_nvidia_provider_uses_the_published_nim_model_and_endpoint(self):
+        provider = chat._lookup("nvidia-nim")
+
+        self.assertEqual(
+            provider["baseUrl"], "https://integrate.api.nvidia.com/v1"
+        )
+        self.assertEqual(
+            [model["id"] for model in provider["models"]],
+            ["nvidia/nemotron-3.5-lightning-30b-a3b"],
+        )
+        self.assertFalse(provider["hasServerKey"])
+
+    def test_nvidia_credentials_are_not_loaded_by_the_backend(self):
+        keys = _load_provider_api_keys({"NVIDIA_API_KEY": "browser-only-key"})
+
+        self.assertNotIn("nvidia-nim", keys)
 
     def test_openai_compatible_streams_send_bearer_key_to_provider_endpoint(self):
         endpoints = {
@@ -290,6 +307,197 @@ class BacklogRAGTests(unittest.TestCase):
             "test-provider-key",
         ))
         self.assertIn("powerful and luminous explosion", stream.call_args.args[4])
+
+    def test_nvidia_keys_are_rejected_by_backend_chat_routes(self):
+        doc_res = self.upload_doc("nvidia.txt", b"NVIDIA test passage for chat.")
+        body = {
+            "providerId": "nvidia-nim",
+            "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+            "documentIds": [doc_res["document"]["id"]],
+            "question": "What does the passage say?",
+        }
+
+        with self.assertRaises(HTTPException) as ctx:
+            chat.chat_ask(
+                body, user=USER, db=self.db, x_provider_key="must-not-reach-backend"
+            )
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("directly from the browser to NVIDIA", ctx.exception.detail)
+
+        with self.assertRaises(HTTPException) as stream_ctx:
+            chat.chat_stream(
+                body, user=USER, db=self.db, x_provider_key="must-not-reach-backend"
+            )
+        self.assertEqual(stream_ctx.exception.status_code, 400)
+
+    def test_nvidia_chat_without_key_returns_only_authorized_citations(self):
+        doc_res = self.upload_doc(
+            "nvidia.txt",
+            b"Nemotron is NVIDIA's family of open models.",
+        )
+        doc_id = doc_res["document"]["id"]
+        result = chat.chat_ask(
+            {
+                "providerId": "nvidia-nim",
+                "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+                "documentIds": [doc_id],
+                "question": "What is Nemotron?",
+            },
+            user=USER,
+            db=self.db,
+            x_provider_key=None,
+            x_api_key=None,
+        )
+
+        self.assertTrue(result["mocked"])
+        self.assertEqual(result["citations"][0]["documentId"], doc_id)
+
+    def test_nvidia_generated_flashcards_are_saved_with_verified_citations(self):
+        doc_res = self.upload_doc(
+            "nvidia.txt",
+            b"A supernova is a powerful and luminous explosion of a star.",
+        )
+        doc_id = doc_res["document"]["id"]
+        generated = {
+            "cards": [
+                {"question": "What is a supernova?", "answer": "A stellar explosion."}
+            ]
+        }
+
+        with patch(
+            "app.routers.artifacts.retrieve_hybrid_passages",
+            return_value=[{
+                "documentId": doc_id,
+                "fileName": "nvidia.txt",
+                "pageNumber": 1,
+                "content": "A supernova is a powerful and luminous explosion of a star.",
+            }],
+        ):
+            result = artifacts.generate_flashcards(
+                {
+                    "documentIds": [doc_id],
+                    "topic": "supernova",
+                    "providerId": "nvidia-nim",
+                    "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+                    "generatedContent": generated,
+                },
+                user=USER,
+                db=self.db,
+                x_provider_key=None,
+                x_api_key=None,
+            )
+
+        self.assertEqual(result["generatedBy"], "llm")
+        self.assertEqual(result["provider"], "nvidia-nim")
+        self.assertEqual(result["cards"][0]["source"]["documentId"], doc_id)
+
+    def test_nvidia_artifact_route_rejects_a_backend_key(self):
+        doc_res = self.upload_doc("nvidia.txt", b"NVIDIA test passage.")
+        request_body = {
+            "documentIds": [doc_res["document"]["id"]],
+            "topic": "NVIDIA",
+            "providerId": "nvidia-nim",
+            "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+            "generatedContent": {"cards": []},
+        }
+
+        with self.assertRaises(HTTPException) as ctx:
+            artifacts.generate_flashcards(
+                request_body,
+                user=USER,
+                db=self.db,
+                x_provider_key="must-not-reach-backend",
+            )
+
+        self.assertEqual(ctx.exception.status_code, 400)
+        with self.assertRaises(HTTPException) as body_ctx:
+            artifacts.generate_flashcards(
+                {**request_body, "api_key": "must-not-reach-backend"},
+                user=USER,
+                db=self.db,
+                x_provider_key=None,
+                x_api_key=None,
+            )
+
+        self.assertEqual(body_ctx.exception.status_code, 400)
+
+    def test_nvidia_artifact_route_rejects_unlisted_model(self):
+        doc_res = self.upload_doc("nvidia.txt", b"NVIDIA test passage.")
+
+        with self.assertRaises(HTTPException) as ctx:
+            artifacts.generate_flashcards(
+                {
+                    "documentIds": [doc_res["document"]["id"]],
+                    "topic": "NVIDIA",
+                    "providerId": "nvidia-nim",
+                    "model": "unlisted-model",
+                    "generatedContent": {"cards": []},
+                },
+                user=USER,
+                db=self.db,
+                x_provider_key=None,
+                x_api_key=None,
+            )
+
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("not allowlisted", ctx.exception.detail)
+
+    def test_nvidia_generated_quiz_and_analogy_are_saved(self):
+        doc_res = self.upload_doc(
+            "nvidia.txt",
+            b"Nemotron is a family of open NVIDIA models for AI applications.",
+        )
+        doc_id = doc_res["document"]["id"]
+        passage = {
+            "documentId": doc_id,
+            "fileName": "nvidia.txt",
+            "pageNumber": 1,
+            "content": "Nemotron is a family of open NVIDIA models for AI applications.",
+        }
+        base = {
+            "documentIds": [doc_id],
+            "providerId": "nvidia-nim",
+            "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+        }
+
+        with patch("app.routers.artifacts.retrieve_hybrid_passages", return_value=[passage]):
+            quiz = artifacts.generate_quiz(
+                {
+                    **base,
+                    "topic": "Nemotron",
+                    "generatedContent": {
+                        "questions": [{
+                            "question": "What is Nemotron?",
+                            "options": ["A model family", "A database"],
+                            "correctIndex": 0,
+                            "explanation": "The source calls it an open model family.",
+                        }]
+                    },
+                },
+                user=USER,
+                db=self.db,
+                x_provider_key=None,
+                x_api_key=None,
+            )
+            analogy = artifacts.generate_analogy(
+                {
+                    **base,
+                    "concept": "Nemotron",
+                    "generatedContent": {
+                        "analogy": "A toolkit of specialized machines.",
+                        "explanation": "The source describes a family of models.",
+                    },
+                },
+                user=USER,
+                db=self.db,
+                x_provider_key=None,
+                x_api_key=None,
+            )
+
+        self.assertEqual(quiz["generatedBy"], "llm")
+        self.assertEqual(quiz["questions"][0]["source"]["documentId"], doc_id)
+        self.assertEqual(analogy["generatedBy"], "llm")
+        self.assertEqual(analogy["source"]["documentId"], doc_id)
 
     def test_key_in_body_is_rejected(self):
         doc_res = self.upload_doc("relativity.txt", b"General relativity describes gravity.")

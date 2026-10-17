@@ -21,6 +21,7 @@ from ..services.rag import (
     resolve_api_key,
     retrieve_hybrid_passages,
     verify_granted_documents,
+    NVIDIA_MODEL_ID,
 )
 
 router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
@@ -51,19 +52,59 @@ _ARTIFACT_MODELS = {
     "gemini-free": "gemini-2.5-flash",
     "groq-free": "openai/gpt-oss-120b",
     "openrouter-free": "meta-llama/llama-3.3-70b-instruct:free",
+    "nvidia-nim": NVIDIA_MODEL_ID,
     "openai": "gpt-4o-mini",
     "anthropic": "claude-haiku-5-5",
     "ollama": "llama3",
 }
 
 
-def _resolve_generation(body: dict, header_key: Optional[str]):
-    """Pick provider + model and resolve the key (BYOK wins, then server key)."""
+def _resolve_generation(
+    body: dict, header_key: Optional[str], api_key_header: Optional[str] = None
+):
+    """Pick provider/model and resolve server-routed keys when applicable."""
     provider_id = (body.get("providerId") or cfg.DEFAULT_AI_PROVIDER or "").strip()
     model = (body.get("model") or _ARTIFACT_MODELS.get(provider_id) or "").strip()
     if not model:
         model = _ARTIFACT_MODELS.get(provider_id, "glm-4.5-flash")
+    if provider_id == "nvidia-nim":
+        key_fields = {
+            "api_key",
+            "apikey",
+            "provider_key",
+            "providerkey",
+            "authorization",
+            "token",
+            "access_token",
+            "accesstoken",
+            "secret",
+            "auth_key",
+            "authkey",
+            "bearer",
+            "nvidia_api_key",
+            "nvidiaapikey",
+        }
+        if (
+            header_key
+            or api_key_header
+            or any(key.lower().replace("-", "_") in key_fields for key in body)
+        ):
+            raise HTTPException(
+                400,
+                "NVIDIA API keys must be sent directly from the browser to NVIDIA, not to Knoprix.",
+            )
+        if model != NVIDIA_MODEL_ID:
+            raise HTTPException(400, f"Model '{model}' is not allowlisted for '{provider_id}'.")
+        return provider_id, model, None
     return provider_id, model, resolve_api_key(provider_id, header_key)
+
+
+def _client_generated_content(body: dict, provider_id: str):
+    """Accept provider output from the browser without receiving its API key."""
+    if provider_id != "nvidia-nim":
+        return None, False
+    generated = body.get("generatedContent")
+    return (generated, isinstance(generated, dict))
 
 
 def _passage_source(p: dict) -> dict:
@@ -119,6 +160,7 @@ def generate_flashcards(
     user=Depends(get_current_user),
     db=Depends(get_db),
     x_provider_key: Optional[str] = Header(None, alias="X-Provider-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     document_ids = body.get("documentIds", [])
     topic = (body.get("topic") or "Key Concepts").strip()
@@ -128,18 +170,20 @@ def generate_flashcards(
     if not passages:
         raise HTTPException(404, "No matching document passages found to generate flashcards.")
 
-    provider_id, model, api_key = _resolve_generation(body, x_provider_key)
+    provider_id, model, api_key = _resolve_generation(body, x_provider_key, x_api_key)
 
     cards: list[dict] = []
-    generated, used_llm = _generate(
-        passages,
-        topic,
-        provider_id,
-        model,
-        api_key,
-        instruction="Write revision flashcards for the topic.",
-        shape_hint='{"cards": [{"question": "...", "answer": "...", "source": {...}}]}',
-    )
+    generated, used_llm = _client_generated_content(body, provider_id)
+    if not used_llm:
+        generated, used_llm = _generate(
+            passages,
+            topic,
+            provider_id,
+            model,
+            api_key,
+            instruction="Write revision flashcards for the topic.",
+            shape_hint='{"cards": [{"question": "...", "answer": "...", "source": {...}}]}',
+        )
     if generated and isinstance(generated, dict) and isinstance(generated.get("cards"), list):
         for i, item in enumerate(generated["cards"][:10], start=1):
             if not isinstance(item, dict):
@@ -157,6 +201,7 @@ def generate_flashcards(
             })
 
     if not cards:
+        used_llm = False
         # Deterministic extractive fallback — still fully grounded.
         for i, p in enumerate(passages[:5], start=1):
             clean_text = p["content"].replace("\n", " ").strip()
@@ -202,6 +247,7 @@ def generate_quiz(
     user=Depends(get_current_user),
     db=Depends(get_db),
     x_provider_key: Optional[str] = Header(None, alias="X-Provider-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     document_ids = body.get("documentIds", [])
     topic = (body.get("topic") or "Knowledge Check").strip()
@@ -211,21 +257,23 @@ def generate_quiz(
     if not passages:
         raise HTTPException(404, "No matching document passages found to generate a quiz.")
 
-    provider_id, model, api_key = _resolve_generation(body, x_provider_key)
+    provider_id, model, api_key = _resolve_generation(body, x_provider_key, x_api_key)
 
     questions: list[dict] = []
-    generated, used_llm = _generate(
-        passages,
-        topic,
-        provider_id,
-        model,
-        api_key,
-        instruction="Write multiple-choice comprehension questions for the topic.",
-        shape_hint=(
-            '{"questions": [{"question": "...", "options": ["...","...","...","..."], '
-            '"correctIndex": 0, "explanation": "...", "source": {...}}]}'
-        ),
-    )
+    generated, used_llm = _client_generated_content(body, provider_id)
+    if not used_llm:
+        generated, used_llm = _generate(
+            passages,
+            topic,
+            provider_id,
+            model,
+            api_key,
+            instruction="Write multiple-choice comprehension questions for the topic.",
+            shape_hint=(
+                '{"questions": [{"question": "...", "options": ["...","...","...","..."], '
+                '"correctIndex": 0, "explanation": "...", "source": {...}}]}'
+            ),
+        )
     if generated and isinstance(generated, dict) and isinstance(generated.get("questions"), list):
         for i, item in enumerate(generated["questions"][:10], start=1):
             if not isinstance(item, dict):
@@ -250,6 +298,7 @@ def generate_quiz(
             })
 
     if not questions:
+        used_llm = False
         # Deterministic extractive fallback: distractors are drawn from other
         # retrieved passages, so every option is real source text rather than
         # invented filler.
@@ -305,6 +354,7 @@ def generate_analogy(
     user=Depends(get_current_user),
     db=Depends(get_db),
     x_provider_key: Optional[str] = Header(None, alias="X-Provider-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     document_ids = body.get("documentIds", [])
     concept = (body.get("concept") or "Core Principle").strip()
@@ -314,7 +364,7 @@ def generate_analogy(
     if not passages:
         raise HTTPException(404, "No matching document passages found to create an analogy.")
 
-    provider_id, model, api_key = _resolve_generation(body, x_provider_key)
+    provider_id, model, api_key = _resolve_generation(body, x_provider_key, x_api_key)
 
     lead_passage = passages[0]
     lead_text = lead_passage["content"].replace("\n", " ").strip()
@@ -322,15 +372,17 @@ def generate_analogy(
     analogy_text: str | None = None
     explanation: str | None = None
 
-    generated, used_llm = _generate(
-        passages,
-        concept,
-        provider_id,
-        model,
-        api_key,
-        instruction="Explain the concept using one clear everyday analogy grounded in the passages.",
-        shape_hint='{"analogy": "...", "explanation": "...", "source": {...}}',
-    )
+    generated, used_llm = _client_generated_content(body, provider_id)
+    if not used_llm:
+        generated, used_llm = _generate(
+            passages,
+            concept,
+            provider_id,
+            model,
+            api_key,
+            instruction="Explain the concept using one clear everyday analogy grounded in the passages.",
+            shape_hint='{"analogy": "...", "explanation": "...", "source": {...}}',
+        )
     if generated and isinstance(generated, dict):
         candidate = str(generated.get("analogy") or "").strip()
         if candidate:
@@ -338,6 +390,7 @@ def generate_analogy(
             explanation = str(generated.get("explanation") or "").strip()
 
     if not analogy_text:
+        used_llm = False
         # Deterministic extractive fallback: describe the mechanism from the
         # source text rather than asserting an invented metaphor.
         analogy_text = (
