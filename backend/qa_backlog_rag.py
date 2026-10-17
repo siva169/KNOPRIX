@@ -134,6 +134,10 @@ class ProviderAdapterTests(unittest.TestCase):
                 self.assertEqual(
                     request.get_header("Authorization"), "Bearer test-provider-key"
                 )
+                self.assertEqual(
+                    open_url.call_args.kwargs["timeout"],
+                    90 if provider_id == "nvidia-nim" else 30,
+                )
                 self.assertEqual(tokens, ["grounded"])
 
     def test_gemini_stream_sends_key_in_header_not_url(self):

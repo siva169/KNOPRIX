@@ -1,5 +1,15 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-17 — Allow longer NVIDIA chat startup
+
+- Increased the NVIDIA streaming read timeout from 30 to 90 seconds so a
+  delayed first response does not immediately fail; other providers retain
+  their existing 30-second timeout.
+- Added a regression assertion for provider-specific timeout behavior.
+  Provider/RAG QA passed (22 tests). No live NVIDIA request, Render log
+  inspection, or deployment was performed, so the screenshot's upstream
+  cause and production resolution remain unverified.
+
 ## 2026-10-17 — Route NVIDIA through the shared backend key
 
 - Added `NVIDIA_API_KEY` as a private backend environment setting and routed

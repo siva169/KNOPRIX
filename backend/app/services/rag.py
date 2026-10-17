@@ -399,7 +399,8 @@ def stream_llm_response(
                 },
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            stream_timeout = 90 if provider_clean == "nvidia-nim" else 30
+            with urllib.request.urlopen(req, timeout=stream_timeout) as resp:
                 for line in resp:
                     line_str = line.decode("utf-8").strip()
                     if line_str.startswith("data: "):
