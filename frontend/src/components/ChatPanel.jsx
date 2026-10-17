@@ -18,8 +18,8 @@ export default function ChatPanel({ onClose }) {
   const { documents, activeDocument, navigateToLocation, notify } = useApp();
   const [mode, setMode] = useState('side'); // 'side' | 'full' (boss: both)
   const [providers, setProviders] = useState([]);
-  const [providerId, setProviderId] = useState('');
-  const [model, setModel] = useState('');
+  const [providerId, setProviderId] = useState('zai-glm-free');
+  const [model, setModel] = useState('glm-4.5-flash');
   const [keys, setKeys] = useState(loadKeys);
   const [keyDraft, setKeyDraft] = useState('');
   const [noticeSeen, setNoticeSeen] = useState(() => localStorage.getItem(NOTICE_KEY) === '1');
@@ -48,10 +48,15 @@ export default function ChatPanel({ onClose }) {
   useEffect(() => {
     api.get('/providers/allowlist')
       .then(({ data }) => {
-        setProviders(data.providers || []);
-        if (data.providers?.length) {
-          setProviderId(data.providers[0].id);
-          setModel(data.providers[0].models[0]?.id || '');
+        const list = data.providers || [];
+        setProviders(list);
+        if (list.length) {
+          const preferred =
+            list.find((p) => p.id === 'zai-glm-free') ||
+            list.find((p) => p.hasServerKey) ||
+            list[0];
+          setProviderId(preferred.id);
+          setModel(preferred.models[0]?.id || 'glm-4.5-flash');
         }
       })
       .catch(() => setError('Could not load providers.'));

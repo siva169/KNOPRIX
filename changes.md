@@ -1,5 +1,17 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-17 — Align AI Wing defaults to the working GLM provider
+
+- Fixed the AI Wing and document-chat default provider selection so the UI now
+  prefers the configured GLM provider (`zai-glm-free` / `glm-4.5-flash`) instead
+  of defaulting to Groq before the allowlist resolves.
+- Kept the backend allowlist ordering aligned with the server default, so both
+  the browser and API agree on the same default provider and model.
+- Verification: backend config check confirms `zai-glm-free` and
+  `glm-4.5-flash` are active defaults; the focused backend RAG QA still passes
+  (3/3); the frontend production build passes with the existing large-chunk
+  warning from Vite.
+
 ## 2026-10-13 — Preserve unsuccessful share recipients for retry
 
 - A successful HTTP response can still contain per-recipient statuses other

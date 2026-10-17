@@ -6,13 +6,17 @@ import {
   HelpCircle, Lightbulb, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Eye
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
-import api from '../api';
+import api, { getAccessToken } from '../api';
 import KnowledgeMap from './KnowledgeMap.jsx';
 
 const KEYS_KEY = 'knoprix_mr_provider_keys';
 const loadKeys = () => {
   try { return JSON.parse(localStorage.getItem(KEYS_KEY) || '{}'); } catch { return {}; }
 };
+
+// The server serialises documents with `file_name` plus `filename`/`title`
+// aliases, but older cached rows may only carry the raw column name.
+const docLabel = (doc) => doc.title || doc.filename || doc.file_name || doc.fileName || 'Untitled document';
 
 export default function AIWingView({ onNavigateToDocument }) {
   const { activeProject, documents, fetchDocuments, navigateToLocation, notify } = useApp();
@@ -21,8 +25,10 @@ export default function AIWingView({ onNavigateToDocument }) {
 
   // Providers & Keys
   const [providers, setProviders] = useState([]);
-  const [providerId, setProviderId] = useState('groq-free');
-  const [model, setModel] = useState('llama-3.3-70b-versatile');
+  const DEFAULT_PROVIDER_ID = 'zai-glm-free';
+  const DEFAULT_MODEL_ID = 'glm-4.5-flash';
+  const [providerId, setProviderId] = useState(DEFAULT_PROVIDER_ID);
+  const [model, setModel] = useState(DEFAULT_MODEL_ID);
   const [keys, setKeys] = useState(loadKeys);
   const [keyDraft, setKeyDraft] = useState('');
   const [showKeyInput, setShowKeyInput] = useState(false);
@@ -43,6 +49,7 @@ export default function AIWingView({ onNavigateToDocument }) {
   const [streamingThought, setStreamingThought] = useState('');
   const [streamingCitations, setStreamingCitations] = useState([]);
   const [showThought, setShowThought] = useState(false);
+  const [streamError, setStreamError] = useState(null);
   const messagesEndRef = useRef(null);
 
   // Artifacts State
@@ -67,8 +74,15 @@ export default function AIWingView({ onNavigateToDocument }) {
         const list = data.providers || [];
         setProviders(list);
         if (list.length > 0) {
-          setProviderId(list[0].id);
-          setModel(list[0].models[0]?.id || '');
+          // Prefer the server default first so the browser matches the active
+          // backend policy; if that provider is unavailable, fall back to a
+          // server-key-backed provider and then the top allowlist entry.
+          const preferred =
+            list.find((p) => p.id === DEFAULT_PROVIDER_ID) ||
+            list.find((p) => p.hasServerKey) ||
+            list[0];
+          setProviderId(preferred.id);
+          setModel(preferred.models?.[0]?.id || DEFAULT_MODEL_ID);
         }
       })
       .catch(() => {});
@@ -80,8 +94,32 @@ export default function AIWingView({ onNavigateToDocument }) {
     setLoadingArtifacts(true);
     api.get('/artifacts', { params: { projectId: activeProject.id } })
       .then(({ data }) => setSavedArtifacts(data.artifacts || []))
-      .catch(() => {})
+      .catch(() => setSavedArtifacts([]))
       .finally(() => setLoadingArtifacts(false));
+  };
+
+  const deleteArtifact = async (artifactId) => {
+    try {
+      await api.delete(`/artifacts/${artifactId}`);
+      notify('Artifact deleted', 'info');
+      loadArtifacts();
+    } catch (err) {
+      notify(err.response?.data?.detail || 'Could not delete artifact', 'error');
+    }
+  };
+
+  const openArtifact = (artifact) => {
+    setCurrentArtifact(artifact);
+    setArtifactType(artifact.artifactType || 'flashcards');
+    setActiveCardIndex(0);
+    setCardFlipped(false);
+    setQuizAnswers({});
+  };
+
+  const ARTIFACT_ICONS = {
+    flashcards: Layers,
+    quiz: HelpCircle,
+    analogy: Lightbulb,
   };
 
   useEffect(() => {
@@ -106,12 +144,15 @@ export default function AIWingView({ onNavigateToDocument }) {
     setSubmittingGrant((prev) => ({ ...prev, [doc.id]: true }));
     try {
       await api.post(`/documents/${doc.id}/grant`, { granted: targetStatus });
-      notify(targetStatus ? `Granted AI access to "${doc.title || doc.filename}"` : `Revoked AI access to "${doc.title || doc.filename}"`, 'info');
+      notify(targetStatus ? `Granted AI access to "${docLabel(doc)}"` : `Revoked AI access to "${docLabel(doc)}"`, 'info');
       if (activeProject?.id) {
         await fetchDocuments(activeProject.id);
       }
-    } catch {
-      notify('Could not update AI authorization status', 'error');
+    } catch (err) {
+      notify(
+        err.response?.data?.detail || 'Could not update AI authorization status',
+        'error'
+      );
     } finally {
       setSubmittingGrant((prev) => ({ ...prev, [doc.id]: false }));
     }
@@ -144,12 +185,17 @@ export default function AIWingView({ onNavigateToDocument }) {
     setStreamingContent('');
     setStreamingThought('');
     setStreamingCitations([]);
+    setStreamError(null);
 
-    const token = localStorage.getItem('knoprix_access_token');
     const customKey = keys[providerId] || '';
 
     try {
-      const response = await fetch(`${api.defaults.baseURL || '/api'}/chat/stream`, {
+      // The bearer token must come from the shared auth helper. Reading
+      // localStorage directly sent no Authorization header at all, so every
+      // streamed request was rejected with 401.
+      const token = await getAccessToken();
+      const base = api.defaults.baseURL || '/api';
+      const response = await fetch(`${base}/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -166,7 +212,18 @@ export default function AIWingView({ onNavigateToDocument }) {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(errorText || `HTTP ${response.status}`);
+        let detail = errorText || `HTTP ${response.status}`;
+        try {
+          const parsedError = JSON.parse(errorText);
+          detail = parsedError.detail || detail;
+        } catch {
+          /* keep raw text */
+        }
+        throw new Error(
+          response.status === 401
+            ? 'Your session expired. Please sign in again.'
+            : detail
+        );
       }
 
       const reader = response.body.getReader();
@@ -175,58 +232,86 @@ export default function AIWingView({ onNavigateToDocument }) {
       let accumulatedContent = '';
       let accumulatedThought = '';
       let finalCitations = [];
+      let streamFailure = null;
+
+      // SSE frames look like:
+      //   event: token
+      //   data: {"text": "..."}
+      // A frame with no event name defaults to "message", per the SSE spec.
+      const handleFrame = (block) => {
+        const lines = block.split('\n');
+        let eventType = 'message';
+        const dataLines = [];
+        for (const line of lines) {
+          if (line.startsWith('event:')) eventType = line.slice(6).trim();
+          else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
+        }
+        if (!dataLines.length) return;
+        let payload;
+        try {
+          payload = JSON.parse(dataLines.join('\n'));
+        } catch {
+          return;
+        }
+        if (eventType === 'meta') {
+          if (!payload.hasKey) {
+            accumulatedThought += 'No API key for this provider — showing retrieved passages. ';
+          }
+          return;
+        }
+        if (eventType === 'thought') {
+          accumulatedThought += payload.text || '';
+          setStreamingThought(accumulatedThought);
+        } else if (eventType === 'token') {
+          accumulatedContent += payload.text ?? payload.token ?? '';
+          setStreamingContent(accumulatedContent);
+        } else if (eventType === 'citation') {
+          finalCitations.push(payload);
+          setStreamingCitations([...finalCitations]);
+        } else if (eventType === 'error') {
+          streamFailure = payload.detail || 'Streaming failed';
+        } else if (eventType === 'done' && Array.isArray(payload.citations) && !finalCitations.length) {
+          finalCitations = payload.citations;
+          setStreamingCitations(finalCitations);
+        }
+      };
 
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-
-        for (const block of lines) {
-          const match = block.match(/event:\s*([a-zA-Z0-9_-]+)\ndata:\s*(.*)/s);
-          if (match) {
-            const [, eventType, eventData] = match;
-            try {
-              const parsed = JSON.parse(eventData);
-              if (eventType === 'thought') {
-                accumulatedThought += parsed.text;
-                setStreamingThought(accumulatedThought);
-              } else if (eventType === 'token') {
-                accumulatedContent += parsed.text;
-                setStreamingContent(accumulatedContent);
-              } else if (eventType === 'citation') {
-                finalCitations.push(parsed);
-                setStreamingCitations([...finalCitations]);
-              } else if (eventType === 'error') {
-                throw new Error(parsed.detail || 'Streaming failed');
-              }
-            } catch {
-              // Non-JSON SSE line
-            }
-          }
-        }
+        const frames = buffer.split('\n\n');
+        buffer = frames.pop() || '';
+        frames.forEach(handleFrame);
       }
+      if (buffer.trim()) handleFrame(buffer);
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: accumulatedContent,
-          thought: accumulatedThought || null,
-          citations: finalCitations,
-        }
-      ]);
+      if (streamFailure) throw new Error(streamFailure);
+
+      const assistantMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: accumulatedContent,
+        thought: accumulatedThought || null,
+        citations: finalCitations,
+      };
+      if (!assistantMessage.content) {
+        assistantMessage.content =
+          'The provider returned no text for this question. Your authorized passages are cited below.';
+      }
+      setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
-      notify(`Streaming error: ${err.message}`, 'error');
+      const message = err.message || 'Unknown streaming error';
+      setStreamError(message);
+      notify(`Streaming error: ${message}`, 'error');
       setMessages((prev) => [
         ...prev,
         {
           id: `assistant-err-${Date.now()}`,
           role: 'assistant',
-          content: `Unable to stream grounded answer: ${err.message}. Please verify provider settings and document authorization.`,
+          content: `Unable to stream a grounded answer: ${message}`,
           citations: [],
+          isError: true,
         }
       ]);
     } finally {
@@ -253,16 +338,31 @@ export default function AIWingView({ onNavigateToDocument }) {
 
     try {
       const endpoint = `/artifacts/${artifactType}`;
-      const payload = artifactType === 'analogy'
-        ? { documentIds: grantedDocIds, concept: topic }
-        : { documentIds: grantedDocIds, topic };
-      
-      const { data } = await api.post(endpoint, payload);
+      const payload = {
+        documentIds: grantedDocIds,
+        topic,
+        concept: topic,
+        providerId,
+        model,
+      };
+
+      const { data } = await api.post(endpoint, payload, {
+        headers: keys[providerId] ? { 'X-Provider-Key': keys[providerId] } : undefined,
+      });
       setCurrentArtifact(data);
-      notify(`Generated grounded ${artifactType}!`, 'success');
+      setActiveCardIndex(0);
+      notify(
+        data.generatedBy === 'llm'
+          ? `Generated grounded ${artifactType}`
+          : `Generated ${artifactType} from source text (no provider key configured)`,
+        'success'
+      );
       loadArtifacts();
     } catch (err) {
-      notify(err.response?.data?.detail || `Failed to generate ${artifactType}`, 'error');
+      notify(
+        err.response?.data?.detail || `Failed to generate ${artifactType}`,
+        'error'
+      );
     } finally {
       setGeneratingArtifact(false);
     }
@@ -303,7 +403,7 @@ export default function AIWingView({ onNavigateToDocument }) {
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-ivory truncate">{doc.title || doc.filename}</p>
+                    <p className="text-xs font-medium text-ivory truncate">{docLabel(doc)}</p>
                     <p className="text-[10px] text-ivory/50 flex items-center gap-1.5 mt-0.5">
                       <span>{doc.page_count || 1} pages</span>
                       <span>·</span>
@@ -354,7 +454,9 @@ export default function AIWingView({ onNavigateToDocument }) {
               className="w-full bg-midnight-panel border border-glass-borderDark rounded-lg px-2 py-1 text-xs text-ivory focus:outline-none focus:border-accent"
             >
               {providers.map((p) => (
-                <option key={p.id} value={p.id}>{p.name || p.id}</option>
+                <option key={p.id} value={p.id}>
+                  {p.name || p.id}{p.hasServerKey ? ' · server key ready' : ''}
+                </option>
               ))}
             </select>
             <select
@@ -476,7 +578,9 @@ export default function AIWingView({ onNavigateToDocument }) {
                       </div>
                     )}
 
-                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                    <div className={`whitespace-pre-wrap ${msg.isError ? 'text-rose-300' : ''}`}>
+                      {msg.content}
+                    </div>
 
                     {msg.citations && msg.citations.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-glass-borderDark/60 flex flex-wrap gap-2 items-center">
@@ -512,6 +616,9 @@ export default function AIWingView({ onNavigateToDocument }) {
                       </div>
                     )}
                     <div className="whitespace-pre-wrap">{streamingContent || '…'}</div>
+                    {streamError && (
+                      <p className="mt-2 text-[11px] font-mono text-rose-300">{streamError}</p>
+                    )}
                     {streamingCitations.length > 0 && (
                       <div className="mt-3 pt-2 border-t border-glass-borderDark flex flex-wrap gap-1.5">
                         {streamingCitations.map((c, i) => (
@@ -602,6 +709,44 @@ export default function AIWingView({ onNavigateToDocument }) {
               </button>
             </div>
 
+            {/* Saved artifacts for this project */}
+            {(savedArtifacts.length > 0 || loadingArtifacts) && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                <span className="text-[10px] uppercase tracking-wider text-ivory/40 shrink-0">
+                  Saved
+                </span>
+                {loadingArtifacts && (
+                  <span className="text-[11px] text-ivory/40 shrink-0">Loading…</span>
+                )}
+                {savedArtifacts.map((artifact) => {
+                  const Icon = ARTIFACT_ICONS[artifact.artifactType] || Layers;
+                  return (
+                    <div
+                      key={artifact.id}
+                      className="group flex items-center gap-1 shrink-0 rounded-xl border border-glass-borderDark bg-midnight-panel pl-2.5 pr-1 py-1"
+                    >
+                      <button
+                        onClick={() => openArtifact(artifact)}
+                        className="flex items-center gap-1.5 text-[11px] text-ivory/80 hover:text-accent transition"
+                        title={`Open ${artifact.title}`}
+                      >
+                        <Icon className="w-3.5 h-3.5 text-accent" />
+                        <span className="max-w-[160px] truncate">{artifact.title}</span>
+                      </button>
+                      <button
+                        onClick={() => deleteArtifact(artifact.id)}
+                        className="p-1 rounded-md text-ivory/30 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                        title="Delete artifact"
+                        aria-label={`Delete ${artifact.title}`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Artifact Content Area */}
             <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center">
               {currentArtifact ? (
@@ -664,7 +809,8 @@ export default function AIWingView({ onNavigateToDocument }) {
                         </span>
                         <button
                           onClick={() => {
-                            setActiveCardIndex((prev) => Math.min(currentArtifact.cards.length - 1, prev + 1));
+                            const total = currentArtifact.cards.length;
+                            setActiveCardIndex((prev) => Math.min(Math.max(total - 1, 0), prev + 1));
                             setCardFlipped(false);
                           }}
                           disabled={activeCardIndex === currentArtifact.cards.length - 1}
@@ -729,28 +875,35 @@ export default function AIWingView({ onNavigateToDocument }) {
                   )}
 
                   {/* Analogy View */}
-                  {currentArtifact.artifactType === 'analogy' && currentArtifact.analogy && (
+                  {currentArtifact.artifactType === 'analogy' && (
                     <div className="p-6 rounded-2xl bg-midnight-panel border border-accent/40 shadow-2xl space-y-4">
                       <div className="flex items-center gap-2 text-accent">
                         <Lightbulb className="w-5 h-5" />
                         <h3 className="font-semibold text-base">{currentArtifact.title}</h3>
                       </div>
-                      <p className="text-sm leading-relaxed text-secondary bg-primary/10 p-4 rounded-xl border border-primary/30">
-                        {currentArtifact.analogy}
+                      <p className="text-sm leading-relaxed text-secondary bg-primary/10 p-4 rounded-xl border border-primary/30 whitespace-pre-wrap">
+                        {typeof currentArtifact.analogy === 'string'
+                          ? currentArtifact.analogy
+                          : currentArtifact.analogy?.analogy}
                       </p>
                       {currentArtifact.explanation && (
                         <p className="text-xs text-ivory/70 italic">
                           {currentArtifact.explanation}
                         </p>
                       )}
-                      {currentArtifact.source && (
+                      {(currentArtifact.source || currentArtifact.citations?.[0]) && (
                         <div className="pt-3 border-t border-glass-borderDark flex justify-between items-center text-xs">
                           <button
-                            onClick={() => handleJumpToCitation(currentArtifact.source)}
+                            onClick={() => handleJumpToCitation(currentArtifact.source || currentArtifact.citations[0])}
                             className="font-mono text-accent hover:underline flex items-center gap-1"
                           >
                             <BookOpen className="w-3.5 h-3.5" />
-                            <span>{currentArtifact.source.fileName} (p. {currentArtifact.source.page})</span>
+                            <span>
+                              {(currentArtifact.source || currentArtifact.citations[0]).fileName}
+                              {' (p. '}
+                              {(currentArtifact.source || currentArtifact.citations[0]).page}
+                              {')'}
+                            </span>
                           </button>
                           <span className="text-[10px] text-ivory/40">Verified Source Evidence</span>
                         </div>
