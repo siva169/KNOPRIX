@@ -3,13 +3,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, MessageSquare, Layers, Share2, Check, ShieldCheck, ShieldAlert,
   Send, KeyRound, ExternalLink, RefreshCw, Trash2, ChevronRight, BookOpen,
-  HelpCircle, Lightbulb, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Eye
+  HelpCircle, Lightbulb, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Eye,
+  PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import api, { getAccessToken } from '../api';
 import KnowledgeMap from './KnowledgeMap.jsx';
 
 const KEYS_KEY = 'knoprix_mr_provider_keys';
+const SIDEBAR_COLLAPSED_KEY = 'knoprix_aiwing_sidebar_collapsed';
 const loadKeys = () => {
   try { return JSON.parse(localStorage.getItem(KEYS_KEY) || '{}'); } catch { return {}; }
 };
@@ -22,6 +24,17 @@ export default function AIWingView({ onNavigateToDocument }) {
   const { activeProject, documents, fetchDocuments, navigateToLocation, notify } = useApp();
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'artifacts' | 'mindmap'
   const [submittingGrant, setSubmittingGrant] = useState({});
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true',
+  );
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((collapsed) => {
+      const next = !collapsed;
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      return next;
+    });
+  };
 
   // Providers & Keys
   const [providers, setProviders] = useState([]);
@@ -373,19 +386,44 @@ export default function AIWingView({ onNavigateToDocument }) {
   return (
     <div className="flex-1 flex flex-col md:flex-row h-full overflow-hidden bg-midnight text-ivory">
       {/* Left Sidebar: Document Authorization Grants & Model Selection */}
-      <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-glass-borderDark bg-midnight-panel/95 flex flex-col shrink-0">
-        <div className="p-4 border-b border-glass-borderDark flex items-center justify-between">
-          <div className="flex items-center gap-2">
+      <aside
+        className={`w-full md:h-full border-b md:border-b-0 md:border-r border-glass-borderDark bg-midnight-panel/95 flex flex-col shrink-0 ${
+          sidebarCollapsed ? 'h-14 md:w-[68px]' : 'md:w-80'
+        }`}
+        aria-label="AI Wing document and provider sidebar"
+      >
+        <div className={`p-4 border-b border-glass-borderDark flex items-center justify-between ${
+          sidebarCollapsed ? 'md:justify-center md:p-2' : ''
+        }`}>
+          <div className={`flex items-center gap-2 ${sidebarCollapsed ? 'md:hidden' : ''}`}>
             <ShieldCheck className="w-4 h-4 text-accent" />
             <span className="font-semibold text-xs tracking-wider uppercase text-ivory/90">Document Grants</span>
           </div>
-          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-accent/15 text-accent border border-accent/30">
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full bg-accent/15 text-accent border border-accent/30 ${
+            sidebarCollapsed ? 'md:hidden' : ''
+          }`}>
             {authorizedDocs.length}/{documents.length} Authorized
           </span>
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label={`${sidebarCollapsed ? 'Expand' : 'Collapse'} AI Wing sidebar`}
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="ai-wing-sidebar-documents ai-wing-sidebar-provider"
+            title={`${sidebarCollapsed ? 'Expand' : 'Collapse'} AI Wing sidebar`}
+            className="grid min-h-11 min-w-11 place-items-center rounded-xl text-ivory/65 hover:bg-white/10 hover:text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+          >
+            {sidebarCollapsed
+              ? <PanelLeftOpen className="w-4 h-4" aria-hidden="true" />
+              : <PanelLeftClose className="w-4 h-4" aria-hidden="true" />}
+          </button>
         </div>
 
         {/* Documents list with authorization toggles */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        <div
+          id="ai-wing-sidebar-documents"
+          className={`flex-1 overflow-y-auto p-3 space-y-2 ${sidebarCollapsed ? 'hidden' : ''}`}
+        >
           {documents.length === 0 ? (
             <div className="text-center py-8 px-4 text-xs text-ivory/50">
               No documents in this project. Upload documents to empower the AI Wing.
@@ -430,7 +468,12 @@ export default function AIWingView({ onNavigateToDocument }) {
         </div>
 
         {/* AI Provider Config */}
-        <div className="p-3 border-t border-glass-borderDark bg-midnight-deep/60 space-y-2">
+        <div
+          id="ai-wing-sidebar-provider"
+          className={`p-3 border-t border-glass-borderDark bg-midnight-deep/60 space-y-2 ${
+            sidebarCollapsed ? 'hidden' : ''
+          }`}
+        >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-ivory/80 flex items-center gap-1.5">
               <KeyRound className="w-3.5 h-3.5 text-accent" /> Provider & BYOK
@@ -496,7 +539,7 @@ export default function AIWingView({ onNavigateToDocument }) {
             </div>
           )}
         </div>
-      </div>
+      </aside>
 
       {/* Main AI Workspace */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">

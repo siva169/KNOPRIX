@@ -18,6 +18,10 @@ async function run() {
     await page.addInitScript(() => {
       localStorage.setItem('knoprix_access_token', 'mock-qa-token');
       localStorage.setItem('knoprix_refresh_token', 'mock-qa-refresh');
+      if (sessionStorage.getItem('qa-sidebar-state-reset') !== 'true') {
+        localStorage.removeItem('knoprix_aiwing_sidebar_collapsed');
+        sessionStorage.setItem('qa-sidebar-state-reset', 'true');
+      }
       // Mock mock-user
       window.__MOCK_USER = { id: 'u1', email: 'test@knoprix.dev', full_name: 'Test Boss' };
     });
@@ -110,6 +114,25 @@ async function run() {
       throw new Error(`[${bp.name}] Workspace buttons not visible! Reading Desk: ${isReadingDeskVisible}, AI Wing: ${isAiWingVisible}`);
     }
 
+    if (bp.width >= 1024) {
+      await page.getByRole('button', { name: 'Collapse workspace navigation' }).click();
+      const expandWorkspaceNavigation = page.getByRole('button', { name: 'Expand workspace navigation' });
+      if (!(await expandWorkspaceNavigation.isVisible())) {
+        throw new Error(`[${bp.name}] Workspace navigation did not collapse.`);
+      }
+      await expandWorkspaceNavigation.click();
+    } else {
+      await page.getByTitle('Toggle folders').click();
+      const closeWorkspaceNavigation = page.getByRole('button', { name: 'Close navigation' });
+      if (!(await closeWorkspaceNavigation.isVisible())) {
+        throw new Error(`[${bp.name}] Mobile workspace navigation did not open.`);
+      }
+      await closeWorkspaceNavigation.click();
+      if (await closeWorkspaceNavigation.isVisible()) {
+        throw new Error(`[${bp.name}] Mobile workspace navigation did not close.`);
+      }
+    }
+
     console.log(`[PASS] ${bp.name} (${bp.width}px): Reading Desk & AI Wing switcher buttons visible`);
 
     // 3. Click AI Wing
@@ -129,6 +152,37 @@ async function run() {
 
     if (!grantsVisible || !chatVisible || !artifactsVisible || !mapVisible) {
       throw new Error(`[${bp.name}] AI Wing content elements missing! Grants: ${grantsVisible}, Chat: ${chatVisible}, Artifacts: ${artifactsVisible}, Map: ${mapVisible}`);
+    }
+
+    // Verify the AI Wing sidebar retracts, remembers its state, and reopens.
+    const collapseSidebar = page.getByRole('button', { name: 'Collapse AI Wing sidebar' });
+    const authorizeButton = page.getByRole('button', { name: 'Authorize', exact: true });
+    if (!(await authorizeButton.isVisible())) {
+      throw new Error(`[${bp.name}] Document authorization controls are not visible before collapsing.`);
+    }
+    await collapseSidebar.click();
+    const collapsedAuthorizeVisible = await authorizeButton.isVisible();
+    const collapsedPreference = await page.evaluate(
+      () => localStorage.getItem('knoprix_aiwing_sidebar_collapsed'),
+    );
+    if (collapsedAuthorizeVisible || collapsedPreference !== 'true') {
+      throw new Error(`[${bp.name}] AI Wing sidebar did not collapse or persist its state.`);
+    }
+
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    await aiWingBtn.click();
+    const persistedExpandSidebar = page.getByRole('button', { name: 'Expand AI Wing sidebar' });
+    await persistedExpandSidebar.waitFor({ state: 'visible', timeout: 5000 });
+    if (!(await persistedExpandSidebar.isVisible())) {
+      const restoredPreference = await page.evaluate(
+        () => localStorage.getItem('knoprix_aiwing_sidebar_collapsed'),
+      );
+      throw new Error(`[${bp.name}] AI Wing sidebar state was not restored after reload (stored: ${restoredPreference}).`);
+    }
+    await persistedExpandSidebar.click();
+    if (!(await authorizeButton.isVisible())) {
+      throw new Error(`[${bp.name}] AI Wing sidebar did not reopen its document controls.`);
     }
 
     // 4. Test Study Artifacts tab

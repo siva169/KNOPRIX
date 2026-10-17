@@ -1,5 +1,20 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-17 — Make the AI Wing sidebar retractable
+
+- Added a keyboard-accessible collapse control to the AI Wing document-grants
+  and provider sidebar. It becomes a 68px icon rail on desktop and a compact
+  header on mobile, matching the approved workspace-navigation behavior.
+- The collapsed preference is saved in browser local storage and restored
+  after reload. The existing workspace navigation and PDF thumbnail controls
+  remain available.
+- Extended the mocked Playwright workspace check to exercise workspace
+  navigation open/collapse, AI Wing collapse/reopen, and preference restore at
+  390px, 425px, 768px, and 1024px.
+- Verification: all four browser viewport checks pass; the frontend build
+  passes with Vite's existing large-chunk warning; the QA script syntax check
+  and `git diff --check` pass.
+
 ## 2026-10-17 — Align AI Wing defaults to the working GLM provider
 
 - Fixed the AI Wing and document-chat default provider selection so the UI now
