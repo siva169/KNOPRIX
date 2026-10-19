@@ -1206,3 +1206,10 @@ record: that service is not a ghost.
 - Page bookmark controls now clearly switch to `Remove` with an accessible removal label when a page is saved.
 - Bookmark drawer deletion is always reachable on touch and desktop, rather than appearing only on hover.
 - Merged overlapping slide highlight ranges so a phrase and word highlight cannot paint duplicate text.
+
+# 2026-10-19 — Prepared verified highlight fixes for GitHub delivery
+
+- Prepared the two tested reader-annotation fixes for delivery on `master`:
+  precise persisted text anchors/bookmark jumps and unambiguous blue live-selection feedback.
+- Verified the local application checks before delivery: `node qa-bookmarks.mjs` passed 41/41 checks and `npm run build` completed successfully (only the existing large-chunk warning remained).
+- GitHub delivery target confirmed by boss: `siva169/KNOPRIX`, authenticated as `siva169`; Vercel and Render remain GitHub-push driven, with no hosting configuration changed here.
