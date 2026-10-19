@@ -88,6 +88,22 @@ export function AppProvider({ children }) {
     ) setDocuments(data.documents);
   }, []);
 
+  const adjustDocumentHighlightCount = useCallback((documentId, amount) => {
+    setDocuments((current) => current.map((doc) => (
+      doc.id === documentId
+        ? { ...doc, highlight_count: Math.max(0, (Number(doc.highlight_count) || 0) + amount) }
+        : doc
+    )));
+  }, []);
+
+  const adjustDocumentBookmarkCount = useCallback((documentId, amount) => {
+    setDocuments((current) => current.map((doc) => (
+      doc.id === documentId
+        ? { ...doc, bookmark_count: Math.max(0, (Number(doc.bookmark_count) || 0) + amount) }
+        : doc
+    )));
+  }, []);
+
   const fetchBookmarks = useCallback(async (projectId) => {
     const requestSequence = projectRequestSequence.current;
     const { data } = await api.get(`/projects/${projectId}/bookmarks`);
@@ -154,6 +170,8 @@ export function AppProvider({ children }) {
       value={{
         projects, activeProject, selectProject, fetchProjects, resetWorkspace,
         documents, fetchDocuments,
+        adjustDocumentHighlightCount,
+        adjustDocumentBookmarkCount,
         activeDocument, openDocument, navigateToLocation,
         getReadingProgress, saveReadingProgress,
         bookmarks, fetchBookmarks, removeBookmarkFromState,

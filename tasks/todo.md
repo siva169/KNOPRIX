@@ -5,6 +5,19 @@ current academic prototype toward a trustworthy consumer product. It separates
 verified current capabilities from future work. A checkbox means the work has
 been implemented and verified; planning or partial wiring does not count.
 
+- [x] Slice: show per-document saved-item counts and exact jumps
+  - Acceptance: the source index shows the current user's bookmark and
+    highlight counts, expands each document's saved items on demand, and opens
+    the saved page and exact text anchor. Highlight creation, deletion, and
+    undo keep displayed counts current.
+  - Sharing: annotation shares navigate to their exact source only when that
+    document is separately shared and accepted; otherwise the annotation/page
+    remains available without revealing the document. Contacts sections load
+    independently and failed sections can be retried.
+  - Verify: focused backend count/share tests, mocked browser flow, responsive
+    checks at 390/425/768/1024px, and production frontend build.
+  - UI/UX: approved in `UI-UX.md` A2 and H1 on 2026-10-20.
+
 - [x] Slice: add named, searchable bookmarks with exact passage jumps
   - Acceptance: names are optional for text/page bookmarks; project-scoped
     case-insensitive live search covers name, selected text, and notes; legacy

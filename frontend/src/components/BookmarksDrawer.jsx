@@ -7,7 +7,7 @@ import api from '../api';
 export default function BookmarksDrawer({ onClose }) {
   const {
     bookmarks, activeProject, fetchBookmarks, removeBookmarkFromState,
-    navigateToLocation, notify,
+    adjustDocumentBookmarkCount, navigateToLocation, notify,
   } = useApp();
   const [visible, setVisible] = useState(bookmarks);
   const [popping, setPopping] = useState(null);
@@ -61,10 +61,12 @@ export default function BookmarksDrawer({ onClose }) {
     if (popping) return;
     setPopping(id);
     try {
+      const removedBookmark = bookmarks.find((bookmark) => bookmark.id === id);
       await api.delete(`/bookmarks/${id}`);
       setVisible((items) => items.filter((item) => item.id !== id));
       setSearchResults((items) => items?.filter((item) => item.id !== id) ?? null);
       removeBookmarkFromState(id);
+      if (removedBookmark) adjustDocumentBookmarkCount(removedBookmark.document_id, -1);
       notify(successMessage, 'info');
     } catch {
       notify(errorMessage, 'error');

@@ -128,7 +128,11 @@ omits internal user/project identifiers. For document shares, it returns
 reader metadata only; the reader fetches content from the owner/share-checked
 `GET /documents/{documentId}` route, whose shared response omits storage paths
 and project identifiers while preserving the document text needed by the
-read-only viewer.
+read-only viewer. Highlight annotation shares include the saved character
+anchors so the reader can jump precisely when the recipient separately has
+accepted access to the source document. `GET /projects/{projectId}/documents`
+also includes per-document `bookmark_count` and `highlight_count`, each scoped
+to the authenticated user and requested project.
 
 Email notification preferences are stored, but no delivery provider/outbox
 is connected; the profile response explicitly reports email notifications as

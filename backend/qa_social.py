@@ -27,6 +27,7 @@ class SocialFeatureTests(unittest.TestCase):
         self.addCleanup(self.database_url_patch.stop)
         database._create_auth_session_schema(self.db)
         database._create_contacts_sharing_schema(self.db)
+        database._create_production_backlog_schema(self.db)
         for user_id, email in (
             ("user-a", "a@example.com"),
             ("user-b", "b@example.com"),
@@ -89,6 +90,51 @@ class SocialFeatureTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as unauthorized:
             documents.get_document("document-a", self.users["user-b"], self.db)
         self.assertEqual(unauthorized.exception.status_code, 404)
+
+    def test_project_document_list_includes_owner_scoped_annotation_counts(self):
+        self.db.execute(
+            """INSERT INTO documents
+               (id, project_id, file_name, file_type, file_path)
+               VALUES (?, ?, ?, ?, ?)""",
+            ("document-b", "project-a", "other.txt", "txt", str(self.document_path)),
+        )
+        self.db.execute(
+            """INSERT INTO bookmarks
+               (id, user_id, project_id, document_id, page_number)
+               VALUES ('bookmark-a', 'user-a', 'project-a', 'document-a', 1)"""
+        )
+        self.db.execute(
+            """INSERT INTO bookmarks
+               (id, user_id, project_id, document_id, page_number)
+               VALUES ('bookmark-b', 'user-a', 'project-a', 'document-b', 1)"""
+        )
+        self.db.execute(
+            """INSERT INTO highlights
+               (id, user_id, project_id, document_id, page_number, text)
+               VALUES ('highlight-a', 'user-a', 'project-a', 'document-a', 1, 'first')"""
+        )
+        self.db.execute(
+            """INSERT INTO highlights
+               (id, user_id, project_id, document_id, page_number, text)
+               VALUES ('highlight-b', 'user-a', 'project-a', 'document-a', 1, 'second')"""
+        )
+        self.db.execute(
+            """INSERT INTO highlights
+               (id, user_id, project_id, document_id, page_number, text)
+               VALUES ('highlight-other-user', 'user-b', 'project-a', 'document-a', 1, 'private')"""
+        )
+
+        docs = {
+            doc["id"]: doc
+            for doc in documents.list_documents(
+                "project-a", user=self.users["user-a"], db=self.db
+            )["documents"]
+        }
+
+        self.assertEqual(docs["document-a"]["bookmark_count"], 1)
+        self.assertEqual(docs["document-a"]["highlight_count"], 2)
+        self.assertEqual(docs["document-b"]["bookmark_count"], 1)
+        self.assertEqual(docs["document-b"]["highlight_count"], 0)
 
     def test_share_acceptance_is_per_recipient_read_only_and_revocable(self):
         for recipient in ("user-b", "user-c"):
@@ -315,9 +361,10 @@ class SocialFeatureTests(unittest.TestCase):
         )
         self.db.execute(
             """INSERT INTO highlights
-               (id, user_id, project_id, document_id, page_number, text, color)
+               (id, user_id, project_id, document_id, page_number, text, color,
+                anchor_start, anchor_end)
                VALUES ('highlight-a', 'user-a', 'project-a', 'document-a', 1,
-                       'important sentence', 'yellow')"""
+                       'important sentence', 'yellow', 2, 20)"""
         )
 
         for resource_type, resource_id, expected_fields in (
@@ -330,7 +377,7 @@ class SocialFeatureTests(unittest.TestCase):
             (
                 "highlight",
                 "highlight-a",
-                {"text", "color", "document_id", "page_number"},
+                {"text", "color", "document_id", "page_number", "anchor_start", "anchor_end"},
             ),
         ):
             with self.subTest(resource_type=resource_type):
@@ -349,6 +396,9 @@ class SocialFeatureTests(unittest.TestCase):
                 )
 
                 self.assertTrue(expected_fields.issubset(shared["resource"]))
+                if resource_type == "highlight":
+                    self.assertEqual(shared["resource"]["anchor_start"], 2)
+                    self.assertEqual(shared["resource"]["anchor_end"], 20)
                 self.assertNotIn("user_id", shared["resource"])
                 self.assertNotIn("project_id", shared["resource"])
                 with self.assertRaises(HTTPException) as no_document_access:

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Folder, FolderOpen, Plus, FileText, ChevronRight, ChevronDown,
@@ -14,10 +14,14 @@ export default function Sidebar({
 }) {
   const {
     projects, activeProject, selectProject, fetchProjects, documents, openDocument,
-    activeDocument, notify, getReadingProgress, bookmarks,
+    activeDocument, notify, getReadingProgress, bookmarks, navigateToLocation,
   } = useApp();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
+  const [expandedSavedDocumentId, setExpandedSavedDocumentId] = useState(null);
+  const [savedHighlightsByDocument, setSavedHighlightsByDocument] = useState({});
+  const [highlightLoadStatusByDocument, setHighlightLoadStatusByDocument] = useState({});
+  const highlightRequestSequence = useRef({});
 
   const pdfDocs = documents.filter((d) => d.file_type === 'pdf');
   const otherDocs = documents.filter((d) => d.file_type !== 'pdf');
@@ -27,6 +31,38 @@ export default function Sidebar({
     .sort((a, b) => new Date(b.progress.updatedAt || 0) - new Date(a.progress.updatedAt || 0))
     .slice(0, 2);
   const savedDocs = documents.filter((doc) => bookmarks.some((bookmark) => bookmark.document_id === doc.id));
+
+  const loadSavedHighlights = useCallback(async (documentId) => {
+    const requestId = (highlightRequestSequence.current[documentId] || 0) + 1;
+    highlightRequestSequence.current[documentId] = requestId;
+    setHighlightLoadStatusByDocument((current) => ({ ...current, [documentId]: 'loading' }));
+    try {
+      const { data } = await api.get(`/documents/${documentId}/highlights`);
+      if (highlightRequestSequence.current[documentId] !== requestId) return;
+      setSavedHighlightsByDocument((current) => ({
+        ...current,
+        [documentId]: data.highlights || [],
+      }));
+      setHighlightLoadStatusByDocument((current) => ({ ...current, [documentId]: 'loaded' }));
+    } catch {
+      if (highlightRequestSequence.current[documentId] !== requestId) return;
+      setHighlightLoadStatusByDocument((current) => ({ ...current, [documentId]: 'error' }));
+    }
+  }, []);
+
+  const expandedSavedDocument = documents.find((doc) => doc.id === expandedSavedDocumentId);
+  useEffect(() => {
+    if (expandedSavedDocument) void loadSavedHighlights(expandedSavedDocument.id);
+  }, [expandedSavedDocumentId, expandedSavedDocument?.highlight_count, loadSavedHighlights]);
+
+  const openSavedLocation = (documentId, pageNumber, snippet, anchorStart, anchorEnd) => {
+    setExpandedSavedDocumentId(null);
+    navigateToLocation(documentId, pageNumber, snippet, {
+      start: anchorStart,
+      end: anchorEnd,
+    });
+    onClose?.();
+  };
 
   const createProject = async (e) => {
     e.preventDefault();
@@ -43,20 +79,117 @@ export default function Sidebar({
     }
   };
 
-  const DocRow = ({ doc }) => (
-    <motion.button
-      whileHover={{ x: 2 }}
-      onClick={() => openDocument(doc)}
-      className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition ${
-        activeDocument?.id === doc.id
-          ? 'bg-primary/20 text-secondary font-semibold border border-primary/40'
-          : 'text-ivory/70 hover:bg-white/5'
-      }`}
-    >
-      <FileText className="w-3.5 h-3.5 text-accent shrink-0" />
-      <span className="truncate">{doc.file_name}</span>
-    </motion.button>
-  );
+  const renderDocRow = (doc) => {
+    const documentBookmarks = bookmarks.filter((bookmark) => bookmark.document_id === doc.id);
+    const bookmarkCount = doc.bookmark_count == null
+      ? documentBookmarks.length
+      : Number(doc.bookmark_count) || 0;
+    const highlights = savedHighlightsByDocument[doc.id] || [];
+    const highlightCount = Number(doc.highlight_count) || 0;
+    const expanded = expandedSavedDocumentId === doc.id;
+    const highlightStatus = highlightLoadStatusByDocument[doc.id];
+    const savedItemsId = `saved-items-${doc.id}`;
+
+    return (
+      <div key={doc.id}>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              setExpandedSavedDocumentId(null);
+              openDocument(doc);
+              onClose?.();
+            }}
+            aria-label={`Open document ${doc.file_name}`}
+            className={`min-h-11 min-w-0 flex-1 flex items-center gap-2 rounded-lg px-2 text-left text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary ${
+              activeDocument?.id === doc.id
+                ? 'bg-primary/20 text-secondary font-semibold border border-primary/40'
+                : 'text-ivory/70 hover:bg-white/5'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5 text-accent shrink-0" />
+            <span className="truncate">{doc.file_name}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setExpandedSavedDocumentId(expanded ? null : doc.id)}
+            aria-label={`Show saved items for ${doc.file_name}: ${bookmarkCount} bookmarks and ${highlightCount} highlights`}
+            aria-expanded={expanded}
+            aria-controls={savedItemsId}
+            className="min-h-11 shrink-0 flex items-center gap-1 rounded-lg px-1.5 text-[9px] text-ivory/55 hover:bg-white/5 hover:text-ivory focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+          >
+            <span>{bookmarkCount} B · {highlightCount} H</span>
+            {expanded
+              ? <ChevronDown className="size-3" aria-hidden="true" />
+              : <ChevronRight className="size-3" aria-hidden="true" />}
+          </button>
+        </div>
+        {expanded && (
+          <div id={savedItemsId} className="ml-4 border-l border-glass-borderDark pl-1">
+            {documentBookmarks.map((bookmark) => {
+              const label = bookmark.name || bookmark.highlighted_text || `Page ${bookmark.page_number}`;
+              return (
+                <button
+                  key={bookmark.id}
+                  type="button"
+                  onClick={() => openSavedLocation(
+                    doc.id,
+                    bookmark.page_number,
+                    bookmark.highlighted_text || '',
+                    bookmark.anchor_start,
+                    bookmark.anchor_end,
+                  )}
+                  aria-label={`Open bookmark: ${label} in ${doc.file_name}, page ${bookmark.page_number}`}
+                  className="min-h-11 w-full flex items-center gap-2 rounded-lg px-2 text-left text-[11px] text-ivory/70 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+                >
+                  <Bookmark className="size-3.5 shrink-0 text-secondary" />
+                  <span className="min-w-0 flex-1 truncate">{label}</span>
+                  <span className="shrink-0 text-[9px] text-ivory/40">p. {bookmark.page_number}</span>
+                </button>
+              );
+            })}
+            {highlightStatus === 'loading' && (
+              <p className="px-2 py-2 text-[10px] text-ivory/45" role="status">Loading highlights…</p>
+            )}
+            {highlightStatus === 'error' && (
+              <div className="px-2 py-2 text-[10px] text-rose-200" role="alert">
+                Could not load highlights.{' '}
+                <button
+                  type="button"
+                  onClick={() => void loadSavedHighlights(doc.id)}
+                  className="underline underline-offset-2"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+            {highlightStatus === 'loaded' && highlights.map((highlight) => (
+              <button
+                key={highlight.id}
+                type="button"
+                onClick={() => openSavedLocation(
+                  doc.id,
+                  highlight.page_number,
+                  highlight.text,
+                  highlight.anchor_start,
+                  highlight.anchor_end,
+                )}
+                aria-label={`Open highlight: ${highlight.text} in ${doc.file_name}, page ${highlight.page_number}`}
+                className="min-h-11 w-full flex items-center gap-2 rounded-lg px-2 text-left text-[11px] text-ivory/70 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+              >
+                <FileText className="size-3.5 shrink-0 text-accent" />
+                <span className="min-w-0 flex-1 truncate">{highlight.text}</span>
+                <span className="shrink-0 text-[9px] text-ivory/40">p. {highlight.page_number}</span>
+              </button>
+            ))}
+            {highlightStatus === 'loaded' && documentBookmarks.length === 0 && highlights.length === 0 && (
+              <p className="px-2 py-2 text-[10px] text-ivory/45">No bookmarks or highlights saved.</p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const FolderBlock = ({ title, icon, children }) => {
     const [expanded, setExpanded] = useState(true);
@@ -276,12 +409,12 @@ export default function Sidebar({
             </p>
             {pdfDocs.length > 0 && (
               <FolderBlock title={`PDF Documents (${pdfDocs.length})`}>
-                {pdfDocs.map((d) => <DocRow key={d.id} doc={d} />)}
+                {pdfDocs.map(renderDocRow)}
               </FolderBlock>
             )}
             {otherDocs.length > 0 && (
               <FolderBlock title={`Other Text Files (${otherDocs.length})`}>
-                {otherDocs.map((d) => <DocRow key={d.id} doc={d} />)}
+                {otherDocs.map(renderDocRow)}
               </FolderBlock>
             )}
           </div>

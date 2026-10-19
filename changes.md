@@ -1,5 +1,26 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-20 — Add document annotation counts and safe sharing navigation
+
+- Added user/project-scoped bookmark and highlight totals to each project
+  document response. The sidebar shows those counts and lazily expands saved
+  items with accessible page-and-anchor jumps; live highlight counts stay in
+  sync after creation, deletion, and undo.
+- Contacts & sharing now loads independent sections with `Promise.allSettled`,
+  preserves successful data, labels failures, and retries only failed requests.
+  Accepted annotation shares jump to their source only when the recipient also
+  has accepted document access; otherwise only annotation/page details appear.
+- Added highlight anchors to the shared-resource allowlist (without owner or
+  project identifiers), backend regressions, and browser checks for partial
+  load recovery, privacy boundaries, exact jumps, and mobile/tablet/desktop
+  layouts.
+- Verification: frontend build passes (with the existing large-chunk advisory);
+  mocked browser QA passes 67/67, including 390/425/768/1024px layouts and
+  annotation-only versus separately accepted source access. Focused backend
+  count/share tests pass (2/2). The broader `qa_social` run is 10/11: its
+  unrelated document-share detail test expects a narrower field set than the
+  current response.
+
 ## 2026-10-20 — Align PDF text selection with rendered glyphs
 
 - Browser reproduction exposed a PDF.js text-layer mismatch that the earlier

@@ -533,6 +533,8 @@ def _shared_resource_fields(resource_type: str) -> tuple[str, ...]:
             "match_all",
             "document_id",
             "page_number",
+            "anchor_start",
+            "anchor_end",
         ),
     }[resource_type]
 

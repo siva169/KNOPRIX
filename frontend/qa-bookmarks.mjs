@@ -62,6 +62,9 @@ const bookmarks = [{
 let nextBookmarkId = 1;
 const highlights = [];
 let nextHighlightId = 1;
+let contactsRequests = 0;
+let failContactsRequests = true;
+let sourceDocumentShareAccepted = false;
 
 const respond = (route, status, data) => route.fulfill({
   status,
@@ -77,7 +80,10 @@ const page = await browser.newPage({
 const errors = [];
 page.on('pageerror', (error) => errors.push(error.message));
 page.on('console', (message) => {
-  if (message.type() === 'error') errors.push(message.text());
+  const expectedMockFailure = /status of (?:404|503)/.test(message.text());
+  if (message.type() === 'error' && !expectedMockFailure) {
+    errors.push(message.text());
+  }
 });
 await page.route('**/api/**', async (route) => {
   const request = route.request();
@@ -89,6 +95,12 @@ await page.route('**/api/**', async (route) => {
       contentType: 'application/pdf',
       path: fileURLToPath(new URL('../backend/uploads/1789381445896-6523eb3b-23AID204_Lecture16-18.pdf', import.meta.url)),
     });
+  }
+
+  if (path === '/api/documents/document-1' && request.method() === 'GET') {
+    return sourceDocumentShareAccepted
+      ? respond(route, 200, { document: { ...documents[0], readOnly: true } })
+      : respond(route, 404, { detail: 'Document not found' });
   }
 
   if (path === '/api/auth/refresh' && request.method() === 'POST') {
@@ -106,7 +118,13 @@ await page.route('**/api/**', async (route) => {
     });
   }
   if (path === '/api/projects/project-1/documents') {
-    return respond(route, 200, { documents });
+    return respond(route, 200, {
+      documents: documents.map((doc) => ({
+        ...doc,
+        bookmark_count: bookmarks.filter((bookmark) => bookmark.document_id === doc.id).length,
+        highlight_count: highlights.filter((highlight) => highlight.document_id === doc.id).length,
+      })),
+    });
   }
   if (path === '/api/projects/project-1/bookmarks' && request.method() === 'GET') {
     const query = (url.searchParams.get('q') || '').toLocaleLowerCase();
@@ -174,6 +192,58 @@ await page.route('**/api/**', async (route) => {
     if (index !== -1) highlights.splice(index, 1);
     return respond(route, 204, null);
   }
+  if (path === '/api/v1/profile') {
+    return respond(route, 200, {
+      knoprixId: 'KP-AAAAAAAAAA',
+      allowIdLookup: true,
+      allowContactRequests: true,
+      emailNotificationsEnabled: false,
+    });
+  }
+  if (path === '/api/v1/contacts') {
+    contactsRequests += 1;
+    if (failContactsRequests) return respond(route, 503, { detail: 'Temporary contacts outage' });
+    return respond(route, 200, {
+      contacts: [{ contactId: 'contact-1', knoprixId: 'KP-BBBBBBBBBB', fullName: 'Study Partner' }],
+    });
+  }
+  if (path === '/api/v1/inbox') {
+    return respond(route, 200, { contactRequests: [], shareRequests: [] });
+  }
+  if (path === '/api/v1/contact-requests/sent') {
+    return respond(route, 200, { requests: [] });
+  }
+  if (path === '/api/v1/shares/sent') {
+    return respond(route, 200, { shares: [] });
+  }
+  if (path === '/api/v1/shares/received') {
+    return respond(route, 200, {
+      shares: [{
+        shareId: 'share-annotation',
+        resourceType: 'highlight',
+        status: 'accepted',
+        fromKnoprixId: 'KP-BBBBBBBBBB',
+      }],
+    });
+  }
+  if (path === '/api/v1/shared-resources/share-annotation') {
+    const sharedHighlight = highlights.find((highlight) =>
+      highlight.document_id === 'document-1' && highlight.text === 'duplicate anchor',
+    );
+    return respond(route, 200, {
+      shareId: 'share-annotation',
+      resourceType: 'highlight',
+      resource: {
+        ...sharedHighlight,
+        document_id: 'document-1',
+        page_number: 1,
+      },
+      readOnly: true,
+    });
+  }
+  if (path === '/api/v1/blocks') {
+    return respond(route, 200, { blockedKnoprixIds: [] });
+  }
   return respond(route, 200, {});
 });
 
@@ -184,8 +254,27 @@ async function clickVisibleText(text) {
       await matches.nth(index).click();
       return true;
     }
+
   }
   return false;
+}
+
+async function openSidebarDocument(fileName) {
+  const sidebar = page.locator('aside').first();
+  if (!await sidebar.isVisible()) await page.getByTitle('Toggle folders').click();
+  const documentButton = page.getByRole('button', { name: `Open document ${fileName}` });
+  await documentButton.waitFor({ state: 'visible' });
+  await documentButton.click();
+}
+
+async function openSidebarSavedItems(fileName) {
+  const sidebar = page.locator('aside').first();
+  if (!await sidebar.isVisible()) await page.getByTitle('Toggle folders').click();
+  const savedItemsButton = page.getByRole('button', {
+    name: new RegExp(`Show saved items for ${fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:`),
+  });
+  await savedItemsButton.waitFor({ state: 'visible' });
+  await savedItemsButton.click();
 }
 
 async function applySelectedHighlight() {
@@ -602,10 +691,8 @@ try {
   await page.getByRole('textbox', { name: 'Search bookmarks' }).waitFor({ state: 'detached' });
   check('opening a bookmark closes the drawer', true);
 
-  await page.getByTitle('Toggle folders').click();
-  const reopenedOtherDocument = await clickVisibleText('other.txt');
-  await page.getByTitle('Toggle folders').click();
-  check('second document can reopen before the legacy bookmark', reopenedOtherDocument);
+  await openSidebarDocument('other.txt');
+  check('second document can reopen before the legacy bookmark', true);
   await page.getByText('A different document', { exact: true }).waitFor();
   await page.evaluate(() => window.getSelection()?.removeAllRanges());
   await page.getByTitle('Bookmark collection').click();
@@ -639,10 +726,8 @@ try {
   );
 
   await page.getByRole('button', { name: 'Remove bookmark from page 1' }).waitFor();
-  await page.getByTitle('Toggle folders').click();
-  const reopenedAfterPageBookmark = await clickVisibleText('other.txt');
-  await page.getByTitle('Toggle folders').click();
-  check('other document opens after saving a page bookmark', reopenedAfterPageBookmark);
+  await openSidebarDocument('other.txt');
+  check('other document opens after saving a page bookmark', true);
   await page.getByText('A different document', { exact: true }).waitFor();
   await page.getByTitle('Bookmark collection').click();
   await page.getByRole('textbox', { name: 'Search bookmarks' }).fill('Second occurrence');
@@ -679,19 +764,24 @@ try {
     check(`[${width}px] drawer fits viewport without horizontal overflow`, drawerFits);
     await page.screenshot({ path: `${evidenceDir}/drawer-${width}.png` });
     await page.getByRole('button', { name: 'Close bookmark collection' }).click();
+  }
 
-    check(`[${width}px] text selection still opens bookmark naming`, await selectText('duplicate anchor', 1));
-    await page.getByRole('button', { name: 'Bookmark selected passage' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Save bookmark' });
-    await dialog.waitFor();
+  await page.setViewportSize({ width: 390, height: 844 });
+  check('[390px] text selection still opens bookmark naming', await selectText('duplicate anchor', 1));
+  await page.waitForTimeout(300);
+  await page.getByRole('button', { name: 'Bookmark selected passage' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Save bookmark' });
+  await dialog.waitFor();
+  for (const width of [390, 425, 768, 1024]) {
+    await page.setViewportSize({ width, height: 844 });
     const dialogFits = await page.evaluate(() => {
       const rect = document.querySelector('[role="dialog"]').getBoundingClientRect();
       return rect.left >= 0 && rect.right <= window.innerWidth && rect.width <= window.innerWidth;
     });
     check(`[${width}px] optional-name dialog fits viewport`, dialogFits);
     await page.screenshot({ path: `${evidenceDir}/name-dialog-${width}.png` });
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
   }
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
 
   let pdfFixtureOpened = await clickVisibleText('selection-visual.pdf');
   if (!pdfFixtureOpened) {
@@ -862,6 +952,78 @@ try {
   await page.locator(`mark[data-hlid="${secondPdfHighlightId}"]`).waitFor();
   check('PDF highlights restore after reopening the document', reopenedPdf);
   await page.screenshot({ path: `${evidenceDir}/overlapping-pdf-highlights.png` });
+
+  const sourceBookmarkCount = bookmarks.filter((bookmark) => bookmark.document_id === 'document-1').length;
+  const sourceHighlightCount = highlights.filter((highlight) => highlight.document_id === 'document-1').length;
+  const savedItemsButton = page.getByRole('button', {
+    name: `Show saved items for source.txt: ${sourceBookmarkCount} bookmarks and ${sourceHighlightCount} highlights`,
+  });
+  check('sidebar shows per-document bookmark and highlight counts', await savedItemsButton.isVisible());
+  if (await savedItemsButton.isVisible()) {
+    await savedItemsButton.click();
+    const savedHighlight = highlights.find((highlight) => highlight.document_id === 'document-1');
+    if (savedHighlight) {
+      await page.getByRole('button', {
+        name: `Open highlight: ${savedHighlight.text} in source.txt, page ${savedHighlight.page_number}`,
+      }).click();
+      await page.getByText('First duplicate anchor', { exact: true }).waitFor();
+      await page.waitForFunction(
+        (text) => window.getSelection()?.toString() === text,
+        savedHighlight.text,
+        { timeout: 5000 },
+      );
+      check('sidebar highlight opens its exact saved passage', true);
+    } else {
+      check('sidebar highlight opens its exact saved passage', false, 'No source highlight fixture');
+    }
+    await openSidebarSavedItems('source.txt');
+    const savedBookmark = bookmarks.find((bookmark) =>
+      bookmark.document_id === 'document-1' && bookmark.name === 'Second occurrence',
+    );
+    if (savedBookmark) {
+      await page.getByRole('button', {
+        name: `Open bookmark: ${savedBookmark.name} in source.txt, page ${savedBookmark.page_number}`,
+      }).click();
+      await page.getByText('First duplicate anchor', { exact: true }).waitFor();
+      await page.waitForFunction(
+        () => window.getSelection()?.toString() === 'duplicate anchor',
+        null,
+        { timeout: 5000 },
+      );
+      check('sidebar bookmark opens its exact saved passage', true);
+    } else {
+      check('sidebar bookmark opens its exact saved passage', false, 'No named bookmark fixture');
+    }
+  } else {
+    check('sidebar highlight opens its exact saved passage', false, 'Saved-item list is unavailable');
+    check('sidebar bookmark opens its exact saved passage', false, 'Saved-item list is unavailable');
+  }
+
+  await page.getByRole('button', { name: 'Contacts and sharing' }).click();
+  await page.getByRole('button', { name: 'Retry loading' }).waitFor({ timeout: 5000 });
+  check(
+    'Contacts & Sharing keeps loaded sections visible and identifies a partial failure',
+    await page.getByText('KP-AAAAAAAAAA', { exact: true }).isVisible() &&
+      await page.getByText(/contacts/i).count() > 0,
+  );
+  failContactsRequests = false;
+  await page.getByRole('button', { name: 'Retry loading' }).click();
+  await page.getByText('Study Partner', { exact: true }).waitFor();
+  check('Contacts & Sharing retry reloads the failed contacts section', true);
+  await page.getByRole('button', { name: 'View read-only' }).click();
+  await page.getByText(
+    'The source document was not separately shared with you, so only this annotation is available.',
+  ).waitFor();
+  check('annotation-only shares do not open their private source document', true);
+  sourceDocumentShareAccepted = true;
+  await page.getByRole('button', { name: 'View read-only' }).click();
+  await page.getByText('First duplicate anchor', { exact: true }).waitFor();
+  await page.waitForFunction(
+    () => window.getSelection()?.toString() === 'duplicate anchor',
+    null,
+    { timeout: 5000 },
+  );
+  check('annotation share jumps to its exact anchor when source access is accepted', true);
 
   check('no browser runtime errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 } catch (error) {

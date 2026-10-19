@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Copy, Link2, LoaderCircle, LockKeyhole, Share2, ShieldBan, UserPlus, Users, X } from 'lucide-react';
 import api from '../api';
 
@@ -15,7 +15,9 @@ const shareStatusLabel = (status) => ({
   unavailable: 'User unavailable',
 }[status] || 'No request created');
 
-export default function ContactsPage({ onClose, activeDocument, activeProject, openDocument, notify }) {
+export default function ContactsPage({
+  onClose, activeDocument, activeProject, openDocument, navigateToLocation, notify,
+}) {
   const [profile, setProfile] = useState(null);
   const [contacts, setContacts] = useState([]);
   const [sentContactRequests, setSentContactRequests] = useState([]);
@@ -26,8 +28,10 @@ export default function ContactsPage({ onClose, activeDocument, activeProject, o
   const [bookmarks, setBookmarks] = useState([]);
   const [highlights, setHighlights] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [failedSections, setFailedSections] = useState([]);
   const [knoprixIdInput, setKnoprixIdInput] = useState('');
   const [lookupResult, setLookupResult] = useState('');
   const [resourceType, setResourceType] = useState('document');
@@ -35,41 +39,82 @@ export default function ContactsPage({ onClose, activeDocument, activeProject, o
   const [selectedRecipients, setSelectedRecipients] = useState([]);
   const [shareResults, setShareResults] = useState([]);
   const [shareDetail, setShareDetail] = useState(null);
+  const refreshSequence = useRef(0);
   const [privacy, setPrivacy] = useState({
     allowIdLookup: true,
     allowContactRequests: true,
     emailNotificationsEnabled: false,
   });
 
-  const refresh = useCallback(async () => {
-    setError('');
+  const refresh = useCallback(async (sectionsToLoad = null) => {
+    const requestId = ++refreshSequence.current;
+    const requests = {
+      profile: () => api.get('/v1/profile'),
+      contacts: () => api.get('/v1/contacts'),
+      inbox: () => api.get('/v1/inbox'),
+      sentContactRequests: () => api.get('/v1/contact-requests/sent'),
+      sentShares: () => api.get('/v1/shares/sent'),
+      receivedShares: () => api.get('/v1/shares/received'),
+      blocks: () => api.get('/v1/blocks'),
+    };
+    const labels = {
+      profile: 'privacy settings',
+      contacts: 'contacts',
+      inbox: 'incoming requests',
+      sentContactRequests: 'sent contact requests',
+      sentShares: 'sent shares',
+      receivedShares: 'incoming shares',
+      blocks: 'blocked users',
+    };
+    const sections = sectionsToLoad || Object.keys(requests);
+    setRefreshing(true);
     try {
-      const [profileResponse, contactsResponse, inboxResponse, contactOutboxResponse, sentResponse, receivedResponse, blocksResponse] =
-        await Promise.all([
-          api.get('/v1/profile'),
-          api.get('/v1/contacts'),
-          api.get('/v1/inbox'),
-          api.get('/v1/contact-requests/sent'),
-          api.get('/v1/shares/sent'),
-          api.get('/v1/shares/received'),
-          api.get('/v1/blocks'),
-        ]);
-      setProfile(profileResponse.data);
-      setPrivacy({
-        allowIdLookup: profileResponse.data.allowIdLookup,
-        allowContactRequests: profileResponse.data.allowContactRequests,
-        emailNotificationsEnabled: profileResponse.data.emailNotificationsEnabled,
+      const results = await Promise.allSettled(sections.map((section) => requests[section]()));
+      if (requestId !== refreshSequence.current) return;
+      const failures = [];
+      results.forEach((result, index) => {
+        const section = sections[index];
+        if (result.status === 'rejected') {
+          failures.push(section);
+          return;
+        }
+        const { data } = result.value;
+        if (section === 'profile') {
+          setProfile(data);
+          setPrivacy({
+            allowIdLookup: data.allowIdLookup,
+            allowContactRequests: data.allowContactRequests,
+            emailNotificationsEnabled: data.emailNotificationsEnabled,
+          });
+        } else if (section === 'contacts') {
+          setContacts(data.contacts || []);
+        } else if (section === 'inbox') {
+          setInbox({
+            contactRequests: [],
+            shareRequests: [],
+            ...data,
+          });
+        } else if (section === 'sentContactRequests') {
+          setSentContactRequests(data.requests || []);
+        } else if (section === 'sentShares') {
+          setSentShares(data.shares || []);
+        } else if (section === 'receivedShares') {
+          setReceivedShares(data.shares || []);
+        } else if (section === 'blocks') {
+          setBlocks(data.blockedKnoprixIds || []);
+        }
       });
-      setContacts(contactsResponse.data.contacts || []);
-      setSentContactRequests(contactOutboxResponse.data.requests || []);
-      setInbox(inboxResponse.data);
-      setSentShares(sentResponse.data.shares || []);
-      setReceivedShares(receivedResponse.data.shares || []);
-      setBlocks(blocksResponse.data.blockedKnoprixIds || []);
-    } catch (requestError) {
-      setError(requestError.response?.data?.detail || 'Could not load contacts and sharing.');
+      setFailedSections(failures);
+      if (failures.length) {
+        setError(`Some sections could not be loaded: ${failures.map((section) => labels[section]).join(', ')}.`);
+      } else {
+        setError('');
+      }
     } finally {
-      setLoading(false);
+      if (requestId === refreshSequence.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -235,7 +280,29 @@ export default function ContactsPage({ onClose, activeDocument, activeProject, o
         openDocument({ ...documentData.document, readOnly: true });
         onClose();
       } else {
-        setShareDetail(data);
+        const resource = data.resource;
+        if (resource.document_id) {
+          try {
+            const { data: documentData } = await api.get(`/documents/${resource.document_id}`);
+            openDocument({ ...documentData.document, readOnly: true });
+            navigateToLocation(
+              resource.document_id,
+              resource.page_number,
+              resource.text || resource.highlighted_text || '',
+              { start: resource.anchor_start, end: resource.anchor_end },
+            );
+            onClose();
+          } catch (documentError) {
+            if (documentError.response?.status === 404) {
+              setShareDetail({ ...data, sourceDocumentUnavailable: true });
+            } else {
+              setShareDetail(data);
+              reportError(documentError, 'Could not open the source document.');
+            }
+          }
+        } else {
+          setShareDetail(data);
+        }
       }
     } catch (requestError) {
       reportError(requestError, 'This share is no longer available.');
@@ -374,7 +441,21 @@ export default function ContactsPage({ onClose, activeDocument, activeProject, o
           </button>
         </div>
 
-        {error && <p role="alert" className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</p>}
+        {error && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            <span>{error}</span>
+            {failedSections.length > 0 && (
+              <button
+                type="button"
+                onClick={() => void refresh(failedSections)}
+                disabled={refreshing}
+                className="min-h-10 shrink-0 rounded-lg border border-rose-200/30 px-3 text-xs font-semibold text-rose-100 disabled:opacity-50"
+              >
+                {refreshing ? 'Retrying…' : 'Retry loading'}
+              </button>
+            )}
+          </div>
+        )}
         {loading ? (
           <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-ivory/60" role="status">
             <LoaderCircle className="size-4 animate-spin" /> Loading contacts…
@@ -599,6 +680,14 @@ export default function ContactsPage({ onClose, activeDocument, activeProject, o
                 <p className="mt-2 whitespace-pre-wrap break-words text-sm text-ivory/80">
                   {shareDetail.resource.text || shareDetail.resource.highlighted_text || shareDetail.resource.notes || shareDetail.resource.name || 'Shared bookmark'}
                 </p>
+                {shareDetail.resource.page_number && (
+                  <p className="mt-2 text-xs text-ivory/50">Saved on page {shareDetail.resource.page_number}.</p>
+                )}
+                {shareDetail.sourceDocumentUnavailable && (
+                  <p className="mt-2 text-xs text-ivory/55">
+                    The source document was not separately shared with you, so only this annotation is available.
+                  </p>
+                )}
               </section>
             )}
           </>

@@ -103,6 +103,9 @@ your documents.
 - Existing health, authentication, project, document, search, DSA, bookmark,
   and highlight routes remain available.
 - Existing bookmark behavior remains Hash Table + Doubly Linked List based.
+- Project document lists include authenticated-user bookmark and highlight
+  totals per document. The sidebar can expand these items and jump to a saved
+  page/text anchor without loading every document's highlights at startup.
 - Any backend behavior change is proposed and approved separately.
 
 ### AI integration — later slice
@@ -129,8 +132,11 @@ your documents.
   highlight; project snapshots are not supported.
 - Accepted document shares provide read-only access to that document's
   existing reader endpoints. Bookmark/highlight shares expose only the selected
-  annotation. Contact removal, blocking, owner revocation, recipient leave, or
-  source deletion removes future access.
+  annotation; a shared annotation opens its source only when the recipient also
+  has a separately accepted share for that document. Contact removal, blocking,
+  owner revocation, recipient leave, or source deletion removes future access.
+- Contacts & sharing loads sections independently, retains successful data,
+  names failed sections, and offers a retry for those requests.
 - Email preference fields are present, but email delivery is not configured.
   Do not claim that email notifications are sent. Email cannot deliver private
   files or bypass Knoprix authentication and share acceptance.

@@ -26,7 +26,7 @@ export default function App() {
     toast, notify,
     fetchProjects, selectProject, resetWorkspace,
     projects, activeProject, activeDocument,
-    openDocument,
+    openDocument, navigateToLocation,
   } = useApp();
   const [authMode, setAuthMode] = useState('login');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -186,6 +186,7 @@ export default function App() {
                 activeDocument={activeDocument}
                 activeProject={activeProject}
                 openDocument={openDocument}
+                navigateToLocation={navigateToLocation}
                 notify={notify}
               />
             ) : workspaceMode === 'ai-wing' ? (

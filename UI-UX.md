@@ -38,6 +38,11 @@ No visual choice is treated as approved until it is selected here.
 - Used for: projects, documents, search, bookmarks, highlights, settings.
 - Decisions: fixed sidebar or rail, expanded/collapsed labels, active indicator,
   mobile drawer behavior.
+- Approved improvement (2026-10-20): source rows show the current user's
+  bookmark and highlight totals; a document expands to its saved items. Opening
+  an item navigates to its page and exact saved text anchor. Load highlights
+  only when a document's list is expanded, and close the mobile drawer after a
+  document or saved item is opened.
 - Reference URLs: _add here_
 
 ### A3. `MobileNavigationDrawer` — navigation panel opened on small screens
@@ -355,7 +360,10 @@ No visual choice is treated as approved until it is selected here.
 - Responsive: stack all cards and controls on mobile; no horizontal overflow;
   target 390px and 425px mobile, 768px tablet, and 1024px desktop.
 - States: initial loading, empty contact/request/share lists, per-action
-  loading, success toasts, actionable API errors, and unavailable email state.
+  loading, partial section failures with retry, success toasts, actionable API
+  errors, and unavailable email state. An annotation-only share opens its
+  source only when that document was separately shared and accepted; otherwise
+  show the annotation and page without exposing the source.
 - Approval: dedicated Contacts page, page order, entry points, and visual
   direction approved by boss 2026-10-12.
 

@@ -74,6 +74,8 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   const {
     activeDocument, currentPage, setCurrentPage, zoomLevel,
     highlightSnippet, notify, activeProject, fetchBookmarks,
+    adjustDocumentHighlightCount,
+    adjustDocumentBookmarkCount,
     getReadingProgress, saveReadingProgress, locationRequest,
   } = useApp();
   const readOnly = Boolean(activeDocument?.readOnly);
@@ -428,6 +430,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         );
         if (bm) {
           await api.delete(`/bookmarks/${bm.id}`);
+          adjustDocumentBookmarkCount(activeDocument.id, -1);
           notify(`Removed page ${pageNum} bookmark`, 'info');
         }
       } else {
@@ -607,6 +610,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         selectionStart: bookmarkDraft.selectionStart,
         selectionEnd: bookmarkDraft.selectionEnd,
       });
+      adjustDocumentBookmarkCount(activeDocument.id, 1);
       notify(
         name
           ? 'Named bookmark added to your collection'
@@ -714,6 +718,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       };
       highlightsRef.current = [...highlightsRef.current, savedHighlight];
       setHighlights((h) => [...h, savedHighlight]);
+      adjustDocumentHighlightCount(activeDocument.id, 1);
       setRecentHighlightId(data.id);
       notify('Highlighted — saved for this document', 'success');
       window.getSelection()?.removeAllRanges();
@@ -740,17 +745,20 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     if (readOnly) return;
     const removed = highlights.find((h) => h.id === id);
     if (!removed) return;
+    const documentId = activeDocument.id;
+    const projectId = activeProject.id;
     try {
       await api.delete(`/highlights/${id}`);
       highlightsRef.current = highlightsRef.current.filter((highlight) => highlight.id !== id);
       setHighlights((h) => h.filter((x) => x.id !== id));
+      adjustDocumentHighlightCount(documentId, -1);
       notify('Highlight removed', 'info', {
         label: 'Undo',
         run: async () => {
           try {
             const { data } = await api.post('/highlights', {
-              projectId: activeProject.id,
-              documentId: activeDocument.id,
+              projectId,
+              documentId,
               pageNumber: removed.pageNumber,
               text: removed.text,
               color: removed.color,
@@ -760,6 +768,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
             });
             highlightsRef.current = [...highlightsRef.current, { ...removed, id: data.id }];
             setHighlights((h) => [...h, { ...removed, id: data.id }]);
+            adjustDocumentHighlightCount(documentId, 1);
             setRecentHighlightId(data.id);
             notify('Highlight restored', 'success');
           } catch {

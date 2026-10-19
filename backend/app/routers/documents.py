@@ -297,17 +297,31 @@ def list_documents(project_id: str, user=Depends(get_current_user), db=Depends(g
     rows = db.execute(
         """
         SELECT d.*,
-               CASE WHEN g.id IS NULL THEN 0 ELSE 1 END AS has_grant
+               CASE WHEN g.id IS NULL THEN 0 ELSE 1 END AS has_grant,
+               COALESCE(b.bookmark_count, 0) AS bookmark_count,
+               COALESCE(h.highlight_count, 0) AS highlight_count
         FROM documents d
         LEFT JOIN ai_document_grants g
                ON g.document_id = d.id
               AND g.user_id = ?
               AND g.purpose = 'all'
               AND g.revoked_at IS NULL
+        LEFT JOIN (
+            SELECT document_id, COUNT(*) AS bookmark_count
+            FROM bookmarks
+            WHERE user_id = ? AND project_id = ?
+            GROUP BY document_id
+        ) b ON b.document_id = d.id
+        LEFT JOIN (
+            SELECT document_id, COUNT(*) AS highlight_count
+            FROM highlights
+            WHERE user_id = ? AND project_id = ?
+            GROUP BY document_id
+        ) h ON h.document_id = d.id
         WHERE d.project_id = ?
         ORDER BY d.created_at DESC
         """,
-        (user["id"], project_id),
+        (user["id"], user["id"], project_id, user["id"], project_id, project_id),
     ).fetchall()
     # Full rows (incl. extracted_text) so text viewers can render without an
     # extra fetch. Typical extracted text is tens of KB — acceptable for lists.
@@ -669,4 +683,3 @@ def list_ai_grants(user=Depends(get_current_user), db=Depends(get_db)):
         (user["id"],),
     ).fetchall()
     return {"grants": [dict(r) for r in rows]}
-
