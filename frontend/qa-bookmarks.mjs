@@ -1,6 +1,6 @@
 /* Bookmark regression QA against a mocked API; writes local responsive evidence. */
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const evidenceDir = fileURLToPath(new URL('../qa-artifacts/knoprix-bookmarks/', import.meta.url));
@@ -33,6 +33,16 @@ const documents = [
     file_size: 24,
     page_count: 1,
     extracted_text: 'A different document',
+  },
+  {
+    id: 'document-3',
+    project_id: 'project-1',
+    file_name: 'selection-visual.pdf',
+    file_type: 'pdf',
+    file_path: 'selection-visual.pdf',
+    file_size: 23894176,
+    page_count: 10,
+    extracted_text: '',
   },
 ];
 const bookmarks = [{
@@ -70,6 +80,13 @@ await page.route('**/api/**', async (route) => {
   const request = route.request();
   const url = new URL(request.url());
   const path = url.pathname;
+
+  if (path === '/api/documents/document-3/stream') {
+    return route.fulfill({
+      contentType: 'application/pdf',
+      path: fileURLToPath(new URL('../backend/uploads/1789381445896-6523eb3b-23AID204_Lecture16-18.pdf', import.meta.url)),
+    });
+  }
 
   if (path === '/api/auth/refresh' && request.method() === 'POST') {
     return respond(route, 200, {
@@ -162,6 +179,25 @@ async function clickVisibleText(text) {
   return false;
 }
 
+async function selectPdfSpan() {
+  return page.evaluate(() => {
+    const span = [...document.querySelectorAll('.pdf-text-layer span')]
+      .find((candidate) => candidate.textContent.trim().length >= 8);
+    if (!span || !span.firstChild) return false;
+    const text = span.textContent.trim();
+    const node = span.firstChild;
+    const start = node.textContent.indexOf(text);
+    const range = document.createRange();
+    range.setStart(node, start);
+    range.setEnd(node, start + Math.min(text.length, 12));
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    span.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    return selection.toString();
+  });
+}
+
 async function selectText(phrase, occurrence) {
   return page.evaluate(({ phrase: selected, occurrence: selectedOccurrence }) => {
     const paragraphs = [...document.querySelectorAll('#main-content p')];
@@ -194,9 +230,46 @@ try {
   await page.getByText('First duplicate anchor', { exact: true }).waitFor({ timeout: 15000 });
   check('mock project and source document load', true);
 
+  const selectionToggle = page.getByRole('button', { name: 'Switch to browse mode' });
+  check(
+    'Text Selection is visibly active before an annotation begins',
+    await selectionToggle.getAttribute('aria-pressed') === 'true',
+  );
+  await selectionToggle.click();
+  check(
+    'Browse mode clearly reports that text annotation is unavailable',
+    await page.getByRole('button', { name: 'Switch to text selection mode' }).getAttribute('aria-pressed') === 'false',
+  );
+  await selectText('duplicate anchor', 1);
+  check(
+    'Browse mode does not open an annotation action by mistake',
+    !await page.getByTitle('Apply yellow to this selection').isVisible().catch(() => false),
+  );
+  await page.getByRole('button', { name: 'Switch to text selection mode' }).click();
+  await page.evaluate(() => window.getSelection()?.removeAllRanges());
+
   check('second repeated passage can be selected', await selectText('duplicate anchor', 1));
+  await page.getByTitle('Apply yellow to this selection').waitFor();
+  check(
+    'selection action palette stays outside the selected words',
+    await page.evaluate(() => {
+      const range = window.getSelection()?.getRangeAt(0);
+      const palette = [...document.querySelectorAll('.fixed')]
+        .find((element) => element.querySelector('[title="Apply yellow to this selection"]'));
+      if (!range || !palette) return false;
+      const selected = range.getBoundingClientRect();
+      const action = palette.getBoundingClientRect();
+      return action.bottom <= selected.top || action.top >= selected.bottom;
+    }),
+  );
+  await page.screenshot({ path: `${evidenceDir}/live-selection-text.png` });
   await page.getByTitle('Apply yellow to this selection').click();
   await page.locator('mark[data-hlid="highlight-1"]').waitFor();
+  check(
+    'a newly saved marker gives a short visual confirmation before settling',
+    await page.locator('mark[data-hlid="highlight-1"]').evaluate((mark) =>
+      mark.classList.contains('kn-hl--new')),
+  );
   check(
     'highlight stores exact offsets and marks only the selected duplicate',
     highlights[0]?.anchor_start !== null &&
@@ -354,6 +427,29 @@ try {
     await page.screenshot({ path: `${evidenceDir}/name-dialog-${width}.png` });
     await dialog.getByRole('button', { name: 'Cancel' }).click();
   }
+
+  let pdfFixtureOpened = await clickVisibleText('selection-visual.pdf');
+  if (!pdfFixtureOpened) {
+    const folderToggle = page.getByTitle('Toggle folders');
+    if (await folderToggle.isVisible().catch(() => false)) {
+      await folderToggle.click();
+      pdfFixtureOpened = await clickVisibleText('selection-visual.pdf');
+    }
+  }
+  check('PDF fixture opens for live selection feedback', pdfFixtureOpened);
+  await page.getByText('Rendering PDF canvas…').waitFor({ state: 'hidden', timeout: 20000 });
+  await page.locator('.pdf-text-layer span').first().waitFor({ timeout: 20000 });
+  const selectedPdfText = await selectPdfSpan();
+  await page.getByTitle('Apply yellow to this selection').waitFor();
+  await page.screenshot({ path: `${evidenceDir}/live-selection-pdf.png` });
+  const selectionCss = readFileSync(
+    fileURLToPath(new URL('./src/index.css', import.meta.url)),
+    'utf8',
+  );
+  check(
+    'PDF live selection is a distinct blue state, not the saved gold marker',
+    Boolean(selectedPdfText) && selectionCss.includes('background: rgba(37, 99, 235, 0.8)'),
+  );
 
   check('no browser runtime errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 } catch (error) {

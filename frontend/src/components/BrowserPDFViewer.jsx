@@ -92,6 +92,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   const [savedPages, setSavedPages] = useState(new Set());
   const [highlights, setHighlights] = useState([]);
   const [highlightsDocumentId, setHighlightsDocumentId] = useState(null);
+  const [recentHighlightId, setRecentHighlightId] = useState(null);
   const [colorMenuOpen, setColorMenuOpen] = useState(false);
   const [matchAllMode, setMatchAllMode] = useState(
     () => localStorage.getItem(HIGHLIGHT_ALL_KEY) === 'true'
@@ -114,6 +115,12 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   useEffect(() => {
     highlightsRef.current = highlights;
   }, [highlights]);
+
+  useEffect(() => {
+    if (!recentHighlightId) return undefined;
+    const clearRecentHighlight = window.setTimeout(() => setRecentHighlightId(null), 220);
+    return () => window.clearTimeout(clearRecentHighlight);
+  }, [recentHighlightId]);
 
   const pageCanvasRefs = useRef({});
   const pageTextLayerRefs = useRef({});
@@ -327,7 +334,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         /* skip broken page */
       }
     },
-    [pdfDoc, zoomLevel]
+    [pdfDoc, zoomLevel, recentHighlightId]
   );
 
   // Re-render pages whenever highlights change too — renderPage reads the
@@ -460,7 +467,13 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
 
   // ── Selection → action popover ─────────────────────────────────────────────
   const handleMouseUp = (e) => {
-    if (readOnly || browseMode) return;
+    if (readOnly) return;
+    if (browseMode) {
+      if ((window.getSelection()?.toString() || '').trim()) {
+        notify('Text selection is off. Choose Text Selection to highlight.', 'info');
+      }
+      return;
+    }
     if (e?.target?.closest?.('button, a, input, textarea, select, [role="button"]')) return;
     // Clicking an existing highlight marker opens the remove menu instead of
     // the selection popover.
@@ -488,11 +501,19 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         Math.max(rect.left + rect.width / 2, half + 8),
         window.innerWidth - half - 8,
       );
-      const y = Math.min(Math.max(rect.top - 8, 8), window.innerHeight - 170);
+      // Keep the palette out of the reader's line of sight. It belongs above
+      // the selected words; only use the space below when the selection is
+      // too close to the top edge.
+      const paletteHeight = 48;
+      const placement = rect.top > paletteHeight + 12 ? 'above' : 'below';
+      const y = placement === 'above'
+        ? rect.top - 8
+        : Math.min(rect.bottom + 8, window.innerHeight - paletteHeight - 8);
       setSelection({
         text,
         x,
         y,
+        placement,
         page,
         selectionStart: offsets
           ? offsets.start + leadingWhitespace
@@ -618,6 +639,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
           anchorEnd: sel.selectionEnd,
         },
       ]);
+      setRecentHighlightId(data.id);
       notify('Highlighted — saved for this document', 'success');
       setSelection(null);
       setColorMenuOpen(false);
@@ -658,6 +680,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
               selectionEnd: removed.anchorEnd,
             });
             setHighlights((h) => [...h, { ...removed, id: data.id }]);
+            setRecentHighlightId(data.id);
             notify('Highlight restored', 'success');
           } catch {
             notify('Could not restore highlight', 'error');
@@ -712,7 +735,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       const e = Math.min(nodeEnd, end) - nodeStart;
       if (s === 0 && e === len) {
         const mark = document.createElement('mark');
-        mark.className = 'kn-hl';
+        mark.className = `kn-hl${hlId === recentHighlightId ? ' kn-hl--new' : ''}`;
         mark.dataset.hlid = hlId;
         mark.style.setProperty('--hl-bg', bg);
         node.replaceWith(mark);
@@ -721,7 +744,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         const before = node.splitText(s);
         before.splitText(e - s);
         const mark = document.createElement('mark');
-        mark.className = 'kn-hl';
+        mark.className = `kn-hl${hlId === recentHighlightId ? ' kn-hl--new' : ''}`;
         mark.dataset.hlid = hlId;
         mark.style.setProperty('--hl-bg', bg);
         before.replaceWith(mark);
@@ -978,7 +1001,12 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
                 {segs
                   ? segs.map((seg, j) =>
                       seg.mark ? (
-                        <mark key={j} data-hlid={seg.id} className="kn-hl-plain" style={{ background: seg.color }}>
+                        <mark
+                          key={j}
+                          data-hlid={seg.id}
+                          className={`kn-hl-plain${seg.id === recentHighlightId ? ' kn-hl--new' : ''}`}
+                          style={{ background: seg.color, '--hl-bg': seg.color }}
+                        >
                           {seg.text}
                         </mark>
                       ) : (
@@ -1122,11 +1150,12 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       <AnimatePresence>
         {selection && !readOnly && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
             style={{ top: selection.y, left: selection.x }}
-            className="fixed z-50 -translate-x-1/2 glass-panel rounded-xl px-1.5 py-1 shadow-2xl flex flex-col gap-0.5 border border-primary/40 max-w-[94vw]"
+            className={`fixed z-50 -translate-x-1/2 ${selection.placement === 'above' ? '-translate-y-full' : ''} glass-panel rounded-xl px-1.5 py-1 shadow-2xl flex flex-col gap-0.5 border border-primary/40 max-w-[94vw]`}
           >
             <div className="flex items-center gap-0.5 overflow-x-auto">
               <button

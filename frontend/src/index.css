@@ -98,15 +98,22 @@ html.light .bg-primary\/10 { background-color: rgba(201, 144, 63, 0.1); }
   cursor: text;
   transform-origin: 0% 0%;
 }
+[data-page] ::selection {
+  /* Blue means "this is the live range I am about to annotate". Gold is
+     reserved for the saved highlighter, so the two states cannot be confused. */
+  background: rgba(37, 99, 235, 0.8);
+  color: #eff6ff;
+}
 .pdf-text-layer ::selection {
-  background: rgba(232, 190, 106, 0.45);
+  background: rgba(37, 99, 235, 0.8);
+  color: transparent;
 }
 .bookmark-jump-active ::selection {
-  background: rgba(232, 190, 106, 0.72);
-  color: #1b1408;
+  background: rgba(37, 99, 235, 0.88);
+  color: transparent;
 }
 .pdf-text-layer.bookmark-jump-active ::selection {
-  background: rgba(232, 190, 106, 0.72);
+  background: rgba(37, 99, 235, 0.88);
   color: transparent;
 }
 
@@ -124,6 +131,31 @@ html.light .bg-primary\/10 { background-color: rgba(201, 144, 63, 0.1); }
 }
 .pdf-text-layer mark.kn-hl:hover {
   filter: brightness(1.1);
+}
+
+/* A new saved marker settles from the blue selection state into its chosen
+   highlighter color. The motion confirms the action without moving the page. */
+@keyframes kn-highlight-settle {
+  from {
+    background-color: rgba(37, 99, 235, 0.8);
+    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.36);
+  }
+  to {
+    background-color: var(--hl-bg);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.pdf-text-layer mark.kn-hl--new,
+mark.kn-hl-plain.kn-hl--new {
+  animation: kn-highlight-settle 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdf-text-layer mark.kn-hl--new,
+  mark.kn-hl-plain.kn-hl--new {
+    animation: none;
+  }
 }
 
 /* Highlight marks in text viewer & slides — colored background with readable text */

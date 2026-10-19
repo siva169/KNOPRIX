@@ -104,11 +104,14 @@ export default function PDFToolbar({
           onClick={() => setBrowseMode(!browseMode)}
           className={`p-1.5 rounded-xl border transition flex items-center gap-1.5 font-semibold ${
             browseMode
-              ? 'bg-primary/20 text-secondary border-primary/60'
-              : 'bg-midnight-panel text-ivory/70 border-glass-borderDark hover:bg-white/10'
+              ? 'bg-midnight-panel text-ivory/70 border-glass-borderDark hover:bg-white/10'
+              : 'bg-sky-500/15 text-sky-100 border-sky-300/60 hover:bg-sky-500/25'
           }`}
-          title={browseMode ? 'Browse mode: click and select text to annotate' : 'Text selection mode'}
+          title={browseMode
+            ? 'Browse mode is active. Switch to Text Selection to highlight text.'
+            : 'Text Selection is active. Drag across text to highlight it.'}
           aria-label={browseMode ? 'Switch to text selection mode' : 'Switch to browse mode'}
+          aria-pressed={!browseMode}
         >
           {browseMode ? <MousePointer2 className="w-3.5 h-3.5" /> : <ScanText className="w-3.5 h-3.5" />}
           <span className="hidden xl:inline text-[10px]">{browseMode ? 'Browse' : 'Text Selection'}</span>

@@ -1,5 +1,22 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-19 — Make live text highlighting unambiguous
+
+- The recordings showed a separate interaction defect from saved anchors:
+  active Browse mode silently suppressed annotation, the live PDF selection
+  used the same gold family as a saved yellow marker, and the action palette
+  could cover the selected words.
+- Text Selection now has an explicit active blue state. A live range is blue
+  in PDF and text readers; saved markers retain their chosen highlighter
+  color. The action palette now settles immediately above the selected text,
+  falling below only at the top of the viewport.
+- A newly saved marker briefly transitions from the blue live range to its
+  chosen color (180ms); reduced-motion users receive the final state directly.
+- Verification: mocked Chromium QA passes 41/41 checks, including PDF/text
+  live-selection screenshots, browse/text-mode behavior, no palette overlap,
+  saved-marker feedback, and mobile through desktop widths. Production build
+  passes with the pre-existing large-chunk warning.
+
 ## 2026-10-19 — Make saved highlights and bookmark jumps precise
 
 - Diagnosis from the supplied recordings and a repeated-text browser fixture:
