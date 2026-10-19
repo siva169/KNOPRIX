@@ -82,6 +82,12 @@ html.light .bg-primary\/10 { background-color: rgba(201, 144, 63, 0.1); }
 
 /* pdf.js text layer */
 .pdf-text-layer {
+  --user-unit: 1;
+  --total-scale-factor: calc(var(--scale-factor) * var(--user-unit));
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
   position: absolute;
   inset: 0;
   overflow: hidden;
@@ -97,6 +103,12 @@ html.light .bg-primary\/10 { background-color: rgba(201, 144, 63, 0.1); }
   white-space: pre;
   cursor: text;
   transform-origin: 0% 0%;
+}
+.pdf-text-layer > span:not(.markedContent):not([role="img"]),
+.pdf-text-layer .markedContent span:not(.markedContent):not([role="img"]) {
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate, 0deg)) scaleX(var(--scale-x, 1))
+    scale(var(--min-font-size-inv));
 }
 [data-page] ::selection {
   /* Blue means "this is the live range I am about to annotate". Gold is
@@ -122,10 +134,9 @@ html.light .bg-primary\/10 { background-color: rgba(201, 144, 63, 0.1); }
   position: static;
   color: transparent;
   background: var(--hl-bg, rgba(253, 224, 71, 0.5));
-  border-radius: 2px;
+  border-radius: 1px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  padding: 0 1px;
   cursor: pointer;
   transition: filter 0.15s;
 }

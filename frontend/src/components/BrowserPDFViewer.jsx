@@ -317,8 +317,8 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
           textLayer.style.position = 'absolute';
           textLayer.style.top = '0';
           textLayer.style.left = '0';
-          textLayer.style.transform = `scale(${1 / dpr})`;
-          // Keep the CSS scale factor aligned with the TextLayer viewport.
+          // TextLayer dimensions and coordinates are CSS pixels; canvas
+          // supersampling must not scale the selectable layer a second time.
           textLayer.style.setProperty('--scale-factor', String(zoom));
           try {
             const textContent = await page.getTextContent();

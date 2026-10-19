@@ -70,7 +70,10 @@ const respond = (route, status, data) => route.fulfill({
 });
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+const page = await browser.newPage({
+  viewport: { width: 390, height: 844 },
+  deviceScaleFactor: 2,
+});
 const errors = [];
 page.on('pageerror', (error) => errors.push(error.message));
 page.on('console', (message) => {
@@ -195,17 +198,19 @@ async function applySelectedHighlight() {
   return highlights.at(-1)?.id;
 }
 
-async function selectPdfSpan(startOffset = 0, length = 12) {
-  return page.evaluate(({ startOffset: selectionStart, length: selectionLength }) => {
+async function selectPdfSpan(startOffset = 0, length = 12, targetText = null) {
+  return page.evaluate(({ startOffset: selectionStart, length: selectionLength, targetText: expectedText }) => {
     const span = [...document.querySelectorAll('.pdf-text-layer span')]
-      .find((candidate) => candidate.textContent.trim().length >= 8);
+      .find((candidate) => expectedText
+        ? candidate.textContent === expectedText
+        : candidate.textContent.trim().length >= 8);
     if (!span) return false;
     const nodes = [];
     const walker = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
     let node;
     while ((node = walker.nextNode())) nodes.push(node);
     const text = nodes.map((textNode) => textNode.textContent).join('');
-    if (text.length < 8) return false;
+    if (text.length < (expectedText ? 1 : 8)) return false;
     const pointAt = (offset) => {
       let consumed = 0;
       for (const textNode of nodes) {
@@ -228,7 +233,30 @@ async function selectPdfSpan(startOffset = 0, length = 12) {
     (range.endContainer.parentElement || span)
       .dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
     return selection.toString();
-  }, { startOffset, length });
+  }, { startOffset, length, targetText });
+}
+
+async function dragSelectPdfText(text) {
+  const geometry = await page.locator('.pdf-text-layer span').evaluateAll((spans, expectedText) => {
+    const span = spans.find((candidate) => candidate.textContent === expectedText);
+    if (!span) return null;
+    const rect = span.getBoundingClientRect();
+    return { x: rect.x, y: rect.y + rect.height / 2, width: rect.width, height: rect.height };
+  }, text);
+  if (!geometry || geometry.width <= 2 || geometry.height <= 2) return null;
+  await page.mouse.move(geometry.x + 1, geometry.y);
+  await page.mouse.down();
+  await page.mouse.move(geometry.x + geometry.width - 1, geometry.y, { steps: 8 });
+  await page.mouse.up();
+  return page.evaluate(() => {
+    const selection = window.getSelection();
+    if (!selection?.rangeCount) return null;
+    const rect = selection.getRangeAt(0).getBoundingClientRect();
+    return {
+      text: selection.toString(),
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+    };
+  });
 }
 
 async function selectText(phrase, occurrence) {
@@ -675,8 +703,43 @@ try {
   }
   check('PDF fixture opens for live selection feedback', pdfFixtureOpened);
   await page.getByText('Rendering PDF canvas…').waitFor({ state: 'hidden', timeout: 20000 });
-  await page.locator('.pdf-text-layer span').first().waitFor({ timeout: 20000 });
-  const selectedPdfText = await selectPdfSpan();
+  await page.locator('.pdf-text-layer span').first().waitFor({ state: 'attached', timeout: 20000 });
+  const pdfLayerGeometry = await page.locator('.pdf-text-layer').first().evaluate((layer) => {
+    const canvas = layer.parentElement.querySelector('canvas');
+    const layerRect = layer.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    return {
+      devicePixelRatio: window.devicePixelRatio,
+      canvas: { x: canvasRect.x, y: canvasRect.y, width: canvasRect.width, height: canvasRect.height },
+      textLayer: { x: layerRect.x, y: layerRect.y, width: layerRect.width, height: layerRect.height },
+      expectedFontSize: layer.querySelector('span') && (
+        parseFloat(getComputedStyle(layer.querySelector('span')).getPropertyValue('--font-height')) *
+        parseFloat(getComputedStyle(layer).getPropertyValue('--scale-factor')) *
+        parseFloat(getComputedStyle(layer).getPropertyValue('--min-font-size'))
+      ),
+      spanStyle: layer.querySelector('span') && {
+        fontSize: getComputedStyle(layer.querySelector('span')).fontSize,
+      },
+      scaleFactor: getComputedStyle(layer).getPropertyValue('--scale-factor').trim(),
+      totalScaleFactor: getComputedStyle(layer).getPropertyValue('--total-scale-factor').trim(),
+    };
+  });
+  check(
+    'PDF text selection layer matches the visible page geometry at 2x device scale',
+    Math.abs(pdfLayerGeometry.textLayer.x - pdfLayerGeometry.canvas.x) < 1 &&
+      Math.abs(pdfLayerGeometry.textLayer.y - pdfLayerGeometry.canvas.y) < 1 &&
+      Math.abs(pdfLayerGeometry.textLayer.width - pdfLayerGeometry.canvas.width) < 1 &&
+      Math.abs(pdfLayerGeometry.textLayer.height - pdfLayerGeometry.canvas.height) < 1 &&
+      Math.abs(parseFloat(pdfLayerGeometry.spanStyle.fontSize) -
+        pdfLayerGeometry.expectedFontSize) < 0.1,
+    JSON.stringify(pdfLayerGeometry),
+  );
+  const pointerSelection = await dragSelectPdfText('Lecture');
+  check(
+    'a real pointer drag over the printed PDF word selects that exact word',
+    pointerSelection?.text === 'Lecture',
+    JSON.stringify(pointerSelection),
+  );
   await page.getByTitle('Apply yellow to this selection').waitFor();
   await page.screenshot({ path: `${evidenceDir}/live-selection-pdf.png` });
   const selectionCss = readFileSync(
@@ -685,13 +748,27 @@ try {
   );
   check(
     'PDF live selection is a distinct blue state, not the saved gold marker',
-    Boolean(selectedPdfText) && selectionCss.includes('background: rgba(37, 99, 235, 0.8)'),
+    pointerSelection?.text === 'Lecture' &&
+      selectionCss.includes('background: rgba(37, 99, 235, 0.8)'),
   );
   const pdfTextBeforeHighlights = await page.locator('.pdf-text-layer').first().innerText();
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.getByTitle('Apply yellow to this selection').click();
-  const firstPdfHighlightId = highlights.at(-1)?.id;
+  const firstPdfHighlightId = await applySelectedHighlight();
   await page.locator(`mark[data-hlid="${firstPdfHighlightId}"]`).waitFor();
+  const pointerHighlightRect = await page.locator(`mark[data-hlid="${firstPdfHighlightId}"]`)
+    .evaluate((mark) => {
+      const rect = mark.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, text: mark.textContent };
+    });
+  check(
+    'saved PDF marker matches the exact pointer-selected text bounds',
+    pointerHighlightRect.text === 'Lecture' &&
+      Math.abs(pointerHighlightRect.x - pointerSelection.rect.x) < 2 &&
+      Math.abs(pointerHighlightRect.y - pointerSelection.rect.y) < 2 &&
+      Math.abs(pointerHighlightRect.width - pointerSelection.rect.width) < 2 &&
+      Math.abs(pointerHighlightRect.height - pointerSelection.rect.height) < 2,
+    JSON.stringify({ pointerSelection: pointerSelection.rect, pointerHighlight: pointerHighlightRect }),
+  );
   const reducedMotionResult = await page.locator(`mark[data-hlid="${firstPdfHighlightId}"]`)
     .evaluate((mark) => ({
       className: mark.className,
@@ -706,10 +783,10 @@ try {
     JSON.stringify(reducedMotionResult),
   );
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  const overlappingPdfText = await selectPdfSpan(6, 2);
+  const overlappingPdfText = await selectPdfSpan(5, 2, 'Lecture');
   check(
     'PDF selection ending inside an existing marker remains actionable',
-    Boolean(overlappingPdfText) &&
+    overlappingPdfText === 're' &&
       await page.getByTitle('Apply yellow to this selection').isVisible(),
   );
   await page.getByTitle('Apply yellow to this selection').click();
@@ -735,8 +812,19 @@ try {
     'PDF zoom rerender preserves both anchored highlights and the text layer',
     await page.evaluate(({ firstId, secondId, originalText }) => {
       const layer = document.querySelector('.pdf-text-layer');
+      const canvas = layer.parentElement.querySelector('canvas');
+      const layerRect = layer.getBoundingClientRect();
+      const canvasRect = canvas.getBoundingClientRect();
+      const span = layer.querySelector('span');
+      const expectedFontSize =
+        parseFloat(getComputedStyle(span).getPropertyValue('--font-height')) *
+        parseFloat(getComputedStyle(layer).getPropertyValue('--scale-factor')) *
+        parseFloat(getComputedStyle(layer).getPropertyValue('--min-font-size'));
       const ids = new Set([...layer.querySelectorAll('mark.kn-hl')].map((mark) => mark.dataset.hlid));
-      return ids.has(firstId) && ids.has(secondId) && layer.innerText === originalText;
+      return ids.has(firstId) && ids.has(secondId) && layer.innerText === originalText &&
+        Math.abs(layerRect.width - canvasRect.width) < 1 &&
+        Math.abs(layerRect.height - canvasRect.height) < 1 &&
+        Math.abs(parseFloat(getComputedStyle(span).fontSize) - expectedFontSize) < 0.1;
     }, {
       firstId: firstPdfHighlightId,
       secondId: secondPdfHighlightId,

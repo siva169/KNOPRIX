@@ -1,5 +1,25 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-20 — Align PDF text selection with rendered glyphs
+
+- Browser reproduction exposed a PDF.js text-layer mismatch that the earlier
+  programmatic-range tests missed: at 2× device scale, the canvas was
+  1920×1080 CSS pixels while the selectable layer was only 960×540. Its text
+  spans also lacked PDF.js font-height scaling, so their hit targets were far
+  from the visible PDF glyphs; an earlier browser screenshot showed a saved
+  marker on unrelated characters.
+- Removed the second device-pixel-ratio scale from the text layer and restored
+  PDF.js scale/font-height CSS variables. Removed extra horizontal marker
+  padding so saved PDF marker bounds match the captured selection bounds.
+- Added a browser regression that checks canvas/layer alignment and PDF.js
+  span font sizing at 2× DPR, performs a real mouse drag over a printed word,
+  and compares the saved marker rectangle with the browser selection rectangle.
+- Verification: mocked browser QA passes (63/63), including the 2× geometry
+  check, real pointer selection of “Lecture”, exact marker rectangle match,
+  overlap rendering, zoom, page navigation, persistence, bookmarks, and
+  390/425/768/1024px layouts. Frontend unit tests pass (3/3); production build
+  passes with the existing large-chunk advisory; PDF.js smoke check passes.
+
 ## 2026-10-19 — Preserve precise selections across overlapping highlights
 
 - The remaining rendering defect was caused by applying each saved PDF range
