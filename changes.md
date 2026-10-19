@@ -1,5 +1,24 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-19 — Make saved highlights and bookmark jumps precise
+
+- Diagnosis from the supplied recordings and a repeated-text browser fixture:
+  highlights previously saved only their quoted text, so a duplicate phrase
+  always painted the first match. Bookmark offsets already existed, but a
+  bookmark jump could be applied before saved highlights re-rendered, which
+  cleared its visible selection.
+- Highlights now persist validated start/end character anchors through an
+  append-only database migration. PDF and text readers render these anchored
+  highlights exactly; existing records without anchors keep their safe
+  text-matching fallback. Undo also restores the original anchored range.
+- Bookmark restoration now waits for the current document's highlight layer,
+  preventing the redraw race without changing bookmark, annotation, or
+  whole-page-bookmark behavior.
+- Verification: migration/API checks (2 + 3 + 5 tests), production frontend
+  build, and the mocked Chromium flow all pass. The browser flow reports
+  34/34 checks, covering duplicate-text highlighting, persistence after
+  reload, bookmark reopening, legacy fallback, and 390/425/768/1024px layouts.
+
 ## 2026-10-17 — Allow longer NVIDIA chat startup
 
 - Increased the NVIDIA streaming read timeout from 30 to 120 seconds so a

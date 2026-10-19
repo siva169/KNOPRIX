@@ -1,12 +1,13 @@
 /* Bookmark regression QA against a mocked API; writes local responsive evidence. */
 import { chromium } from 'playwright';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const evidenceDir = fileURLToPath(new URL('../qa-artifacts/knoprix-bookmarks/', import.meta.url));
 mkdirSync(evidenceDir, { recursive: true });
 
 const results = [];
+let flowError = '';
 const check = (name, passed, detail = '') => {
   results.push([name, Boolean(passed)]);
   console.log(`${passed ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
@@ -49,6 +50,8 @@ const bookmarks = [{
   created_at: '2025-01-01T00:00:00.000000+00:00',
 }];
 let nextBookmarkId = 1;
+const highlights = [];
+let nextHighlightId = 1;
 
 const respond = (route, status, data) => route.fulfill({
   status,
@@ -63,14 +66,17 @@ page.on('pageerror', (error) => errors.push(error.message));
 page.on('console', (message) => {
   if (message.type() === 'error') errors.push(message.text());
 });
-await page.addInitScript(() => {
-  localStorage.setItem('knoprix_mr_access_token', 'bookmark-qa-token');
-});
 await page.route('**/api/**', async (route) => {
   const request = route.request();
   const url = new URL(request.url());
   const path = url.pathname;
 
+  if (path === '/api/auth/refresh' && request.method() === 'POST') {
+    return respond(route, 200, {
+      tokens: { accessToken: 'bookmark-qa-token' },
+      user: { id: 'user-1', email: 'qa@example.test', full_name: 'QA User' },
+    });
+  }
   if (path === '/api/auth/me') {
     return respond(route, 200, { id: 'user-1', email: 'qa@example.test', full_name: 'QA User' });
   }
@@ -115,8 +121,32 @@ await page.route('**/api/**', async (route) => {
     if (index !== -1) bookmarks.splice(index, 1);
     return respond(route, 204, null);
   }
-  if (/^\/api\/documents\/[^/]+\/highlights$/.test(path)) {
-    return respond(route, 200, { highlights: [] });
+  if (/^\/api\/documents\/[^/]+\/highlights$/.test(path) && request.method() === 'GET') {
+    const documentId = path.split('/').at(-2);
+    return respond(route, 200, {
+      highlights: highlights.filter((highlight) => highlight.document_id === documentId),
+    });
+  }
+  if (path === '/api/highlights' && request.method() === 'POST') {
+    const body = request.postDataJSON();
+    const highlight = {
+      id: `highlight-${nextHighlightId++}`,
+      document_id: body.documentId,
+      page_number: body.pageNumber,
+      text: body.text,
+      color: body.color,
+      match_all: body.matchAll ? 1 : 0,
+      anchor_start: body.selectionStart ?? null,
+      anchor_end: body.selectionEnd ?? null,
+    };
+    highlights.push(highlight);
+    return respond(route, 201, { id: highlight.id });
+  }
+  if (path.startsWith('/api/highlights/') && request.method() === 'DELETE') {
+    const id = path.split('/').at(-1);
+    const index = highlights.findIndex((highlight) => highlight.id === id);
+    if (index !== -1) highlights.splice(index, 1);
+    return respond(route, 204, null);
   }
   return respond(route, 200, {});
 });
@@ -165,6 +195,24 @@ try {
   check('mock project and source document load', true);
 
   check('second repeated passage can be selected', await selectText('duplicate anchor', 1));
+  await page.getByTitle('Apply yellow to this selection').click();
+  await page.locator('mark[data-hlid="highlight-1"]').waitFor();
+  check(
+    'highlight stores exact offsets and marks only the selected duplicate',
+    highlights[0]?.anchor_start !== null &&
+      highlights[0]?.anchor_end > highlights[0]?.anchor_start &&
+      await page.locator('mark[data-hlid="highlight-1"]').evaluate((mark) =>
+        mark.closest('p')?.textContent === 'Second duplicate anchor'),
+  );
+  await page.reload({ waitUntil: 'networkidle' });
+  check('source fixture reloads with saved highlight', await clickVisibleText('source.txt'));
+  await page.locator('mark[data-hlid="highlight-1"]').waitFor();
+  check(
+    'persisted highlight remains on the second duplicate after reload',
+    await page.locator('mark[data-hlid="highlight-1"]').evaluate((mark) =>
+      mark.closest('p')?.textContent === 'Second duplicate anchor'),
+  );
+  check('second repeated passage can be selected after reload', await selectText('duplicate anchor', 1));
   await page.getByRole('button', { name: 'Bookmark selected passage' }).click();
   const nameDialog = page.getByRole('dialog', { name: 'Save bookmark' });
   await nameDialog.getByLabel(/Bookmark name/).fill('Second occurrence');
@@ -201,9 +249,13 @@ try {
   check('search has a distinct no-match state', true);
   await search.fill('Second occurrence');
   await page.getByText('Second occurrence', { exact: true }).waitFor();
-  await page.getByRole('button', { name: /Second occurrence/ }).click();
+  await page.getByRole('button', { name: 'Open bookmark: Second occurrence' }).click();
   await page.getByText('First duplicate anchor', { exact: true }).waitFor();
-  await page.waitForFunction(() => window.getSelection()?.toString() === 'duplicate anchor');
+  await page.waitForFunction(
+    () => window.getSelection()?.toString() === 'duplicate anchor',
+    null,
+    { timeout: 5000 },
+  );
   check('bookmark reopens the source document and selects its saved passage', await page.evaluate(() => {
     const selected = window.getSelection();
     return selected?.toString() === 'duplicate anchor' &&
@@ -221,9 +273,13 @@ try {
   await page.getByTitle('Bookmark collection').click();
   await page.getByRole('textbox', { name: 'Search bookmarks' }).fill('Legacy title');
   await page.getByText('Legacy title', { exact: true }).waitFor();
-  await page.getByRole('button', { name: /Legacy title/ }).click();
+  await page.getByRole('button', { name: 'Open bookmark: Legacy title' }).click();
   await page.getByText('First duplicate anchor', { exact: true }).waitFor();
-  await page.waitForFunction(() => window.getSelection()?.toString() === 'duplicate anchor');
+  await page.waitForFunction(
+    () => window.getSelection()?.toString() === 'duplicate anchor',
+    null,
+    { timeout: 5000 },
+  );
   await page.getByRole('textbox', { name: 'Search bookmarks' }).waitFor({ state: 'detached' });
   check(
     'older bookmarks without offsets fall back to the saved quote',
@@ -253,9 +309,13 @@ try {
   await page.getByTitle('Bookmark collection').click();
   await page.getByRole('textbox', { name: 'Search bookmarks' }).fill('Second occurrence');
   await page.getByText('Second occurrence', { exact: true }).waitFor();
-  await page.getByRole('button', { name: /Second occurrence/ }).click();
+  await page.getByRole('button', { name: 'Open bookmark: Second occurrence' }).click();
   await page.getByText('First duplicate anchor', { exact: true }).waitFor();
-  await page.waitForFunction(() => window.getSelection()?.toString() === 'duplicate anchor');
+  await page.waitForFunction(
+    () => window.getSelection()?.toString() === 'duplicate anchor',
+    null,
+    { timeout: 5000 },
+  );
   check(
     'text anchor remains exact after page-bookmark button changes',
     await page.evaluate(() =>
@@ -297,10 +357,15 @@ try {
 
   check('no browser runtime errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 } catch (error) {
+  flowError = error.stack || String(error);
   console.error(error.stack);
   check('bookmark browser flow completes', false, String(error).split('\n')[0]);
   await page.screenshot({ path: `${evidenceDir}/failure.png` }).catch(() => {});
 } finally {
+  writeFileSync(
+    `${evidenceDir}/result.txt`,
+    [...results.map(([name, passed]) => `${passed ? 'PASS' : 'FAIL'} ${name}`), flowError].filter(Boolean).join('\n'),
+  );
   await browser.close();
 }
 

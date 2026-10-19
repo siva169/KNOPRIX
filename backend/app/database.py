@@ -103,6 +103,8 @@ CREATE TABLE IF NOT EXISTS highlights (
     text TEXT NOT NULL,
     color TEXT DEFAULT 'yellow',
     match_all INTEGER NOT NULL DEFAULT 0,
+    anchor_start INTEGER,
+    anchor_end INTEGER,
     created_at TEXT DEFAULT (datetime('now'))
 );
 """
@@ -610,6 +612,15 @@ def _create_production_backlog_schema(conn) -> None:
         conn.execute(statement)
 
 
+def _add_precise_highlight_anchors(conn) -> None:
+    """Add durable selection offsets without changing existing highlights."""
+    highlight_columns = _table_columns(conn, "highlights")
+    if "anchor_start" not in highlight_columns:
+        conn.execute("ALTER TABLE highlights ADD COLUMN anchor_start INTEGER")
+    if "anchor_end" not in highlight_columns:
+        conn.execute("ALTER TABLE highlights ADD COLUMN anchor_end INTEGER")
+
+
 # Migration versions are append-only; never edit a migration after it is released.
 MIGRATIONS = (
     (1, "baseline-schema", _create_base_schema),
@@ -617,6 +628,7 @@ MIGRATIONS = (
     (3, "auth-session-and-rate-limit-state", _create_auth_session_schema),
     (4, "contacts-sharing-and-annotation-links", _create_contacts_sharing_schema),
     (5, "production-backlog-foundations", _create_production_backlog_schema),
+    (6, "precise-highlight-anchors", _add_precise_highlight_anchors),
 )
 
 

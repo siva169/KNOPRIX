@@ -31,6 +31,8 @@ class HighlightBody(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
     color: str = Field(default="yellow", max_length=20)
     matchAll: bool = Field(default=False)  # paint every occurrence, not just the first
+    selectionStart: int | None = Field(default=None, ge=0)
+    selectionEnd: int | None = Field(default=None, ge=0)
 
 
 @router.get("/documents/{document_id}/highlights")
@@ -53,15 +55,24 @@ def create_highlight(body: HighlightBody, user=Depends(get_current_user), db=Dep
     get_owned_document(db, user["id"], body.documentId)
     if body.color not in VALID_COLORS:
         raise HTTPException(422, f"Invalid color. Allowed: {sorted(VALID_COLORS)}")
+    if (body.selectionStart is None) != (body.selectionEnd is None):
+        raise HTTPException(422, "selectionStart and selectionEnd must be supplied together")
+    if (
+        body.selectionStart is not None
+        and body.selectionEnd is not None
+        and body.selectionEnd <= body.selectionStart
+    ):
+        raise HTTPException(422, "selectionEnd must be greater than selectionStart")
     highlight_id = str(uuid.uuid4())
     db.execute(
         """
         INSERT INTO highlights (id, user_id, project_id, document_id, page_number,
-                                text, color, match_all)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                text, color, match_all, anchor_start, anchor_end)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (highlight_id, user["id"], body.projectId, body.documentId,
-         body.pageNumber, body.text.strip(), body.color, 1 if body.matchAll else 0),
+         body.pageNumber, body.text.strip(), body.color, 1 if body.matchAll else 0,
+         body.selectionStart, body.selectionEnd),
     )
     return {"id": highlight_id}
 

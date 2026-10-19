@@ -91,6 +91,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   const [bookmarkSaving, setBookmarkSaving] = useState(false);
   const [savedPages, setSavedPages] = useState(new Set());
   const [highlights, setHighlights] = useState([]);
+  const [highlightsDocumentId, setHighlightsDocumentId] = useState(null);
   const [colorMenuOpen, setColorMenuOpen] = useState(false);
   const [matchAllMode, setMatchAllMode] = useState(
     () => localStorage.getItem(HIGHLIGHT_ALL_KEY) === 'true'
@@ -180,10 +181,12 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     }
     if (activeDocument.readOnly) {
       setHighlights([]);
+      setHighlightsDocumentId(activeDocument.id);
       return;
     }
+    const documentId = activeDocument.id;
     try {
-      const { data } = await api.get(`/documents/${activeDocument.id}/highlights`);
+      const { data } = await api.get(`/documents/${documentId}/highlights`);
       // API returns snake_case columns — normalize to the camelCase shape the
       // renderers expect ({ id, pageNumber, text, color }).
       setHighlights(
@@ -193,15 +196,20 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
           text: h.text,
           color: h.color,
           matchAll: !!h.match_all,
+          anchorStart: h.anchor_start,
+          anchorEnd: h.anchor_end,
         }))
       );
+      setHighlightsDocumentId(documentId);
     } catch {
       setHighlights([]);
+      setHighlightsDocumentId(documentId);
     }
   }, [activeDocument]);
 
   useEffect(() => {
     setHighlights([]);
+    setHighlightsDocumentId(null);
     refreshHighlights();
   }, [activeDocument, refreshHighlights]);
 
@@ -348,7 +356,8 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     if (
       !locationRequest ||
       locationRequest.documentId !== activeDocument?.id ||
-      appliedLocationRef.current === locationRequest.id
+      appliedLocationRef.current === locationRequest.id ||
+      highlightsDocumentId !== activeDocument?.id
     ) return undefined;
 
     const fileType = (activeDocument.file_type || '').toLowerCase();
@@ -392,7 +401,10 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       clearTimeout(timeout);
       clearEmphasis();
     };
-  }, [activeDocument, currentPage, locationRequest, pdfDoc, pdfDocumentId]);
+  }, [
+    activeDocument, currentPage, locationRequest, pdfDoc, pdfDocumentId,
+    highlightsDocumentId,
+  ]);
 
   // ── Per-page bookmarking ──────────────────────────────────────────────────
   const bookmarkPage = async (pageNum) => {
@@ -591,10 +603,20 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         text,
         color,
         matchAll: matchAllMode,
+        selectionStart: sel.selectionStart,
+        selectionEnd: sel.selectionEnd,
       });
       setHighlights((h) => [
         ...h,
-        { id: data.id, pageNumber: sel.page || currentPage, text, color, matchAll: matchAllMode },
+        {
+          id: data.id,
+          pageNumber: sel.page || currentPage,
+          text,
+          color,
+          matchAll: matchAllMode,
+          anchorStart: sel.selectionStart,
+          anchorEnd: sel.selectionEnd,
+        },
       ]);
       notify('Highlighted — saved for this document', 'success');
       setSelection(null);
@@ -632,6 +654,8 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
               text: removed.text,
               color: removed.color,
               matchAll: removed.matchAll,
+              selectionStart: removed.anchorStart,
+              selectionEnd: removed.anchorEnd,
             });
             setHighlights((h) => [...h, { ...removed, id: data.id }]);
             notify('Highlight restored', 'success');
@@ -769,6 +793,16 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     };
 
     for (const h of pageHighlights) {
+      const hasExactAnchor = !h.matchAll &&
+        Number.isInteger(h.anchorStart) &&
+        Number.isInteger(h.anchorEnd) &&
+        h.anchorStart >= 0 &&
+        h.anchorEnd > h.anchorStart &&
+        h.anchorEnd <= full.length;
+      if (hasExactAnchor) {
+        wrapOffsets(textNodes, h.anchorStart, h.anchorEnd, h.id, colorById(h.color).bg);
+        continue;
+      }
       const needle = h.text.replace(/\s+/g, '');
       if (needle) {
         let wrapped = false;
@@ -820,7 +854,28 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     if (!ph.length) return null;
     const low = line.toLowerCase();
     const ranges = [];
+    const lineStart = viewerLines
+      .slice(0, lineIndex)
+      .reduce((offset, priorLine) => offset + priorLine.length, 0);
+    const lineEnd = lineStart + line.length;
     for (const h of ph) {
+      const hasExactAnchor = !h.matchAll &&
+        Number.isInteger(h.anchorStart) &&
+        Number.isInteger(h.anchorEnd) &&
+        h.anchorStart >= 0 && h.anchorEnd > h.anchorStart;
+      if (hasExactAnchor) {
+        const start = Math.max(lineStart, h.anchorStart);
+        const end = Math.min(lineEnd, h.anchorEnd);
+        if (end > start) {
+          ranges.push({
+            s: start - lineStart,
+            e: end - lineStart,
+            color: colorById(h.color).bg,
+            id: h.id,
+          });
+        }
+        continue;
+      }
       const needle = h.text.replace(/\s+/g, ' ').trim();
       if (!needle) continue;
       const words = needle.split(' ');

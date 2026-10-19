@@ -49,6 +49,7 @@ class DatabaseMigrationTests(unittest.TestCase):
                 (3, "auth-session-and-rate-limit-state"),
                 (4, "contacts-sharing-and-annotation-links"),
                 (5, "production-backlog-foundations"),
+                (6, "precise-highlight-anchors"),
             ],
         )
         self.assertTrue({
@@ -203,10 +204,10 @@ class DatabaseMigrationTests(unittest.TestCase):
             self.assertEqual(
                 tuple(
                     upgraded.execute(
-                        "SELECT id, text, match_all FROM highlights"
+                        "SELECT id, text, match_all, anchor_start, anchor_end FROM highlights"
                     ).fetchone()
                 ),
-                ("highlight-1", "passage", 0),
+                ("highlight-1", "passage", 0, None, None),
             )
             self.assertEqual(
                 tuple(
