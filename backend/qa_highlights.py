@@ -6,7 +6,13 @@ from unittest.mock import patch
 from fastapi import HTTPException
 
 from app import database
-from app.routers.highlights import HighlightBody, create_highlight, list_highlights
+from app.routers.highlights import (
+    HighlightBody,
+    HighlightColorBody,
+    create_highlight,
+    list_highlights,
+    update_highlight_color,
+)
 
 
 USER = {"id": "user-1"}
@@ -76,6 +82,50 @@ class HighlightApiTests(unittest.TestCase):
         with self.assertRaisesRegex(HTTPException, "greater than"):
             create_highlight(
                 HighlightBody(**common, selectionStart=8, selectionEnd=8), USER, self.db
+            )
+
+    def test_updates_color_without_changing_the_saved_anchor(self):
+        created = create_highlight(
+            HighlightBody(
+                projectId=PROJECT_ID,
+                documentId=DOCUMENT_ID,
+                pageNumber=1,
+                text="selection",
+                selectionStart=4,
+                selectionEnd=13,
+            ),
+            USER,
+            self.db,
+        )
+
+        updated = update_highlight_color(
+            created["id"], HighlightColorBody(color="green"), USER, self.db
+        )
+
+        saved = list_highlights(DOCUMENT_ID, USER, self.db)["highlights"][0]
+        self.assertEqual(updated, {"id": created["id"], "color": "green"})
+        self.assertEqual(saved["color"], "green")
+        self.assertEqual(saved["anchor_start"], 4)
+        self.assertEqual(saved["anchor_end"], 13)
+
+    def test_color_update_rejects_invalid_colors_and_foreign_highlights(self):
+        created = create_highlight(
+            HighlightBody(
+                projectId=PROJECT_ID,
+                documentId=DOCUMENT_ID,
+                pageNumber=1,
+                text="selection",
+            ),
+            USER,
+            self.db,
+        )
+        with self.assertRaisesRegex(HTTPException, "Invalid color"):
+            update_highlight_color(
+                created["id"], HighlightColorBody(color="ultraviolet"), USER, self.db
+            )
+        with self.assertRaisesRegex(HTTPException, "Highlight not found"):
+            update_highlight_color(
+                created["id"], HighlightColorBody(color="green"), {"id": "other-user"}, self.db
             )
 
 

@@ -1,5 +1,30 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-19 — Preserve precise selections across overlapping highlights
+
+- The remaining rendering defect was caused by applying each saved PDF range
+  sequentially to a live list of text nodes. Splitting a node for an earlier
+  marker changed the offsets used by later markers; the plain-text renderer
+  also merged overlaps into one marker, hiding the later annotation. Selection
+  capture was mouse-up-only, and a mouse-up on an existing mark suppressed
+  valid overlapping selections.
+- Added deterministic interval segmentation for PDF text nodes and plain-text
+  lines: later highlights take precedence only on their overlapping segment,
+  while earlier annotations remain available outside it and reappear when a
+  later annotation is removed. Keyboard selection changes and touch-end now
+  capture the same text-and-offset snapshot; saved highlights clear the native
+  range without removing the rendered annotation. Duplicate in-flight saves
+  for the same range/color are ignored.
+- Added an accessible color-change action for saved highlights and a
+  user-owned `PATCH /api/highlights/{id}` route. Updates retain the stable ID
+  and text anchors; invalid colors and attempts to update another user's
+  highlight are rejected.
+- Verification: frontend build passes (with the existing large-chunk
+  advisory); range segmentation tests pass (3/3); highlight API tests pass
+  (4/4); mocked browser QA passes (60/60), including keyboard/touch capture,
+  text/PDF overlaps, color update and reload, undo, reduced motion, PDF zoom,
+  page navigation, reload, bookmark workflows, and 390/425/768/1024px layouts.
+
 ## 2026-10-19 — Make live text highlighting unambiguous
 
 - The recordings showed a separate interaction defect from saved anchors:

@@ -15,6 +15,7 @@ import {
   findBookmarkRange,
   getSelectionOffsets,
 } from '../bookmarkAnchors';
+import { splitHighlightSegments } from '../highlightSegments.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 const HIGHLIGHT_ALL_KEY = 'knoprix_highlight_all_matches';
@@ -99,11 +100,13 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   );
   const [eraseMode, setEraseMode] = useState(false);
   const [markMenu, setMarkMenu] = useState(null); // {id, x, y}
+  const [markColorMenuOpen, setMarkColorMenuOpen] = useState(false);
   const highlightsRef = useRef([]);
   const restoredDocumentRef = useRef(null);
   const locationRequestRef = useRef(locationRequest);
   const appliedLocationRef = useRef(null);
   const bookmarkDraftSequence = useRef(0);
+  const pendingHighlightsRef = useRef(new Set());
   locationRequestRef.current = locationRequest;
 
   useEffect(() => {
@@ -475,21 +478,45 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       return;
     }
     if (e?.target?.closest?.('button, a, input, textarea, select, [role="button"]')) return;
-    // Clicking an existing highlight marker opens the remove menu instead of
-    // the selection popover.
-    if (e?.target?.closest?.('mark[data-hlid]')) {
+    const sel = window.getSelection();
+    const range = sel?.rangeCount ? sel.getRangeAt(0) : null;
+    const clickedMark = e?.target?.closest?.('mark[data-hlid]');
+    // A click on a saved marker opens its menu, but a new range ending inside
+    // one must still be captured so overlapping annotations remain selectable.
+    if (
+      clickedMark &&
+      (!range || range.collapsed || !range.intersectsNode(clickedMark))
+    ) {
       setSelection(null);
       return;
     }
-    const sel = window.getSelection();
     const rawText = sel?.toString() || '';
     const text = rawText.trim();
     if (text && text.length > 0) {
-      const range = sel.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       const pageEl = range.startContainer?.parentElement?.closest?.('[data-page]');
       const selectionRoot = pageEl || containerRef.current;
-      const offsets = getSelectionOffsets(selectionRoot, range);
+      const startParagraph = range.startContainer?.parentElement?.closest?.('p[data-line]');
+      const endParagraph = range.endContainer?.parentElement?.closest?.('p[data-line]');
+      const getParagraphOffset = (paragraph, container, nodeOffset) => {
+        const prefix = document.createRange();
+        prefix.selectNodeContents(paragraph);
+        prefix.setEnd(container, nodeOffset);
+        return viewerLines
+          .slice(0, Number(paragraph.dataset.line))
+          .reduce((total, line) => total + line.length + 1, 0) + prefix.toString().length;
+      };
+      const offsets = startParagraph && endParagraph
+        ? {
+          start: getParagraphOffset(startParagraph, range.startContainer, range.startOffset),
+          end: getParagraphOffset(endParagraph, range.endContainer, range.endOffset),
+        }
+        : getSelectionOffsets(selectionRoot, range);
+      if (pageEl?.classList.contains('pdf-text-layer') && !offsets) {
+        notify('Select text within one PDF page at a time', 'info');
+        setSelection(null);
+        return;
+      }
       const leadingWhitespace = rawText.length - rawText.trimStart().length;
       const trailingWhitespace = rawText.length - rawText.trimEnd().length;
       const page = pageEl ? Number(pageEl.dataset.page) : currentPage;
@@ -528,6 +555,28 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       setSelection(null);
     }
   };
+
+  useEffect(() => {
+    const captureSelectionChange = () => {
+      if (readOnly || browseMode) return;
+      const root = containerRef.current;
+      const selected = window.getSelection();
+      if (
+        !root ||
+        !selected?.rangeCount ||
+        selected.isCollapsed ||
+        !root.contains(selected.anchorNode) ||
+        !root.contains(selected.focusNode)
+      ) {
+        const toolbarHasFocus = document.activeElement?.closest?.('[data-selection-toolbar]');
+        if (selected?.isCollapsed && !toolbarHasFocus) setSelection(null);
+        return;
+      }
+      handleMouseUp();
+    };
+    document.addEventListener('selectionchange', captureSelectionChange);
+    return () => document.removeEventListener('selectionchange', captureSelectionChange);
+  }, [browseMode, handleMouseUp, readOnly]);
 
   const saveBookmark = (sel) => {
     if (readOnly || !activeProject || !activeDocument) return;
@@ -616,6 +665,33 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     // that span a line break still match when the mark is rendered.
     const text = sel.text.replace(/\s+/g, ' ').trim();
     if (!text) return;
+    const selectionStart = Number.isInteger(sel.selectionStart) ? sel.selectionStart : null;
+    const selectionEnd = Number.isInteger(sel.selectionEnd) ? sel.selectionEnd : null;
+    const duplicateKey = JSON.stringify([
+      activeDocument.id,
+      sel.page || currentPage,
+      selectionStart,
+      selectionEnd,
+      text,
+      color,
+      matchAllMode,
+    ]);
+    const duplicateExists = highlightsRef.current.some((highlight) =>
+      highlight.pageNumber === (sel.page || currentPage) &&
+      highlight.color === color &&
+      highlight.matchAll === matchAllMode &&
+      (selectionStart !== null && selectionEnd !== null
+        ? highlight.anchorStart === selectionStart && highlight.anchorEnd === selectionEnd
+        : highlight.text === text),
+    );
+    if (duplicateExists) {
+      window.getSelection()?.removeAllRanges();
+      setSelection(null);
+      setColorMenuOpen(false);
+      return;
+    }
+    if (pendingHighlightsRef.current.has(duplicateKey)) return;
+    pendingHighlightsRef.current.add(duplicateKey);
     try {
       const { data } = await api.post('/highlights', {
         projectId: activeProject.id,
@@ -624,27 +700,29 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         text,
         color,
         matchAll: matchAllMode,
-        selectionStart: sel.selectionStart,
-        selectionEnd: sel.selectionEnd,
+        selectionStart,
+        selectionEnd,
       });
-      setHighlights((h) => [
-        ...h,
-        {
-          id: data.id,
-          pageNumber: sel.page || currentPage,
-          text,
-          color,
-          matchAll: matchAllMode,
-          anchorStart: sel.selectionStart,
-          anchorEnd: sel.selectionEnd,
-        },
-      ]);
+      const savedHighlight = {
+        id: data.id,
+        pageNumber: sel.page || currentPage,
+        text,
+        color,
+        matchAll: matchAllMode,
+        anchorStart: selectionStart,
+        anchorEnd: selectionEnd,
+      };
+      highlightsRef.current = [...highlightsRef.current, savedHighlight];
+      setHighlights((h) => [...h, savedHighlight]);
       setRecentHighlightId(data.id);
       notify('Highlighted — saved for this document', 'success');
+      window.getSelection()?.removeAllRanges();
       setSelection(null);
       setColorMenuOpen(false);
     } catch {
       notify('Could not save highlight', 'error');
+    } finally {
+      pendingHighlightsRef.current.delete(duplicateKey);
     }
   };
 
@@ -664,6 +742,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     if (!removed) return;
     try {
       await api.delete(`/highlights/${id}`);
+      highlightsRef.current = highlightsRef.current.filter((highlight) => highlight.id !== id);
       setHighlights((h) => h.filter((x) => x.id !== id));
       notify('Highlight removed', 'info', {
         label: 'Undo',
@@ -679,6 +758,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
               selectionStart: removed.anchorStart,
               selectionEnd: removed.anchorEnd,
             });
+            highlightsRef.current = [...highlightsRef.current, { ...removed, id: data.id }];
             setHighlights((h) => [...h, { ...removed, id: data.id }]);
             setRecentHighlightId(data.id);
             notify('Highlight restored', 'success');
@@ -693,6 +773,27 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     }
   };
 
+  const updateHighlightColor = async (id, color) => {
+    if (readOnly) return;
+    const current = highlights.find((highlight) => highlight.id === id);
+    if (!current || current.color === color) {
+      setMarkColorMenuOpen(false);
+      return;
+    }
+    try {
+      await api.patch(`/highlights/${id}`, { color });
+      const updated = highlightsRef.current.map((highlight) =>
+        highlight.id === id ? { ...highlight, color } : highlight,
+      );
+      highlightsRef.current = updated;
+      setHighlights(updated);
+      setMarkColorMenuOpen(false);
+      notify('Highlight color updated', 'success');
+    } catch {
+      notify('Could not update highlight color', 'error');
+    }
+  };
+
   // Clicking a highlighted <mark>: open a small remove menu, or erase right
   // away when the eraser toggle is on.
   const handleMarkClick = (e) => {
@@ -701,6 +802,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     if (!mark) {
       setMarkMenu(null);
       setColorMenuOpen(false);
+      setMarkColorMenuOpen(false);
       return;
     }
     e.preventDefault();
@@ -714,55 +816,24 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         x: rect.left + rect.width / 2,
         y: rect.top - 8,
       });
+      setMarkColorMenuOpen(false);
     }
   };
 
   // ── PDF text-layer highlight application ──────────────────────────────────
-  // Wraps matching text across pdfjs text-layer spans in <mark> elements with
-  // the highlight color — called after each renderPage so highlights persist
-  // across zoom changes (the text layer is rebuilt each time).
-  const wrapOffsets = (nodes, start, end, hlId, bg) => {
-    let offset = 0;
-    for (const node of nodes) {
-      const len = node.textContent.length;
-      const nodeStart = offset;
-      const nodeEnd = offset + len;
-      if (nodeEnd <= start || nodeStart >= end) {
-        offset = nodeEnd;
-        continue;
-      }
-      const s = Math.max(nodeStart, start) - nodeStart;
-      const e = Math.min(nodeEnd, end) - nodeStart;
-      if (s === 0 && e === len) {
-        const mark = document.createElement('mark');
-        mark.className = `kn-hl${hlId === recentHighlightId ? ' kn-hl--new' : ''}`;
-        mark.dataset.hlid = hlId;
-        mark.style.setProperty('--hl-bg', bg);
-        node.replaceWith(mark);
-        mark.appendChild(node);
-      } else {
-        const before = node.splitText(s);
-        before.splitText(e - s);
-        const mark = document.createElement('mark');
-        mark.className = `kn-hl${hlId === recentHighlightId ? ' kn-hl--new' : ''}`;
-        mark.dataset.hlid = hlId;
-        mark.style.setProperty('--hl-bg', bg);
-        before.replaceWith(mark);
-        mark.appendChild(before);
-      }
-      offset = nodeEnd;
-    }
-  };
-
+  // Split each original text node once using absolute text-layer offsets. This
+  // keeps successive and overlapping annotations independent across rerenders.
   const applyPageHighlights = (textLayer, pageNum, hlList) => {
     if (!textLayer) return;
     const pageHighlights = hlList.filter((h) => h.pageNumber === pageNum);
     if (!pageHighlights.length) return;
-    // Collect text nodes outside existing marks (idempotent).
+    textLayer.querySelectorAll('mark.kn-hl').forEach((mark) => {
+      mark.replaceWith(...Array.from(mark.childNodes));
+    });
     const textNodes = Array.from(textLayer.querySelectorAll('span'))
       .flatMap((span) => Array.from(span.childNodes))
       .filter(
-        (n) => n.nodeType === Node.TEXT_NODE && !n.parentElement.closest('mark')
+        (n) => n.nodeType === Node.TEXT_NODE
       );
     if (!textNodes.length) return;
     const full = textNodes.map((n) => n.textContent).join('');
@@ -815,6 +886,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       return best;
     };
 
+    const ranges = [];
     for (const h of pageHighlights) {
       const hasExactAnchor = !h.matchAll &&
         Number.isInteger(h.anchorStart) &&
@@ -823,7 +895,12 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         h.anchorEnd > h.anchorStart &&
         h.anchorEnd <= full.length;
       if (hasExactAnchor) {
-        wrapOffsets(textNodes, h.anchorStart, h.anchorEnd, h.id, colorById(h.color).bg);
+        ranges.push({
+          start: h.anchorStart,
+          end: h.anchorEnd,
+          id: h.id,
+          color: colorById(h.color).bg,
+        });
         continue;
       }
       const needle = h.text.replace(/\s+/g, '');
@@ -835,7 +912,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
           if (idx === -1) break;
           const start = rawPos[idx];
           const end = rawPos[idx + needle.length - 1] + 1;
-          wrapOffsets(textNodes, start, end, h.id, colorById(h.color).bg);
+          ranges.push({ start, end, id: h.id, color: colorById(h.color).bg });
           wrapped = true;
           cursor = idx + needle.length;
           if (!h.matchAll) break; // precise mode: first occurrence only
@@ -847,8 +924,41 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       if (!needleWords.length) continue;
       const best = findBestRun(needleWords.map((w) => w.toLowerCase()));
       if (best) {
-        wrapOffsets(textNodes, tokens[best.startTok].s, tokens[best.endTok].e, h.id, colorById(h.color).bg);
+        ranges.push({
+          start: tokens[best.startTok].s,
+          end: tokens[best.endTok].e,
+          id: h.id,
+          color: colorById(h.color).bg,
+        });
       }
+    }
+    let nodeOffset = 0;
+    for (const node of textNodes) {
+      const originalText = node.textContent;
+      const nodeEnd = nodeOffset + originalText.length;
+      const localRanges = ranges
+        .filter((range) => range.start < nodeEnd && range.end > nodeOffset)
+        .map((range) => ({
+          start: Math.max(0, range.start - nodeOffset),
+          end: Math.min(originalText.length, range.end - nodeOffset),
+          id: range.id,
+          color: range.color,
+        }));
+      const fragment = document.createDocumentFragment();
+      for (const segment of splitHighlightSegments(originalText, localRanges)) {
+        if (!segment.id) {
+          fragment.appendChild(document.createTextNode(segment.text));
+          continue;
+        }
+        const mark = document.createElement('mark');
+        mark.className = `kn-hl${segment.id === recentHighlightId ? ' kn-hl--new' : ''}`;
+        mark.dataset.hlid = segment.id;
+        mark.style.setProperty('--hl-bg', segment.color);
+        mark.textContent = segment.text;
+        fragment.appendChild(mark);
+      }
+      node.replaceWith(fragment);
+      nodeOffset = nodeEnd;
     }
   };
 
@@ -879,7 +989,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     const ranges = [];
     const lineStart = viewerLines
       .slice(0, lineIndex)
-      .reduce((offset, priorLine) => offset + priorLine.length, 0);
+      .reduce((offset, priorLine) => offset + priorLine.length + 1, 0);
     const lineEnd = lineStart + line.length;
     for (const h of ph) {
       const hasExactAnchor = !h.matchAll &&
@@ -891,8 +1001,8 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         const end = Math.min(lineEnd, h.anchorEnd);
         if (end > start) {
           ranges.push({
-            s: start - lineStart,
-            e: end - lineStart,
+            start: start - lineStart,
+            end: end - lineStart,
             color: colorById(h.color).bg,
             id: h.id,
           });
@@ -910,7 +1020,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         while (true) {
           const idx = low.indexOf(needleLow, cursor);
           if (idx === -1) break;
-          ranges.push({ s: idx, e: idx + needle.length, color: colorById(h.color).bg, id: h.id });
+          ranges.push({ start: idx, end: idx + needle.length, color: colorById(h.color).bg, id: h.id });
           cursor = idx + needle.length;
           found = true;
         }
@@ -929,28 +1039,12 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         }
         if (earlier) continue;
       }
-      ranges.push({ s: best.s, e: best.e, color: colorById(h.color).bg, id: h.id });
+      ranges.push({ start: best.s, end: best.e, color: colorById(h.color).bg, id: h.id });
     }
     if (!ranges.length) return null;
-    ranges.sort((a, b) => a.s - b.s);
-    const merged = [];
-    for (const r of ranges) {
-      const last = merged[merged.length - 1];
-      if (last && r.s <= last.e) {
-        if (r.e > last.e) last.e = r.e;
-      } else {
-        merged.push({ ...r });
-      }
-    }
-    const segs = [];
-    let pos = 0;
-    for (const r of merged) {
-      if (r.s > pos) segs.push({ text: line.slice(pos, r.s) });
-      segs.push({ text: line.slice(r.s, r.e), mark: true, color: r.color, id: r.id });
-      pos = r.e;
-    }
-    if (pos < line.length) segs.push({ text: line.slice(pos) });
-    return segs;
+    return splitHighlightSegments(line, ranges).map((segment) =>
+      segment.id ? { ...segment, mark: true } : segment,
+    );
   };
 
   // ── Empty state ────────────────────────────────────────────────────────────
@@ -981,7 +1075,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
 
   // ── Non-PDF text viewer (TXT / DOCX / PPTX / images) ─────────────────────
   const renderTextViewer = () => (
-    <div ref={containerRef} onMouseUp={handleMouseUp} onClick={handleMarkClick} className="flex-1 overflow-auto p-2 sm:p-8 bg-midnight/60 relative">
+    <div ref={containerRef} onMouseUp={handleMouseUp} onTouchEnd={handleMouseUp} onClick={handleMarkClick} className="flex-1 overflow-auto p-2 sm:p-8 bg-midnight/60 relative">
       <div className="w-full max-w-4xl mx-auto p-4 sm:p-10 rounded-2xl border border-glass-borderDark bg-midnight-panel shadow-2xl">
         <div className="flex items-center justify-between border-b border-glass-borderDark pb-4 mb-6 text-xs text-ivory/60 font-mono">
           <span className="uppercase px-2 py-0.5 rounded bg-secondary/15 text-secondary font-bold text-[10px]">
@@ -997,7 +1091,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
           {viewerLines.map((line, i) => {
             const segs = lineMarks(line, i);
             return (
-              <p key={i} className="my-1.5">
+              <p key={i} data-line={i} data-line-length={line.length} className="my-1.5">
                 {segs
                   ? segs.map((seg, j) =>
                       seg.mark ? (
@@ -1048,7 +1142,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
           onSelectPage={setCurrentPage}
         />
       )}
-      <div ref={containerRef} onMouseUp={handleMouseUp} onClick={handleMarkClick} className="flex-1 overflow-auto p-2 sm:p-6 relative">
+      <div ref={containerRef} onMouseUp={handleMouseUp} onTouchEnd={handleMouseUp} onClick={handleMarkClick} className="flex-1 overflow-auto p-2 sm:p-6 relative">
       {highlightSnippet && (
         <motion.div
           initial={{ opacity: 0, y: -8 }}
@@ -1154,6 +1248,8 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+            onMouseDown={(event) => event.preventDefault()}
+            data-selection-toolbar=""
             style={{ top: selection.y, left: selection.x }}
             className={`fixed z-50 -translate-x-1/2 ${selection.placement === 'above' ? '-translate-y-full' : ''} glass-panel rounded-xl px-1.5 py-1 shadow-2xl flex flex-col gap-0.5 border border-primary/40 max-w-[94vw]`}
           >
@@ -1240,30 +1336,54 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
             style={{ top: markMenu.y, left: markMenu.x }}
-            className="fixed z-50 -translate-x-1/2 glass-panel rounded-xl px-2 py-1.5 shadow-2xl flex items-center gap-2 border border-rose-400/40"
+            className="fixed z-50 -translate-x-1/2 glass-panel rounded-xl px-2 py-1.5 shadow-2xl flex flex-col gap-1.5 border border-rose-400/40 max-w-[94vw]"
           >
             {(() => {
               const hl = highlights.find((h) => h.id === markMenu.id);
               return (
                 <>
-                  <span
-                    className="w-3.5 h-3.5 rounded-full shrink-0"
-                    style={{ background: colorById(hl?.color).swatch }}
-                  />
-                  <span className="text-ivory/80 max-w-[180px] truncate font-medium text-xs">
-                    {hl?.text}
-                  </span>
-                  {hl?.matchAll && (
-                    <span className="px-1.5 py-0.5 rounded bg-secondary/20 text-secondary text-[9px] font-bold tracking-wider">
-                      ALL
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-3.5 h-3.5 rounded-full shrink-0"
+                      style={{ background: colorById(hl?.color).swatch }}
+                    />
+                    <span className="text-ivory/80 max-w-[150px] truncate font-medium text-xs">
+                      {hl?.text}
                     </span>
+                    {hl?.matchAll && (
+                      <span className="px-1.5 py-0.5 rounded bg-secondary/20 text-secondary text-[9px] font-bold tracking-wider">
+                        ALL
+                      </span>
+                    )}
+                    <button
+                      onClick={() => setMarkColorMenuOpen((open) => !open)}
+                      aria-expanded={markColorMenuOpen}
+                      title="Change highlight color"
+                      className="px-2 py-1 rounded-lg text-ivory/80 hover:bg-primary/20 font-medium text-xs transition"
+                    >
+                      Color
+                    </button>
+                    <button
+                      onClick={() => removeHighlight(markMenu.id)}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-rose-300 hover:bg-rose-500/15 font-semibold transition"
+                    >
+                      <Eraser className="w-3.5 h-3.5" /> Remove
+                    </button>
+                  </div>
+                  {markColorMenuOpen && (
+                    <div className="flex items-center justify-center gap-2 border-t border-white/10 pt-1.5">
+                      {HIGHLIGHT_COLORS.map((color) => (
+                        <button
+                          key={color.id}
+                          onClick={() => updateHighlightColor(markMenu.id, color.id)}
+                          title={`Change highlight color to ${color.name}`}
+                          aria-label={`Change highlight color to ${color.name}`}
+                          className="w-5 h-5 rounded-full border border-white/25 hover:scale-110 hover:border-white transition"
+                          style={{ background: color.swatch }}
+                        />
+                      ))}
+                    </div>
                   )}
-                  <button
-                    onClick={() => removeHighlight(markMenu.id)}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-rose-300 hover:bg-rose-500/15 font-semibold transition"
-                  >
-                    <Eraser className="w-3.5 h-3.5" /> Remove
-                  </button>
                 </>
               );
             })()}

@@ -35,6 +35,10 @@ class HighlightBody(BaseModel):
     selectionEnd: int | None = Field(default=None, ge=0)
 
 
+class HighlightColorBody(BaseModel):
+    color: str = Field(max_length=20)
+
+
 @router.get("/documents/{document_id}/highlights")
 def list_highlights(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
     get_owned_document(db, user["id"], document_id)
@@ -75,6 +79,28 @@ def create_highlight(body: HighlightBody, user=Depends(get_current_user), db=Dep
          body.selectionStart, body.selectionEnd),
     )
     return {"id": highlight_id}
+
+
+@router.patch("/highlights/{highlight_id}")
+def update_highlight_color(
+    highlight_id: str,
+    body: HighlightColorBody,
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+):
+    if body.color not in VALID_COLORS:
+        raise HTTPException(422, f"Invalid color. Allowed: {sorted(VALID_COLORS)}")
+    row = db.execute(
+        "SELECT id FROM highlights WHERE id = ? AND user_id = ?",
+        (highlight_id, user["id"]),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(404, "Highlight not found")
+    db.execute(
+        "UPDATE highlights SET color = ? WHERE id = ? AND user_id = ?",
+        (body.color, highlight_id, user["id"]),
+    )
+    return {"id": highlight_id, "color": body.color}
 
 
 @router.delete("/highlights/{highlight_id}", status_code=status.HTTP_204_NO_CONTENT)

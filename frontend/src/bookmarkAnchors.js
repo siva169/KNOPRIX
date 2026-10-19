@@ -15,11 +15,7 @@ export function getSelectionOffsets(root, range) {
   return { start, end: start + range.toString().length };
 }
 
-export function rangeAtOffsets(root, start, end) {
-  if (!root || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) {
-    return null;
-  }
-
+function rangeAtTextOffsets(root, start, end) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let offset = 0;
   let startNode = null;
@@ -49,6 +45,44 @@ export function rangeAtOffsets(root, start, end) {
   return range;
 }
 
+export function rangeAtOffsets(root, start, end) {
+  if (!root || !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start) {
+    return null;
+  }
+  const paragraphs = [...root.querySelectorAll('p[data-line]')];
+  if (!paragraphs.length) return rangeAtTextOffsets(root, start, end);
+
+  const pointAt = (offset) => {
+    let lineStart = 0;
+    for (const paragraph of paragraphs) {
+      const lineLength = Number(paragraph.dataset.lineLength);
+      if (offset >= lineStart && offset <= lineStart + lineLength) {
+        const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+        let node;
+        let localOffset = 0;
+        while ((node = walker.nextNode())) {
+          const nextOffset = localOffset + node.textContent.length;
+          if (offset - lineStart <= nextOffset) {
+            return [node, offset - lineStart - localOffset];
+          }
+          localOffset = nextOffset;
+        }
+        return null;
+      }
+      lineStart += lineLength + 1;
+    }
+    return null;
+  };
+  const startPoint = pointAt(start);
+  const endPoint = pointAt(end);
+  if (!startPoint || !endPoint) return null;
+
+  const range = document.createRange();
+  range.setStart(...startPoint);
+  range.setEnd(...endPoint);
+  return range;
+}
+
 export function findBookmarkRange(root, start, end, quote) {
   const savedQuote = (quote || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
   const anchoredRange = rangeAtOffsets(root, start, end);
@@ -70,7 +104,7 @@ export function findBookmarkRange(root, start, end, quote) {
 
   const exactIndex = fullText.toLocaleLowerCase().indexOf((quote || '').toLocaleLowerCase());
   if (exactIndex !== -1) {
-    return rangeAtOffsets(root, exactIndex, exactIndex + quote.length);
+    return rangeAtTextOffsets(root, exactIndex, exactIndex + quote.length);
   }
 
   let normalized = '';
@@ -94,7 +128,7 @@ export function findBookmarkRange(root, start, end, quote) {
 
   const normalizedIndex = normalized.toLocaleLowerCase().indexOf(savedQuote);
   if (normalizedIndex === -1) return null;
-  return rangeAtOffsets(
+  return rangeAtTextOffsets(
     root,
     rawOffsets[normalizedIndex],
     rawOffsets[normalizedIndex + savedQuote.length - 1] + 1,

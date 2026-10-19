@@ -22,7 +22,7 @@ const documents = [
     file_path: 'source.txt',
     file_size: 64,
     page_count: 1,
-    extracted_text: 'First duplicate anchor\nSecond duplicate anchor',
+    extracted_text: 'First duplicate anchor\nSecond duplicate anchor\nAlpha beta gamma delta',
   },
   {
     id: 'document-2',
@@ -159,6 +159,12 @@ await page.route('**/api/**', async (route) => {
     highlights.push(highlight);
     return respond(route, 201, { id: highlight.id });
   }
+  if (path.startsWith('/api/highlights/') && request.method() === 'PATCH') {
+    const id = path.split('/').at(-1);
+    const highlight = highlights.find((item) => item.id === id);
+    if (highlight) highlight.color = request.postDataJSON().color;
+    return respond(route, highlight ? 200 : 404, highlight ? { id, color: highlight.color } : {});
+  }
   if (path.startsWith('/api/highlights/') && request.method() === 'DELETE') {
     const id = path.split('/').at(-1);
     const index = highlights.findIndex((highlight) => highlight.id === id);
@@ -179,23 +185,50 @@ async function clickVisibleText(text) {
   return false;
 }
 
-async function selectPdfSpan() {
-  return page.evaluate(() => {
+async function applySelectedHighlight() {
+  const response = page.waitForResponse((candidate) =>
+    new URL(candidate.url()).pathname === '/api/highlights' &&
+    candidate.request().method() === 'POST',
+  );
+  await page.getByTitle('Apply yellow to this selection').click();
+  await response;
+  return highlights.at(-1)?.id;
+}
+
+async function selectPdfSpan(startOffset = 0, length = 12) {
+  return page.evaluate(({ startOffset: selectionStart, length: selectionLength }) => {
     const span = [...document.querySelectorAll('.pdf-text-layer span')]
       .find((candidate) => candidate.textContent.trim().length >= 8);
-    if (!span || !span.firstChild) return false;
-    const text = span.textContent.trim();
-    const node = span.firstChild;
-    const start = node.textContent.indexOf(text);
+    if (!span) return false;
+    const nodes = [];
+    const walker = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) nodes.push(node);
+    const text = nodes.map((textNode) => textNode.textContent).join('');
+    if (text.length < 8) return false;
+    const pointAt = (offset) => {
+      let consumed = 0;
+      for (const textNode of nodes) {
+        const next = consumed + textNode.textContent.length;
+        if (offset <= next) return [textNode, offset - consumed];
+        consumed = next;
+      }
+      return [nodes.at(-1), nodes.at(-1).textContent.length];
+    };
     const range = document.createRange();
-    range.setStart(node, start);
-    range.setEnd(node, start + Math.min(text.length, 12));
+    const selectedStart = Math.min(selectionStart, text.length - 1);
+    const selectedEnd = Math.min(selectedStart + selectionLength, text.length);
+    const [startNode, startOffset] = pointAt(selectedStart);
+    const [endNode, endOffset] = pointAt(selectedEnd);
+    range.setStart(startNode, startOffset);
+    range.setEnd(endNode, endOffset);
     const selection = window.getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
-    span.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    (range.endContainer.parentElement || span)
+      .dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
     return selection.toString();
-  });
+  }, { startOffset, length });
 }
 
 async function selectText(phrase, occurrence) {
@@ -205,6 +238,40 @@ async function selectText(phrase, occurrence) {
       paragraph.textContent.includes(selected),
     );
     const paragraph = candidates[selectedOccurrence];
+    if (!paragraph) return false;
+    const textNodes = [];
+    const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) textNodes.push(node);
+    const fullText = textNodes.map((textNode) => textNode.textContent).join('');
+    const matchStart = fullText.indexOf(selected);
+    if (matchStart === -1) return false;
+    const pointAt = (offset) => {
+      let consumed = 0;
+      for (const textNode of textNodes) {
+        const next = consumed + textNode.textContent.length;
+        if (offset <= next) return [textNode, offset - consumed];
+        consumed = next;
+      }
+      return [textNodes.at(-1), textNodes.at(-1).textContent.length];
+    };
+    const range = document.createRange();
+    const [startNode, startOffset] = pointAt(matchStart);
+    const [endNode, endOffset] = pointAt(matchStart + selected.length);
+    range.setStart(startNode, startOffset);
+    range.setEnd(endNode, endOffset);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    paragraph.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    return selection.toString();
+  }, { phrase, occurrence });
+}
+
+async function selectTextWithInputEvent(phrase, eventName) {
+  return page.evaluate(({ selected, inputEvent }) => {
+    const paragraph = [...document.querySelectorAll('#main-content p')]
+      .find((candidate) => candidate.textContent.includes(selected));
     if (!paragraph) return false;
     const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
     let node;
@@ -217,11 +284,43 @@ async function selectText(phrase, occurrence) {
       const selection = window.getSelection();
       selection.removeAllRanges();
       selection.addRange(range);
-      paragraph.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-      return true;
+      const container = document.querySelector('#main-content');
+      if (inputEvent === 'selectionchange') {
+        document.dispatchEvent(new Event('selectionchange'));
+      } else {
+        container.dispatchEvent(new Event(inputEvent, { bubbles: true }));
+      }
+      return selection.toString();
     }
     return false;
-  }, { phrase, occurrence });
+  }, { selected: phrase, inputEvent: eventName });
+}
+
+async function selectAcrossParagraphs() {
+  return page.evaluate(() => {
+    const [startParagraph, endParagraph] = [...document.querySelectorAll('#main-content p')];
+    const firstWalker = document.createTreeWalker(startParagraph, NodeFilter.SHOW_TEXT);
+    let startNode;
+    while ((startNode = firstWalker.nextNode())) {
+      const startOffset = startNode.textContent.lastIndexOf('anchor');
+      if (startOffset === -1) continue;
+      const endWalker = document.createTreeWalker(endParagraph, NodeFilter.SHOW_TEXT);
+      let endNode;
+      let currentEndNode;
+      while ((currentEndNode = endWalker.nextNode())) endNode = currentEndNode;
+      if (!endNode) return false;
+      const range = document.createRange();
+      range.setStart(startNode, startOffset);
+      range.setEnd(endNode, endNode.textContent.length);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      (range.endContainer.parentElement || endParagraph)
+        .dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      return selection.toString();
+    }
+    return false;
+  });
 }
 
 try {
@@ -277,6 +376,11 @@ try {
       await page.locator('mark[data-hlid="highlight-1"]').evaluate((mark) =>
         mark.closest('p')?.textContent === 'Second duplicate anchor'),
   );
+  check(
+    'saved highlight clears the live range but keeps its annotation visible',
+    await page.evaluate(() => !window.getSelection()?.toString()) &&
+      await page.locator('mark[data-hlid="highlight-1"]').count() === 1,
+  );
   await page.reload({ waitUntil: 'networkidle' });
   check('source fixture reloads with saved highlight', await clickVisibleText('source.txt'));
   await page.locator('mark[data-hlid="highlight-1"]').waitFor();
@@ -284,6 +388,139 @@ try {
     'persisted highlight remains on the second duplicate after reload',
     await page.locator('mark[data-hlid="highlight-1"]').evaluate((mark) =>
       mark.closest('p')?.textContent === 'Second duplicate anchor'),
+  );
+  await page.locator('mark[data-hlid="highlight-1"]').click();
+  await page.getByTitle('Change highlight color').click();
+  await page.getByTitle('Change highlight color to Green').click();
+  await page.waitForFunction(() =>
+    document.querySelector('mark[data-hlid="highlight-1"]')?.style.background.includes('134, 239, 172'),
+  );
+  check(
+    'changing a saved highlight color updates its marker and persisted record',
+    highlights[0]?.color === 'green' &&
+      await page.locator('mark[data-hlid="highlight-1"]').evaluate((mark) =>
+        mark.style.background.includes('134, 239, 172')),
+  );
+  await page.reload({ waitUntil: 'networkidle' });
+  check('source document reopens after a saved color change', await clickVisibleText('source.txt'));
+  await page.locator('mark[data-hlid="highlight-1"]').waitFor();
+  check(
+    'updated highlight color survives document reload',
+    await page.locator('mark[data-hlid="highlight-1"]').evaluate((mark) =>
+      mark.style.background.includes('134, 239, 172')),
+  );
+  const paragraphSelectionText = await selectAcrossParagraphs();
+  const paragraphToolbarVisible = await page.getByTitle('Apply yellow to this selection')
+    .isVisible().catch(() => false);
+  check(
+    'selection spanning paragraph boundaries opens the annotation toolbar',
+    Boolean(paragraphSelectionText) && paragraphToolbarVisible,
+  );
+  await page.getByTitle('Apply yellow to this selection').waitFor();
+  await page.waitForTimeout(180);
+  const paragraphHighlightId = await applySelectedHighlight();
+  await page.locator(`mark[data-hlid="${paragraphHighlightId}"]`).first().waitFor();
+  const paragraphMarkers = await page.locator(`mark[data-hlid="${paragraphHighlightId}"]`)
+    .evaluateAll((marks) => marks.map((mark) => ({
+      paragraph: mark.closest('p')?.textContent,
+      text: mark.textContent,
+    })));
+  check(
+    'paragraph-spanning highlight preserves both exact paragraph segments',
+    paragraphMarkers.some((mark) => mark.paragraph === 'First duplicate anchor' &&
+      mark.text === 'anchor') &&
+      paragraphMarkers.some((mark) => mark.paragraph === 'Second duplicate anchor' &&
+        mark.text === 'Second duplicate anchor') &&
+      highlights.at(-1)?.text === paragraphSelectionText.replace(/\s+/g, ' ').trim(),
+    JSON.stringify({ paragraphSelectionText, savedText: highlights.at(-1)?.text, paragraphMarkers }),
+  );
+  const canonicalParagraphText =
+    'First duplicate anchor\nSecond duplicate anchor\nAlpha beta gamma delta';
+  check(
+    'paragraph-spanning offsets match the stored document text model',
+    highlights.at(-1)?.anchor_start === canonicalParagraphText.indexOf('anchor') &&
+      highlights.at(-1)?.anchor_end ===
+        canonicalParagraphText.indexOf('Second duplicate anchor') +
+          'Second duplicate anchor'.length,
+    JSON.stringify({
+      start: highlights.at(-1)?.anchor_start,
+      end: highlights.at(-1)?.anchor_end,
+    }),
+  );
+  const keyboardSelectionText = await selectTextWithInputEvent('First', 'selectionchange');
+  const keyboardToolbarVisible = await page.getByTitle('Apply yellow to this selection')
+    .isVisible().catch(() => false);
+  check(
+    'keyboard selection changes open the annotation toolbar without a mouse event',
+    keyboardSelectionText === 'First' && keyboardToolbarVisible,
+  );
+  if (!keyboardToolbarVisible) await selectText('First', 0);
+  await page.getByTitle('Apply yellow to this selection').waitFor();
+  await page.waitForTimeout(180);
+  const keyboardHighlightId = await applySelectedHighlight();
+  await page.locator(`mark[data-hlid="${keyboardHighlightId}"]`).waitFor();
+  check(
+    'keyboard-selected word is saved at its exact text anchor',
+    keyboardToolbarVisible &&
+      highlights.at(-1)?.text === 'First' &&
+      highlights.at(-1)?.anchor_start !== null &&
+      highlights.at(-1)?.anchor_end === highlights.at(-1)?.anchor_start + 'First'.length,
+  );
+  const keyboardHighlightAnchor = highlights.at(-1)?.anchor_start;
+  const highlightsBeforeDuplicate = highlights.length;
+  await selectText('First', 0);
+  await page.getByTitle('Apply yellow to this selection').waitFor();
+  await page.waitForTimeout(180);
+  await page.getByTitle('Apply yellow to this selection').click();
+  check(
+    'repeating the same highlight action does not create a duplicate record',
+    highlights.length === highlightsBeforeDuplicate,
+  );
+  await page.getByTitle('Apply yellow to this selection').waitFor({ state: 'hidden' });
+  await page.evaluate(() => window.getSelection()?.removeAllRanges());
+  const touchSelectionText = await selectTextWithInputEvent('duplicate', 'touchend');
+  const touchToolbarVisible = await page.getByTitle('Apply yellow to this selection')
+    .isVisible().catch(() => false);
+  check(
+    'touch selection end opens the annotation toolbar',
+    touchSelectionText === 'duplicate' && touchToolbarVisible,
+  );
+  if (!touchToolbarVisible) await selectText('duplicate anchor', 0);
+  await page.getByTitle('Apply yellow to this selection').waitFor();
+  await page.waitForTimeout(180);
+  const touchHighlightId = await applySelectedHighlight();
+  await page.locator(`mark[data-hlid="${touchHighlightId}"]`).waitFor();
+  await selectText('beta gamma', 0);
+  const firstOverlapHighlightId = await applySelectedHighlight();
+  await page.locator(`mark[data-hlid="${firstOverlapHighlightId}"]`).waitFor();
+  await selectText('gamma delta', 0);
+  const secondOverlapHighlightId = await applySelectedHighlight();
+  await page.locator(`mark[data-hlid="${secondOverlapHighlightId}"]`).waitFor();
+  check(
+    'overlapping text highlights preserve both independent ranges',
+    await page.evaluate(() => {
+      const paragraph = [...document.querySelectorAll('#main-content p')]
+        .find((candidate) => candidate.textContent === 'Alpha beta gamma delta');
+      return [...paragraph.querySelectorAll('mark')].map((mark) => [
+        mark.dataset.hlid,
+        mark.textContent,
+      ]);
+    }).then((marks) =>
+      marks.some(([id, text]) => id === firstOverlapHighlightId && text === 'beta ') &&
+      marks.some(([id, text]) => id === secondOverlapHighlightId && text === 'gamma delta')),
+  );
+  await page.locator(`mark[data-hlid="${keyboardHighlightId}"]`).click();
+  await page.getByRole('button', { name: 'Remove', exact: true }).click();
+  await page.locator(`mark[data-hlid="${keyboardHighlightId}"]`).waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: 'Undo' }).click();
+  const restoredKeyboardHighlightId = highlights.at(-1)?.id;
+  await page.locator(`mark[data-hlid="${restoredKeyboardHighlightId}"]`).waitFor();
+  check(
+    'undo restores the removed text highlight and its original anchor',
+    restoredKeyboardHighlightId !== keyboardHighlightId &&
+      highlights.at(-1)?.anchor_start === keyboardHighlightAnchor &&
+      await page.locator(`mark[data-hlid="${restoredKeyboardHighlightId}"]`).evaluate((mark) =>
+        mark.textContent === 'First'),
   );
   check('second repeated passage can be selected after reload', await selectText('duplicate anchor', 1));
   await page.getByRole('button', { name: 'Bookmark selected passage' }).click();
@@ -450,6 +687,93 @@ try {
     'PDF live selection is a distinct blue state, not the saved gold marker',
     Boolean(selectedPdfText) && selectionCss.includes('background: rgba(37, 99, 235, 0.8)'),
   );
+  const pdfTextBeforeHighlights = await page.locator('.pdf-text-layer').first().innerText();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.getByTitle('Apply yellow to this selection').click();
+  const firstPdfHighlightId = highlights.at(-1)?.id;
+  await page.locator(`mark[data-hlid="${firstPdfHighlightId}"]`).waitFor();
+  const reducedMotionResult = await page.locator(`mark[data-hlid="${firstPdfHighlightId}"]`)
+    .evaluate((mark) => ({
+      className: mark.className,
+      animationName: getComputedStyle(mark).animationName,
+      reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    }));
+  check(
+    'reduced motion keeps saved PDF highlights visible without animation',
+    reducedMotionResult.reducedMotion &&
+      (!reducedMotionResult.className.includes('kn-hl--new') ||
+        reducedMotionResult.animationName === 'none'),
+    JSON.stringify(reducedMotionResult),
+  );
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const overlappingPdfText = await selectPdfSpan(6, 2);
+  check(
+    'PDF selection ending inside an existing marker remains actionable',
+    Boolean(overlappingPdfText) &&
+      await page.getByTitle('Apply yellow to this selection').isVisible(),
+  );
+  await page.getByTitle('Apply yellow to this selection').click();
+  const secondPdfHighlightId = highlights.at(-1)?.id;
+  await page.locator(`mark[data-hlid="${secondPdfHighlightId}"]`).waitFor();
+  check(
+    'overlapping PDF annotations render without shifting offsets or losing text',
+    await page.evaluate(({ firstId, secondId, originalText }) => {
+      const layer = document.querySelector('.pdf-text-layer');
+      const ids = new Set([...layer.querySelectorAll('mark.kn-hl')].map((mark) => mark.dataset.hlid));
+      return ids.has(firstId) && ids.has(secondId) && layer.innerText === originalText;
+    }, {
+      firstId: firstPdfHighlightId,
+      secondId: secondPdfHighlightId,
+      originalText: pdfTextBeforeHighlights,
+    }),
+  );
+  await page.getByTitle('Zoom in').click();
+  await page.getByText('110%', { exact: true }).waitFor();
+  await page.waitForTimeout(500);
+  await page.locator(`mark[data-hlid="${secondPdfHighlightId}"]`).waitFor();
+  check(
+    'PDF zoom rerender preserves both anchored highlights and the text layer',
+    await page.evaluate(({ firstId, secondId, originalText }) => {
+      const layer = document.querySelector('.pdf-text-layer');
+      const ids = new Set([...layer.querySelectorAll('mark.kn-hl')].map((mark) => mark.dataset.hlid));
+      return ids.has(firstId) && ids.has(secondId) && layer.innerText === originalText;
+    }, {
+      firstId: firstPdfHighlightId,
+      secondId: secondPdfHighlightId,
+      originalText: pdfTextBeforeHighlights,
+    }),
+  );
+  await page.getByTitle('Zoom out').click();
+  await page.getByText('100%', { exact: true }).waitFor();
+  await page.waitForTimeout(500);
+  await page.getByTitle('View mode').click();
+  await page.getByRole('menuitem', { name: 'Single Page' }).click();
+  const pageInput = page.getByTitle('Type a page number and press Enter to jump');
+  await pageInput.fill('2');
+  await pageInput.press('Enter');
+  await page.locator('[data-page="2"]').waitFor();
+  await pageInput.fill('1');
+  await pageInput.press('Enter');
+  await page.locator(`mark[data-hlid="${firstPdfHighlightId}"]`).waitFor();
+  check(
+    'PDF page navigation away and back restores the saved markers',
+    await page.locator(`mark[data-hlid="${firstPdfHighlightId}"]`).count() > 0 &&
+      await page.locator(`mark[data-hlid="${secondPdfHighlightId}"]`).count() > 0,
+  );
+  await page.reload({ waitUntil: 'networkidle' });
+  let reopenedPdf = await clickVisibleText('selection-visual.pdf');
+  if (!reopenedPdf) {
+    const folderToggle = page.getByTitle('Toggle folders');
+    if (await folderToggle.isVisible().catch(() => false)) {
+      await folderToggle.click();
+      reopenedPdf = await clickVisibleText('selection-visual.pdf');
+    }
+  }
+  await page.locator('.pdf-text-layer span').first().waitFor({ timeout: 20000 });
+  await page.locator(`mark[data-hlid="${firstPdfHighlightId}"]`).waitFor();
+  await page.locator(`mark[data-hlid="${secondPdfHighlightId}"]`).waitFor();
+  check('PDF highlights restore after reopening the document', reopenedPdf);
+  await page.screenshot({ path: `${evidenceDir}/overlapping-pdf-highlights.png` });
 
   check('no browser runtime errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 } catch (error) {
