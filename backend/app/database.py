@@ -621,6 +621,42 @@ def _add_precise_highlight_anchors(conn) -> None:
         conn.execute("ALTER TABLE highlights ADD COLUMN anchor_end INTEGER")
 
 
+def _create_provider_document_files_schema(conn) -> None:
+    for statement in (
+        """CREATE TABLE IF NOT EXISTS provider_document_files (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            document_id TEXT NOT NULL,
+            provider_id TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            credential_fingerprint TEXT NOT NULL,
+            provider_file_id TEXT,
+            provider_file_uri TEXT,
+            source_hash TEXT NOT NULL,
+            page_start INTEGER NOT NULL,
+            page_end INTEGER NOT NULL,
+            status TEXT NOT NULL CHECK (
+                status IN ('uploading', 'ready', 'failed', 'delete_pending', 'revoked')
+            ),
+            expires_at TEXT,
+            error_message TEXT NOT NULL DEFAULT '',
+            consented_at TEXT NOT NULL DEFAULT (datetime('now')),
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(
+                user_id, document_id, provider_id, model_id,
+                credential_fingerprint, page_start
+            )
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_provider_document_files_scope
+            ON provider_document_files(user_id, project_id, provider_id, status)""",
+        """CREATE INDEX IF NOT EXISTS idx_provider_document_files_document
+            ON provider_document_files(user_id, document_id, provider_id, model_id)""",
+    ):
+        conn.execute(statement)
+
+
 # Migration versions are append-only; never edit a migration after it is released.
 MIGRATIONS = (
     (1, "baseline-schema", _create_base_schema),
@@ -629,6 +665,7 @@ MIGRATIONS = (
     (4, "contacts-sharing-and-annotation-links", _create_contacts_sharing_schema),
     (5, "production-backlog-foundations", _create_production_backlog_schema),
     (6, "precise-highlight-anchors", _add_precise_highlight_anchors),
+    (7, "provider-specific-document-files", _create_provider_document_files_schema),
 )
 
 

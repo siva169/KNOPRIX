@@ -2,10 +2,8 @@
 import codecs
 import json
 import logging
-import os
 import re
 import shutil
-import tempfile
 import uuid
 import warnings
 import zipfile
@@ -14,7 +12,7 @@ from pathlib import Path
 from pathlib import PurePosixPath
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from docx.opc.exceptions import PackageNotFoundError as DocxPackageNotFoundError
 from lxml.etree import XMLSyntaxError
@@ -26,9 +24,16 @@ from ..database import get_db
 from ..security import get_current_user, get_owned_document, get_owned_project
 from .social import has_active_document_share, revoke_resource_shares
 from ..services import storage
+from ..services import document_ai
+from ..services.document_io import (
+    materialize_document,
+    object_key,
+    resolve_document_path,
+)
 from ..services.indexer import rebuild_project_indices
 from ..services.ingestion import create_ingestion_job, process_document_ingestion
 from ..services.pdf_parser import extract_document, extract_pptx_slides
+from ..services.rag import resolve_api_key
 
 router = APIRouter(prefix="/api", tags=["documents"])
 logger = logging.getLogger(__name__)
@@ -55,9 +60,6 @@ MAX_SVG_BYTES = 10 * 1024 * 1024
 MAX_SVG_ELEMENTS = 100_000
 MAX_SVG_DEPTH = 64
 PREFIX_RE = re.compile(r"^\d+-\d+-")
-OBJECT_URI_PREFIXES = ("s3://", "r2://")
-
-
 def _get_readable_document(db, user_id: str, document_id: str):
     try:
         return get_owned_document(db, user_id, document_id), False
@@ -234,45 +236,6 @@ def _validate_upload_file(path: Path, ext: str) -> None:
         _validate_raster_image(path, ext)
     elif ext == ".svg":
         _validate_svg(path)
-
-
-def _object_key(file_path: str) -> str | None:
-    for prefix in OBJECT_URI_PREFIXES:
-        if file_path.startswith(prefix):
-            return file_path[len(prefix):]
-    return None
-
-
-def _resolve_path(doc: dict) -> Path:
-    """Return the on-disk file for a document row.
-
-    Falls back to the uploads directory by filename — the project folder may
-    have moved since upload (e.g. Downloads -> AI-Rules), which leaves the
-    stored absolute path stale while the file copy still lives in uploads/.
-    """
-    stored_path = str(doc["file_path"] or "")
-    # Neon can contain paths written on Windows while the API runs on Linux.
-    # Normalize both separators before resolving the portable uploads fallback.
-    path = Path(stored_path.replace("\\", "/"))
-    if not path.exists():
-        path = UPLOAD_DIR / path.name
-    return path
-
-
-def _materialize_document(doc: dict) -> tuple[Path, bool]:
-    """Return a readable path and whether the caller owns the temporary file."""
-    object_key_value = _object_key(str(doc["file_path"]))
-    if storage.enabled() and object_key_value:
-        fd, temp_name = tempfile.mkstemp(prefix="knoprix-document-")
-        os.close(fd)
-        temp = Path(temp_name)
-        try:
-            storage.download(object_key_value, temp)
-        except Exception:
-            temp.unlink(missing_ok=True)
-            raise
-        return temp, True
-    return _resolve_path(doc), False
 
 
 def _serialize_document_row(row, ai_granted: bool) -> dict:
@@ -473,7 +436,7 @@ def get_slides(document_id: str, user=Depends(get_current_user), db=Depends(get_
     doc, _read_only = _get_readable_document(db, user["id"], document_id)
     if (doc["file_type"] or "").lower() not in ("pptx", "ppt"):
         raise HTTPException(404, "Not a slideshow document")
-    path, temporary = _materialize_document(doc)
+    path, temporary = materialize_document(doc)
     if not path.exists():
         raise HTTPException(404, "File missing on disk")
     try:
@@ -508,7 +471,7 @@ def stream_document(document_id: str, user=Depends(get_current_user), db=Depends
         "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
     }
-    object_key_value = _object_key(str(doc["file_path"]))
+    object_key_value = object_key(str(doc["file_path"]))
     if storage.enabled() and object_key_value:
         body = storage.stream(object_key_value)
         return StreamingResponse(
@@ -516,7 +479,7 @@ def stream_document(document_id: str, user=Depends(get_current_user), db=Depends
             media_type=media_type,
             headers=headers,
         )
-    path = _resolve_path(doc)
+    path = resolve_document_path(doc)
     if not path.exists():
         raise HTTPException(404, "File missing on disk")
     return FileResponse(
@@ -538,11 +501,27 @@ def delete_document(document_id: str, user=Depends(get_current_user), db=Depends
             revoke_resource_shares(db, user["id"], resource_type, row["id"])
     revoke_resource_shares(db, user["id"], "document", document_id)
     file_path = str(doc["file_path"])
-    object_key_value = _object_key(file_path)
+    object_key_value = object_key(file_path)
     if storage.enabled() and object_key_value:
         storage.delete(object_key_value)
     else:
         Path(file_path).unlink(missing_ok=True)
+    db.execute(
+        """UPDATE provider_document_files
+           SET status = CASE
+                   WHEN provider_id = 'nvidia-nim' OR provider_file_id IS NULL
+                       THEN 'revoked'
+                   ELSE 'delete_pending'
+               END,
+               error_message = CASE
+                   WHEN provider_id = 'nvidia-nim' OR provider_file_id IS NULL
+                       THEN ''
+                   ELSE 'Source document deleted; retry remote deletion.'
+               END,
+               updated_at = datetime('now')
+           WHERE user_id = ? AND document_id = ? AND status != 'revoked'""",
+        (user["id"], document_id),
+    )
     db.execute("DELETE FROM documents WHERE id = ?", (document_id,))
     rebuild_project_indices(db, doc["project_id"])
     return None
@@ -668,6 +647,159 @@ def revoke_ai_access(document_id: str, purpose: str = "all", user=Depends(get_cu
         (user["id"], document_id, purpose),
     )
     return {"revoked": True, "documentId": document_id, "purpose": purpose}
+
+
+def _provider_document_model(provider_id: str, model_id: str) -> tuple[dict, dict]:
+    from .chat import _lookup
+
+    provider = _lookup(provider_id)
+    if provider is None:
+        raise HTTPException(400, f"Provider '{provider_id}' is not allowlisted.")
+    model = next(
+        (item for item in provider["models"] if item["id"] == model_id), None
+    )
+    if model is None:
+        raise HTTPException(400, f"Model '{model_id}' is not allowlisted for '{provider_id}'.")
+    if not model.get("fullDocumentChat"):
+        raise HTTPException(
+            400, "This provider model does not support full-document visual chat."
+        )
+    return provider, model
+
+
+def _provider_key(
+    provider_id: str, supplied_key: str | None
+) -> str | None:
+    if provider_id == "nvidia-nim" and supplied_key:
+        raise HTTPException(
+            400, "NVIDIA uses the backend-managed key; client-supplied keys are not accepted."
+        )
+    return resolve_api_key(
+        provider_id, None if provider_id == "nvidia-nim" else supplied_key
+    )
+
+
+@router.post("/documents/{document_id}/provider-authorization")
+def authorize_provider_document(
+    document_id: str,
+    body: dict,
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+    x_provider_key: str | None = Header(None, alias="X-Provider-Key"),
+    x_api_key: str | None = Header(None, alias="X-API-Key"),
+):
+    """Upload one explicitly confirmed document to the selected AI provider."""
+    provider_id = body.get("providerId")
+    model_id = body.get("model")
+    if body.get("confirmed") is not True:
+        raise HTTPException(400, "Confirm provider-specific document transfer first.")
+    if not isinstance(provider_id, str) or not isinstance(model_id, str):
+        raise HTTPException(400, "Provider and model are required.")
+    _provider_document_model(provider_id, model_id)
+
+    supplied_key = x_provider_key if x_provider_key else x_api_key
+    api_key = _provider_key(provider_id, supplied_key)
+    if not api_key:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Add a valid provider key before authorizing this document.",
+        )
+    document = get_owned_document(db, user["id"], document_id)
+    grant = db.execute(
+        """SELECT id FROM ai_document_grants
+           WHERE user_id = ? AND document_id = ? AND purpose = 'all'
+             AND revoked_at IS NULL""",
+        (user["id"], document_id),
+    ).fetchone()
+    if grant is None:
+        raise HTTPException(403, "Grant Knoprix AI access before provider transfer.")
+
+    try:
+        result = document_ai.authorize_document(
+            db, user["id"], document, provider_id, model_id, api_key
+        )
+    except document_ai.ProviderFileError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+    return {
+        "documentId": document_id,
+        "providerId": provider_id,
+        "model": model_id,
+        **result,
+    }
+
+
+@router.delete("/documents/{document_id}/provider-authorization")
+def revoke_provider_document(
+    document_id: str,
+    providerId: str = Query(...),
+    model: str = Query(...),
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+    x_provider_key: str | None = Header(None, alias="X-Provider-Key"),
+    x_api_key: str | None = Header(None, alias="X-API-Key"),
+):
+    _provider_document_model(providerId, model)
+    get_owned_document(db, user["id"], document_id)
+    api_key = _provider_key(
+        providerId, x_provider_key if x_provider_key else x_api_key
+    )
+    result = document_ai.revoke_document(
+        db, user["id"], document_id, providerId, model, api_key
+    )
+    return {
+        "documentId": document_id,
+        "providerId": providerId,
+        "model": model,
+        **result,
+    }
+
+
+@router.post("/provider-files/{document_id}/retry-delete")
+def retry_provider_document_deletion(
+    document_id: str,
+    body: dict,
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+    x_provider_key: str | None = Header(None, alias="X-Provider-Key"),
+    x_api_key: str | None = Header(None, alias="X-API-Key"),
+):
+    provider_id = body.get("providerId")
+    model_id = body.get("model")
+    if not isinstance(provider_id, str) or not isinstance(model_id, str):
+        raise HTTPException(400, "Provider and model are required.")
+    _provider_document_model(provider_id, model_id)
+    api_key = _provider_key(
+        provider_id, x_provider_key if x_provider_key else x_api_key
+    )
+    result = document_ai.retry_pending_deletions(
+        db, user["id"], provider_id, api_key, document_id, model_id
+    )
+    return {
+        "documentId": document_id,
+        "providerId": provider_id,
+        "model": model_id,
+        **result,
+    }
+
+
+@router.get("/projects/{project_id}/provider-documents")
+def list_provider_documents(
+    project_id: str,
+    providerId: str,
+    model: str,
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+    x_provider_key: str | None = Header(None, alias="X-Provider-Key"),
+    x_api_key: str | None = Header(None, alias="X-API-Key"),
+):
+    _provider_document_model(providerId, model)
+    get_owned_project(db, user["id"], project_id)
+    api_key = _provider_key(
+        providerId, x_provider_key if x_provider_key else x_api_key
+    )
+    return document_ai.list_provider_documents(
+        db, user["id"], project_id, providerId, model, api_key
+    )
 
 
 @router.get("/chat/grants")

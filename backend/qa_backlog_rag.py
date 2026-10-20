@@ -9,16 +9,17 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from fastapi import HTTPException
 from fastapi.datastructures import UploadFile
+from pypdf import PdfReader, PdfWriter
 from starlette.datastructures import Headers
 
 from app import database
 from app.config import _load_provider_api_keys
 from app.routers import artifacts, chat, documents
-from app.services import rag
+from app.services import document_ai, full_document_chat, rag
 
 USER = {"id": "user-rag-test"}
 PROJECT_ID = "proj-rag-test"
@@ -42,6 +43,54 @@ class FakeHTTPResponse:
 
 
 class ProviderAdapterTests(unittest.TestCase):
+    def test_openai_file_upload_and_deletion_use_supplied_key(self):
+        response = Mock()
+        response.status = 200
+        response.read.return_value = b'{"id":"file-test"}'
+        connection = Mock()
+        connection.getresponse.return_value = response
+
+        with tempfile.TemporaryDirectory() as temp_name:
+            pdf_path = Path(temp_name) / "part.pdf"
+            pdf_path.write_bytes(b"%PDF-1.4")
+            with patch(
+                "app.services.document_ai.http.client.HTTPSConnection",
+                return_value=connection,
+            ):
+                result = document_ai._streaming_multipart_upload(
+                    "openai", "test-openai-key", pdf_path, "part.pdf"
+                )
+
+        headers = {
+            call.args[0]: call.args[1]
+            for call in connection.putheader.call_args_list
+        }
+        self.assertEqual(result["id"], "file-test")
+        self.assertEqual(headers["Authorization"], "Bearer test-openai-key")
+
+        with patch.object(document_ai, "_json_request") as request:
+            document_ai.delete_provider_file(
+                "openai", "test-openai-key", "file-test"
+            )
+
+        self.assertEqual(
+            request.call_args.kwargs["headers"]["Authorization"],
+            "Bearer test-openai-key",
+        )
+
+    def test_image_conversion_creates_work_directory(self):
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as temp_name:
+            root = Path(temp_name)
+            source = root / "source.png"
+            Image.new("RGB", (32, 32), "white").save(source)
+
+            output = document_ai.prepare_pdf(source, "png", root / "conversion")
+
+            self.assertTrue(output.is_file())
+            self.assertEqual(len(PdfReader(str(output)).pages), 1)
+
     def test_google_api_key_environment_alias_configures_gemini(self):
         keys = _load_provider_api_keys({"GOOGLE_API_KEY": "test-google-key"})
 
@@ -84,9 +133,128 @@ class ProviderAdapterTests(unittest.TestCase):
         )
         self.assertEqual(
             [model["id"] for model in provider["models"]],
-            ["nvidia/nemotron-3.5-lightning-30b-a3b"],
+            [
+                "nvidia/nemotron-3.5-lightning-30b-a3b",
+                document_ai.NVIDIA_VISION_MODEL_ID,
+            ],
         )
         self.assertEqual(provider["models"][0]["id"], rag.NVIDIA_MODEL_ID)
+
+    def test_full_document_chat_is_limited_to_verified_visual_models(self):
+        nvidia_models = {
+            model["id"]: model
+            for model in chat._lookup("nvidia-nim")["models"]
+        }
+        openai_models = chat._lookup("openai")["models"]
+        text_only_models = chat._lookup("groq-free")["models"]
+
+        self.assertTrue(
+            nvidia_models[document_ai.NVIDIA_VISION_MODEL_ID]["fullDocumentChat"]
+        )
+        self.assertFalse(nvidia_models[rag.NVIDIA_MODEL_ID]["fullDocumentChat"])
+        self.assertTrue(all(model["fullDocumentChat"] for model in openai_models))
+        self.assertTrue(all(not model["fullDocumentChat"] for model in text_only_models))
+
+    def test_openai_full_document_stream_references_uploaded_pdf_files(self):
+        response = FakeHTTPResponse(
+            b'data: {"type":"response.output_text.delta","delta":"answer"}\n\n'
+            b'data: {"type":"response.completed"}\n\n'
+        )
+        with patch(
+            "app.services.full_document_chat.urllib.request.urlopen",
+            return_value=response,
+        ) as open_url:
+            tokens = list(
+                full_document_chat._stream_openai(
+                    "openai-test-key",
+                    "gpt-4o-mini",
+                    "Use only the uploaded files.",
+                    "Compare both documents.",
+                    [{"provider_file_id": "file-authorized"}],
+                )
+            )
+
+        request = open_url.call_args.args[0]
+        payload = json.loads(request.data)
+        self.assertEqual(request.full_url, "https://api.openai.com/v1/responses")
+        self.assertEqual(
+            request.get_header("Authorization"), "Bearer openai-test-key"
+        )
+        self.assertIn(
+            {"type": "input_file", "file_id": "file-authorized", "detail": "high"},
+            payload["input"][1]["content"],
+        )
+        self.assertEqual(tokens, ["answer"])
+
+    def test_anthropic_full_document_stream_uses_file_blocks(self):
+        response = FakeHTTPResponse(
+            b'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"answer"}}\n\n'
+        )
+        with patch(
+            "app.services.full_document_chat.urllib.request.urlopen",
+            return_value=response,
+        ) as open_url:
+            tokens = list(
+                full_document_chat._stream_anthropic(
+                    "anthropic-test-key",
+                    "claude-sonnet-5-5",
+                    "Use only the uploaded files.",
+                    "Compare both documents.",
+                    [{"provider_file_id": "file_anthropic"}],
+                )
+            )
+
+        request = open_url.call_args.args[0]
+        payload = json.loads(request.data)
+        self.assertEqual(request.full_url, "https://api.anthropic.com/v1/messages")
+        self.assertEqual(
+            request.get_header("Anthropic-beta"), "files-api-2025-04-14"
+        )
+        self.assertIn(
+            {
+                "type": "document",
+                "source": {"type": "file", "file_id": "file_anthropic"},
+            },
+            payload["messages"][0]["content"],
+        )
+        self.assertEqual(tokens, ["answer"])
+
+    def test_gemini_full_document_stream_uses_uploaded_file_uri(self):
+        response = FakeHTTPResponse(
+            b'data: {"candidates":[{"content":{"parts":[{"text":"answer"}]}}]}\n\n'
+        )
+        with patch(
+            "app.services.full_document_chat.urllib.request.urlopen",
+            return_value=response,
+        ) as open_url:
+            tokens = list(
+                full_document_chat._stream_gemini(
+                    "gemini-test-key",
+                    "gemini-2.5-flash",
+                    "Use only the uploaded files.",
+                    "Compare both documents.",
+                    [{
+                        "provider_file_uri":
+                            "https://generativelanguage.googleapis.com/file/abc"
+                    }],
+                )
+            )
+
+        request = open_url.call_args.args[0]
+        payload = json.loads(request.data)
+        self.assertIn(":streamGenerateContent?alt=sse", request.full_url)
+        self.assertEqual(request.get_header("X-goog-api-key"), "gemini-test-key")
+        self.assertIn(
+            {
+                "fileData": {
+                    "mimeType": "application/pdf",
+                    "fileUri":
+                        "https://generativelanguage.googleapis.com/file/abc",
+                }
+            },
+            payload["contents"][0]["parts"],
+        )
+        self.assertEqual(tokens, ["answer"])
 
     def test_nvidia_credentials_load_from_backend_environment(self):
         keys = _load_provider_api_keys({"NVIDIA_API_KEY": "server-test-key"})
@@ -232,6 +400,7 @@ class BacklogRAGTests(unittest.TestCase):
 
         database._create_contacts_sharing_schema(self.db)
         database._create_production_backlog_schema(self.db)
+        database._create_provider_document_files_schema(self.db)
 
         self.db.execute(
             "INSERT INTO users (id, email, password_hash, full_name, knoprix_id) "
@@ -323,6 +492,219 @@ class BacklogRAGTests(unittest.TestCase):
             "test-provider-key",
         ))
         self.assertIn("powerful and luminous explosion", stream.call_args.args[4])
+
+    def test_full_document_chat_requires_separate_provider_consent(self):
+        doc_res = self.upload_doc("supernova.txt", b"A supernova is a stellar explosion.")
+        body = {
+            "mode": "full-document",
+            "providerId": "openai",
+            "model": "gpt-4o-mini",
+            "documentIds": [doc_res["document"]["id"]],
+            "question": "What is a supernova?",
+        }
+
+        with patch("app.routers.chat.stream_full_document_response") as stream:
+            with self.assertRaises(HTTPException) as ctx:
+                chat.chat_ask(
+                    body,
+                    user=USER,
+                    db=self.db,
+                    x_provider_key="test-openai-key",
+                )
+
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertIn("provider-specific", ctx.exception.detail)
+        stream.assert_not_called()
+
+    def test_full_document_chat_uses_authorized_provider_files_not_rag(self):
+        doc_res = self.upload_doc("supernova.txt", b"A supernova is a stellar explosion.")
+        document = doc_res["document"]
+        api_key = "test-openai-key"
+        document_ai._store_part(
+            self.db,
+            USER["id"],
+            PROJECT_ID,
+            document["id"],
+            "openai",
+            "gpt-4o-mini",
+            document_ai.credential_fingerprint("openai", api_key),
+            document_ai.hash_file(Path(document["file_path"])),
+            1,
+            1,
+            "ready",
+            file_id="file-authorized",
+        )
+        body = {
+            "mode": "full-document",
+            "providerId": "openai",
+            "model": "gpt-4o-mini",
+            "documentIds": [document["id"]],
+            "question": "What is a supernova?",
+        }
+
+        with patch("app.routers.chat.retrieve_hybrid_passages") as retrieve, \
+             patch(
+                 "app.routers.chat.stream_full_document_response",
+                 return_value=[("token", {"text": "A stellar explosion."})],
+             ) as stream:
+            result = chat.chat_ask(
+                body, user=USER, db=self.db, x_provider_key=api_key
+            )
+
+        self.assertEqual(result["answer"], "A stellar explosion.")
+        self.assertEqual(result["mode"], "full-document")
+        retrieve.assert_not_called()
+        self.assertEqual(stream.call_args.args[0:3], ("openai", "gpt-4o-mini", api_key))
+
+    def test_expired_gemini_authorization_is_refreshed_before_full_document_chat(self):
+        doc_res = self.upload_doc("notes.txt", b"Gemini must reupload expired files.")
+        document = doc_res["document"]
+        api_key = "test-gemini-key"
+        fingerprint = document_ai.credential_fingerprint("gemini-free", api_key)
+        document_ai._store_part(
+            self.db,
+            USER["id"],
+            PROJECT_ID,
+            document["id"],
+            "gemini-free",
+            "gemini-2.5-flash",
+            fingerprint,
+            document_ai.hash_file(Path(document["file_path"])),
+            1,
+            1,
+            "ready",
+            file_id="files/expired",
+            file_uri="https://generativelanguage.googleapis.com/file/expired",
+            expires_at="2000-01-01T00:00:00+00:00",
+        )
+        part = {
+            "path": Path(self.temp_dir.name) / "pages.pdf",
+            "page_start": 1,
+            "page_end": 1,
+            "page_count": 1,
+        }
+        with patch.object(document_ai, "UPLOAD_DIR", self.upload_dir), \
+             patch(
+                 "app.services.document_ai.prepare_pdf",
+                 return_value=Path(self.temp_dir.name) / "converted.pdf",
+             ), \
+             patch("app.services.document_ai.split_pdf", return_value=[part]), \
+             patch(
+                 "app.services.document_ai.upload_provider_file",
+                 return_value={
+                     "file_id": "files/refreshed",
+                     "file_uri":
+                         "https://generativelanguage.googleapis.com/file/refreshed",
+                     "expires_at": "2099-01-01T00:00:00+00:00",
+                 },
+             ) as upload:
+            files = document_ai.authorized_provider_files(
+                self.db,
+                USER["id"],
+                [document],
+                "gemini-free",
+                "gemini-2.5-flash",
+                api_key,
+            )
+
+        self.assertEqual(files[document["id"]][0]["provider_file_id"], "files/refreshed")
+        upload.assert_called_once()
+
+    def test_provider_file_deletion_failure_remains_retryable(self):
+        api_key = "test-openai-key"
+        document = self.upload_doc("notes.txt", b"Retry provider deletion.")["document"]
+        document_ai._store_part(
+            self.db,
+            USER["id"],
+            PROJECT_ID,
+            document["id"],
+            "openai",
+            "gpt-4o-mini",
+            document_ai.credential_fingerprint("openai", api_key),
+            document_ai.hash_file(Path(document["file_path"])),
+            1,
+            1,
+            "ready",
+            file_id="file-revoke",
+        )
+        with patch(
+            "app.services.document_ai.delete_provider_file",
+            side_effect=document_ai.ProviderFileError("Provider unavailable."),
+        ):
+            result = document_ai.revoke_document(
+                self.db, USER["id"], document["id"], "openai", "gpt-4o-mini", api_key
+            )
+        self.assertTrue(result["deletePending"])
+        self.assertEqual(
+            self.db.execute(
+                "SELECT status FROM provider_document_files WHERE document_id = ?",
+                (document["id"],),
+            ).fetchone()["status"],
+            "delete_pending",
+        )
+
+        with patch("app.services.document_ai.delete_provider_file"):
+            retried = document_ai.retry_pending_deletions(
+                self.db,
+                USER["id"],
+                "openai",
+                api_key,
+                document["id"],
+                "gpt-4o-mini",
+            )
+        self.assertEqual(retried, {"deleted": 1, "deletePending": 0})
+
+    def test_nvidia_visual_chat_processes_all_pages_in_four_page_batches(self):
+        self.upload_dir.mkdir(parents=True, exist_ok=True)
+        pdf_path = self.upload_dir / "visual-report.pdf"
+        writer = PdfWriter()
+        for _ in range(9):
+            writer.add_blank_page(width=200, height=200)
+        with pdf_path.open("wb") as output:
+            writer.write(output)
+        document = {
+            "id": "nvidia-visual-report",
+            "file_name": "visual-report.pdf",
+            "file_type": "pdf",
+            "file_path": str(pdf_path),
+        }
+        batches = []
+
+        def render_batch(_pdf, first, last, output_dir):
+            batches.append((first, last))
+            image = output_dir / f"page-{first}.jpg"
+            image.write_bytes(b"image fixture")
+            return [image for _ in range(last - first + 1)]
+
+        with patch.object(full_document_chat, "UPLOAD_DIR", self.upload_dir), \
+             patch(
+                 "app.services.full_document_chat._render_nvidia_batch",
+                 side_effect=render_batch,
+             ), \
+             patch(
+                 "app.services.full_document_chat._stream_nvidia_batch",
+                 side_effect=lambda *_args: iter(["batch evidence"]),
+             ), \
+             patch(
+                 "app.services.full_document_chat.rag.stream_llm_response",
+                 return_value=iter(["combined answer"]),
+             ):
+            events = list(
+                full_document_chat._stream_nvidia(
+                    "server-key",
+                    document_ai.NVIDIA_VISION_MODEL_ID,
+                    "Use only selected pages.",
+                    "Find the key idea.",
+                    [document],
+                )
+            )
+
+        self.assertEqual(batches, [(1, 4), (5, 8), (9, 9)])
+        self.assertIn(("token", {"text": "combined answer"}), events)
+        self.assertEqual(
+            [payload["current"] for event, payload in events if event == "progress"],
+            [0, 1, 2, 3, 3],
+        )
 
     def test_nvidia_chat_routes_reject_client_keys_and_use_server_key(self):
         doc_res = self.upload_doc("nvidia.txt", b"NVIDIA test passage for chat.")

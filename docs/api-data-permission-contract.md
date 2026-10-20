@@ -1,10 +1,10 @@
 # Knoprix API, Data, and Permission Contract
 
-**Status:** Target contract with a first contacts/sharing slice implemented;
-remaining deviations are listed below.
-**Date:** 2026-10-04
-**Scope:** New extraction, AI, mind-map, contacts, sharing, inbox, and
-notification APIs. This document specifies behavior, not UI layout.
+**Status:** Target contract with contacts/sharing and a first full-document AI
+backend slice implemented; remaining deviations are listed below.
+**Date:** 2026-10-20
+**Scope:** Extraction, AI, mind-map, contacts, sharing, inbox, and notification
+APIs. This document specifies behavior, not UI layout.
 
 ## 1. Compatibility and common rules
 
@@ -35,9 +35,10 @@ notification APIs. This document specifies behavior, not UI layout.
   `POST /api/auth/register` returns `410`. Existing unlinked users may continue
   using legacy login/refresh; after linking, legacy login/refresh are rejected
   and the Firebase ID token is required.
-- The current backend has owner-scoped JWT routes, synchronous document
-  extraction, a mocked `/api/chat/ask`, and no persisted AI grants,
-  conversations, contacts, or shares. It does not yet enforce this contract.
+- The current backend has owner-scoped authenticated routes, synchronous
+  document extraction, persisted AI document grants and provider-file
+  mappings, and implemented contact/share slices. It does not yet implement
+  every `/api/v1` contract below.
 - All new endpoints except public health checks require
   `Authorization: Bearer <accessToken>`. The authenticated user is derived
   from the token; callers cannot choose an `ownerId` or `userId` in a body.
@@ -201,9 +202,10 @@ this document-only task.
    that share. If document content will be sent to an external provider, the
    caller additionally needs an active consent for that document, provider,
    model, and purpose. No one of these permissions substitutes for another.
-6. The provider key stays in browser-local storage and is sent directly to
-   the provider. It must never be accepted, returned, proxied, logged, or
-   stored by Knoprix.
+6. BYOK keys stay in browser-local storage and are sent in request headers to
+   Knoprix for backend-routed provider operations. Knoprix uses the raw key
+   only in request memory; it must never be returned, logged, or persisted.
+   NVIDIA uses only the backend-managed key.
 7. Removing or blocking a mutual contact revokes pending and accepted shares
    between those users.
    Independently, the sender may revoke an accepted share and its recipient
@@ -440,9 +442,45 @@ provider/model or any key-like field is rejected before retrieval.
 ```
 
 If the provider is null, `provider` in the response is null. Retrieved
-context is short-lived and not persisted as conversation history. Existing
-`POST /api/chat/ask` remains a legacy mock and is not the v1 authorization
-contract.
+context is short-lived and not persisted as conversation history. The current
+`POST /api/chat/ask` and `/api/chat/stream` routes use a separate legacy
+request shape; see the implemented full-document route contract below.
+
+### Implemented legacy full-document provider routes
+
+These routes are implemented under `/api`, not `/api/v1`. They do not replace
+the versioned target contracts above. All require authentication and owned
+documents/projects; shared-document full-document transfer is not supported.
+
+- `POST /api/documents/{documentId}/provider-authorization` accepts
+  `{"providerId":"...","model":"...","confirmed":true}` and the BYOK key in
+  `X-Provider-Key` or `X-API-Key`. The backend requires an active Knoprix
+  document AI grant, validates the provider/model allowlist, converts supported
+  inputs to PDF, and uploads the selected document as ordered 20-page parts
+  limited to 50 MB each. NVIDIA uses its server-managed key and rejects
+  client-supplied keys. This confirmation authorizes provider transfer; it is
+  not a general-purpose provider-consent audit record.
+- `GET /api/projects/{projectId}/provider-documents?providerId=...&model=...`
+  returns selected-document statuses without remote file IDs or credential
+  fingerprints. Statuses include `ready`, `failed`, and `delete_pending`.
+- `DELETE /api/documents/{documentId}/provider-authorization?providerId=...&model=...`
+  immediately blocks local use and attempts provider-side deletion. Failed
+  deletion remains retryable.
+- `POST /api/provider-files/{documentId}/retry-delete` accepts
+  `{"providerId":"...","model":"..."}` and retries pending deletion with the
+  provider key in a header (or the NVIDIA server key).
+- `POST /api/chat/ask` and `POST /api/chat/stream` accept the normal chat
+  fields plus optional `mode: "retrieval" | "full-document"`. Retrieval stays
+  the default. Full-document mode requires a ready mapping for every selected
+  document, provider, model, and credential fingerprint; it never silently
+  falls back to retrieval. The streaming route emits progress/thought, token,
+  error, and completion events.
+- OpenAI and Anthropic provider files are reused. Gemini files are refreshed
+  after their 48-hour expiry. NVIDIA renders every selected page and processes
+  it in four-page image batches for each question, then synthesizes the
+  results. No live provider call has been used to verify these adapters.
+- Provider file IDs/URIs and keyed credential fingerprints are stored
+  server-side for lifecycle management. Raw provider keys are not stored.
 
 ### `POST /api/v1/documents/{documentId}/summary`
 
@@ -711,7 +749,7 @@ Existing routes such as `/api/projects`, `/api/documents/...`,
 document GET, slides, pages, and stream routes permit read-only access to an
 accepted, active document share; document mutations remain owner-only. See
 the implemented-slice section above for the exact contact/share routes and
-known limits. Upload remains synchronous and chat remains the existing
-mocked/owner-workspace feature; the broader v1 contracts above are design
-references, not shipped endpoints. Do not infer AI access, email delivery,
-project snapshots, or the additional v1 behaviors from this document.
+known limits. Upload remains synchronous. The new provider-file routes and
+full-document chat are owner-only; all other v1 contracts above remain design
+references, not shipped endpoints. Do not infer email delivery, project
+snapshots, or the additional v1 behaviors from this document.

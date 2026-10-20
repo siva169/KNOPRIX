@@ -1,5 +1,29 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-20 — Add provider-authorized full-document AI backend
+
+- Added explicit provider/model document authorization, reusable provider-file
+  records scoped to user/document/project/provider/model/key fingerprint,
+  status listing, immediate local revocation, and retryable remote deletion.
+- Added full-document chat and SSE support for OpenAI, Anthropic, Gemini, and
+  NVIDIA visual page batches. Retrieval remains the default; full-document mode
+  fails closed when authorization or a usable provider file is missing.
+- Added PDF conversion/splitting and provider file lifecycle handling,
+  including Gemini expiry refresh and source-file hash validation. Render now
+  builds the backend Dockerfile with LibreOffice and Poppler for conversion
+  and rendering.
+- Matched Gemini file-reference field names and file-ID validation to Google's
+  public API schema; set the shared part cap to 50,000,000 bytes, matching the
+  documented Gemini PDF limit. Added a regression for creating image-
+  conversion work directories.
+- Updated provider-transfer security, API, PRD, and upload-support contracts.
+  Provider consent UI and live-provider verification remain pending; no live
+  provider calls, deployment, or remote push were performed.
+- Verification: expanded provider/RAG QA passes (33 tests), touched Python
+  modules compile, and `git diff --check` passes. No provider API, deployment,
+  or remote push was performed. Gemini account/model end-to-end compatibility
+  remains unverified.
+
 ## 2026-10-20 — Add document annotation counts and safe sharing navigation
 
 - Added user/project-scoped bookmark and highlight totals to each project

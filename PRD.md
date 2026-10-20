@@ -1,7 +1,8 @@
 # PRD: Knoprix Final Project
 
 **Type:** College project / document knowledge platform  
-**Status:** Product direction approved; detailed UI/UX decisions remain pending
+**Status:** Product direction approved; full-document backend slice in progress;
+provider-consent UI and detailed UI/UX decisions remain pending
 **Source baseline:** Current Knoprix mid-review version  
 **Project folder:** `knoprix-final-project/`
 
@@ -26,7 +27,10 @@ your documents.
 - Improve the interface as a deliberate, mobile-first reading workspace.
 - Keep document search explainable through the existing Trie and inverted index.
 - Keep bookmark ordering explainable through Hash Table + Doubly Linked List.
-- Add user-controlled cloud AI provider connections later.
+- Support user-controlled cloud AI provider connections with explicit,
+  provider-specific document-transfer consent.
+- Let a user explicitly authorize original selected documents for a named
+  provider/model, including visual content such as diagrams, charts, and images.
 - Support document chat first, then summaries, flashcards, quizzes, and
   opt-in web research as separate slices.
 - Show source citations for AI answers whenever document evidence is used.
@@ -55,8 +59,9 @@ your documents.
 - **AI providers:** Free-tier providers from the server-published allowlist;
   verify availability and terms when implementing each provider.
 - **BYOK — Bring Your Own Key:** Provider keys remain in browser-local storage
-  and are sent directly from the browser to the approved provider. Knoprix
-  backend endpoints must reject key material and never store or log it.
+  and are sent in request headers to Knoprix backend routes for provider
+  operations. The backend uses them only in request memory and never stores or
+  logs raw keys. NVIDIA uses a backend-managed key.
 - **Model allowlist:** Knoprix displays only models explicitly approved by
   the application configuration.
 - **Document scope:** Every AI operation uses only explicitly selected,
@@ -108,16 +113,36 @@ your documents.
   page/text anchor without loading every document's highlights at startup.
 - Any backend behavior change is proposed and approved separately.
 
-### AI integration — later slice
+### AI integration — backend slice implemented; UI and live verification pending
 
-- A user can add a supported provider key without exposing it to the Knoprix
-  backend.
+- Retrieval chat remains the default. Full-document mode uses the explicitly
+  authorized original selected documents and does not fall back to RAG.
+- The backend requires both an active Knoprix AI grant and a separate,
+  per-document confirmation naming the external provider and model.
+- Provider uploads are reusable where supported, split into ordered
+  20-page/50-MB PDF parts, and tracked per provider/model/key fingerprint.
+- NVIDIA analyzes every rendered page in four-page visual batches for each
+  question and synthesizes the batch results.
+- Revocation blocks local use immediately; a failed remote deletion remains
+  visible and retryable.
+- The frontend consent/status/progress/revoke/retry experience remains to be
+  implemented after the pending UI/UX decisions.
+- Provider adapters are tested with mocked responses only; no live provider
+  request has been made. Gemini's `generateContent` file-reference field names
+  match Google's public API discovery schema; Google's current PDF guide
+  demonstrates the newer Interactions API, so end-to-end model/account
+  compatibility must still be verified before production use.
+- A user can add a supported provider key; it is sent to Knoprix backend
+  request handlers in headers and is never persisted server-side.
 - The provider and model are visible before a request is sent.
 - The user selects the document scope explicitly and grants AI access for
   those documents.
 - Third-party processing requires a separate consent that names the provider
   and model before document content is sent.
-- The system returns a grounded answer with document citations.
+- Retrieval responses include structured source citations. Full-document
+  responses are prompted to cite source filenames and pages when available;
+  those provider-generated references remain unverified and are not yet
+  returned as structured citations.
 - Provider failure, invalid key, rate limit, and unsupported model errors are
   visible and actionable.
 
@@ -143,12 +168,13 @@ your documents.
 
 ## 5. API Contract Direction
 
-The existing API remains the baseline. The current backend exposes
-`GET /api/providers/allowlist` and `POST /api/chat/ask`; the latter currently
-returns a mocked response with citations. The frontend can make browser-direct
-calls to some allowlisted providers. These paths are not yet a complete,
-persisted AI-grant system. Future API contracts must enforce ownership/share
-access and AI grants before returning content:
+The existing API remains the baseline. The backend exposes
+`GET /api/providers/allowlist`, `POST /api/chat/ask`, `POST /api/chat/stream`,
+and provider-document authorization/status/revoke/retry routes. Chat supports
+both retrieval (default) and full-document mode; the latter requires previously
+authorized provider files. These are legacy `/api` routes. The `/api/v1`
+contracts below remain future work and must enforce ownership/share access and
+AI grants before returning content:
 
 ```text
 GET    /api/health                         (legacy)
@@ -163,12 +189,10 @@ POST   /api/v1/contact-requests
 POST   /api/v1/shares
 ```
 
-No provider-key endpoint is planned under the approved browser-local BYOK
-policy. New contracts use `/api/v1`; existing `/api/...` paths remain
-unchanged. The complete request/response, data, authorization, idempotency,
-pagination, expiry, deletion, and verification rules are in
-`docs/api-data-permission-contract.md`. That document is a target spec, not a
-claim that the behaviors are implemented.
+No provider-key endpoint is planned. The complete request/response, data,
+authorization, idempotency, pagination, expiry, deletion, and verification
+rules are in `docs/api-data-permission-contract.md`, which distinguishes the
+implemented provider-file routes from the future `/api/v1` target.
 
 ## 6. UI/UX Contract
 
@@ -193,9 +217,9 @@ Required responsive checks: 390px, 425px, 768px, and 1024px.
 
 - **Always:** preserve unrelated user changes, validate inputs, keep secrets
   out of Git, update `changes.md`, verify before committing.
-- **Ask first:** new dependencies, provider/API usage, schema changes,
-  custom provider endpoints, deployment, remote Git operations, and meaningful
-  UI/UX choices.
+- **Ask first:** live provider calls, custom provider endpoints, deployment,
+  remote Git operations, and meaningful UI/UX choices. The approved full-
+  document backend slice includes its focused schema/API changes.
 - **Never:** commit API keys, expose provider credentials to React, silently
   upload documents, delete user data, or present unverified AI output as fact.
 
@@ -232,6 +256,19 @@ Required responsive checks: 390px, 425px, 768px, and 1024px.
   deleted content for up to 30 days.
 - Deployment direction: Render + Vercel + Supabase.
 - Initial scale planning assumption: 100–1,000 users.
+
+## 9a. Full-document AI decisions recorded 2026-10-20
+
+- Require both existing Knoprix AI access and separate confirmation naming
+  the external provider/model before transferring a document.
+- Reuse provider file uploads where available; split uploads into 20-page
+  parts and reject any part exceeding 50 MB.
+- Refresh expired Gemini uploads after the approved 48-hour expiry.
+- For NVIDIA, render and analyze every page in four-page batches per question,
+  with progress and cost/latency notices in the UI.
+- Keep provider-specific statuses, immediate local revocation, and a
+  retryable remote-deletion-pending state.
+- No live provider calls, deployment, or remote push are authorized.
 
 ## 10. Success Criteria
 
