@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, Clock3, CloudUpload, LoaderCircle, RefreshCw, Trash2 } from 'lucide-react';
+import { CheckCircle2, Clock3, LoaderCircle, RefreshCw, Trash2 } from 'lucide-react';
 
 export default function ProviderDocumentStatus({
   document,
@@ -7,12 +7,8 @@ export default function ProviderDocumentStatus({
   status,
   loading,
   action,
-  supported,
-  hasProviderKey,
-  onPrepare,
   onRevoke,
   onRetryDeletion,
-  onAddKey,
 }) {
   if (!document.ai_granted && !['ready', 'delete_pending'].includes(status?.status)) {
     return null;
@@ -30,8 +26,8 @@ export default function ProviderDocumentStatus({
       style: 'text-amber-200',
     },
     failed: {
-      label: status?.error ? 'Provider upload failed' : 'Not authorized',
-      icon: status?.error ? RefreshCw : CloudUpload,
+      label: 'Provider copy unavailable',
+      icon: RefreshCw,
       style: status?.error ? 'text-rose-200' : 'text-ivory/55',
     },
     revoked: {
@@ -42,7 +38,7 @@ export default function ProviderDocumentStatus({
   };
   const current = states[status?.status] || {
     label: loading ? 'Checking provider status…' : 'Not authorized',
-    icon: loading ? LoaderCircle : CloudUpload,
+    icon: LoaderCircle,
     style: 'text-ivory/55',
   };
   const Icon = current.icon;
@@ -81,22 +77,6 @@ export default function ProviderDocumentStatus({
         >
           {action === 'delete' ? 'Retrying…' : 'Retry deletion'}
         </button>
-      )}
-      {document.ai_granted && supported && status?.status !== 'ready' && status?.status !== 'delete_pending' && (
-        <button
-          type="button"
-          onClick={hasProviderKey ? () => onPrepare(document) : onAddKey}
-          disabled={disabled}
-          aria-label={hasProviderKey
-            ? `Prepare ${documentName} for ${providerName}`
-            : `Add a ${providerName} key to prepare ${documentName}`}
-          className="min-h-8 rounded px-2 text-[10px] font-semibold text-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary disabled:opacity-50"
-        >
-          {hasProviderKey ? 'Prepare' : 'Add provider key'}
-        </button>
-      )}
-      {!supported && document.ai_granted && (
-        <span className="text-[10px] text-ivory/45">Choose a visual-capable model to prepare files.</span>
       )}
     </div>
   );

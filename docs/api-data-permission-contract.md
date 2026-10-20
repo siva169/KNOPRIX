@@ -1,7 +1,8 @@
 # Knoprix API, Data, and Permission Contract
 
-**Status:** Target contract with contacts/sharing and a first full-document AI
-backend slice implemented; remaining deviations are listed below.
+**Status:** Target contract with contacts/sharing and extracted-text chat
+implemented; historical provider-copy cleanup remains. Full-document provider
+uploads and visual chat are retired; remaining deviations are listed below.
 **Date:** 2026-10-20
 **Scope:** Extraction, AI, mind-map, contacts, sharing, inbox, and notification
 APIs. This document specifies behavior, not UI layout.
@@ -444,44 +445,40 @@ provider/model or any key-like field is rejected before retrieval.
 If the provider is null, `provider` in the response is null. Retrieved
 context is short-lived and not persisted as conversation history. The current
 `POST /api/chat/ask` and `/api/chat/stream` routes use a separate legacy
-request shape; see the implemented full-document route contract below.
+request shape; see the implemented legacy AI route contract below.
 
-### Implemented legacy full-document provider routes
+### Implemented legacy AI and provider-copy cleanup routes
 
 These routes are implemented under `/api`, not `/api/v1`. They do not replace
-the versioned target contracts above. All require authentication and owned
-documents/projects; shared-document full-document transfer is not supported.
+the versioned target contracts above. Chat requires authenticated, owned
+documents and active AI grants; shared-document AI chat is not supported.
 
-- `POST /api/documents/{documentId}/provider-authorization` accepts
-  `{"providerId":"...","model":"...","confirmed":true}` and the BYOK key in
-  `X-Provider-Key` or `X-API-Key`. The backend requires an active Knoprix
-  document AI grant, validates the provider/model allowlist, converts supported
-  inputs to PDF, and uploads the selected document as ordered 20-page parts
-  limited to 50 MB each. NVIDIA uses its server-managed key and rejects
-  client-supplied keys. This confirmation authorizes provider transfer; it is
-  not a general-purpose provider-consent audit record.
 - `GET /api/projects/{projectId}/provider-documents?providerId=...&model=...`
-  returns selected-document statuses without remote file IDs or credential
-  fingerprints. Statuses include `ready`, `failed`, `revoked`, and
-  `delete_pending`.
+  lists existing provider-copy records without remote file IDs or credential
+  fingerprints. It exists for copies created by the retired upload feature;
+  new chat requests do not create provider copies.
 - `DELETE /api/documents/{documentId}/provider-authorization?providerId=...&model=...`
-  immediately blocks local use and attempts provider-side deletion. Failed
-  deletion remains retryable.
+  immediately blocks local use of a legacy provider copy and attempts
+  provider-side deletion. Failed deletion remains retryable.
 - `POST /api/provider-files/{documentId}/retry-delete` accepts
   `{"providerId":"...","model":"..."}` and retries pending deletion with the
-  provider key in a header (or the NVIDIA server key).
+  provider key in a header. The NVIDIA server key is used only if a legacy
+  record requires cleanup.
 - `POST /api/chat/ask` and `POST /api/chat/stream` accept the normal chat
-  fields plus optional `mode: "retrieval" | "full-document"`. Retrieval stays
-  the default. Full-document mode requires a ready mapping for every selected
-  document, provider, model, and credential fingerprint; it never silently
-  falls back to retrieval. The streaming route emits progress/thought, token,
-  error, and completion events.
-- OpenAI and Anthropic provider files are reused. Gemini files are refreshed
-  after their 48-hour expiry. NVIDIA renders every selected page and processes
-  it in four-page image batches for each question, then synthesizes the
-  results. No live provider call has been used to verify these adapters.
-- Provider file IDs/URIs and keyed credential fingerprints are stored
-  server-side for lifecycle management. Raw provider keys are not stored.
+  fields plus optional `mode: "retrieval" | "document-context"`. Retrieval is
+  the default and keeps its RAG behavior. `document-context` requires
+  `confirmed: true` on every request, an active grant for each document, and
+  complete extracted page text with page numbers from 1 through `page_count`.
+  It accepts at most 10 documents and rejects serialized context over 80,000
+  characters with `413`; it does not silently truncate or run RAG. The selected
+  provider/model and document names must be shown before consent. Only
+  extracted text and the question are sent; original files and visual content
+  are excluded. This mode returns no verified structured citations. The
+  streaming route emits metadata, thought, token, error, and completion events.
+- New provider uploads, provider-file creation, and full-document visual chat
+  are removed. Existing provider file IDs/URIs and keyed credential
+  fingerprints remain stored only so old copies can be revoked and deletion
+  retried; raw provider keys are not stored.
 
 ### `POST /api/v1/documents/{documentId}/summary`
 
@@ -750,7 +747,7 @@ Existing routes such as `/api/projects`, `/api/documents/...`,
 document GET, slides, pages, and stream routes permit read-only access to an
 accepted, active document share; document mutations remain owner-only. See
 the implemented-slice section above for the exact contact/share routes and
-known limits. Upload remains synchronous. The new provider-file routes and
-full-document chat are owner-only; all other v1 contracts above remain design
-references, not shipped endpoints. Do not infer email delivery, project
+known limits. Upload remains synchronous. Provider-copy cleanup routes are
+owner-only; full-document upload/chat routes are not available. All other v1
+contracts above remain design references, not shipped endpoints. Do not infer email delivery, project
 snapshots, or the additional v1 behaviors from this document.

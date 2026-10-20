@@ -13,20 +13,20 @@ async function run() {
 
   for (const bp of breakpoints) {
     const page = await browser.newPage({ viewport: { width: bp.width, height: bp.height } });
-    let providerFileStatus = [];
-    let providerUploadCount = 0;
-    let providerUploadAttempts = 0;
+    let providerFileStatus = [{
+      documentId: 'd1',
+      fileName: 'Quantum Paper',
+      status: 'ready',
+      pageCount: 12,
+    }];
     const chatRequests = [];
-    const providerUploadKeyHeaders = [];
-    const providerAuthorizationRequests = [];
+    const providerDeleteRequests = [];
+    let providerRetryCount = 0;
     
     // Inject mock auth token to bypass login into authenticated workspace
     await page.addInitScript(() => {
       localStorage.setItem('knoprix_access_token', 'mock-qa-token');
       localStorage.setItem('knoprix_refresh_token', 'mock-qa-refresh');
-      localStorage.setItem('knoprix_mr_provider_keys', JSON.stringify({
-        'nvidia-nim': 'unused-browser-key',
-      }));
       if (sessionStorage.getItem('qa-sidebar-state-reset') !== 'true') {
         localStorage.removeItem('knoprix_aiwing_sidebar_collapsed');
         sessionStorage.setItem('qa-sidebar-state-reset', 'true');
@@ -94,6 +94,15 @@ async function run() {
         contentType: 'application/json',
         body: JSON.stringify({
           providers: [
+            {
+              id: 'zai-glm-free',
+              name: 'Z.AI GLM',
+              hasServerKey: true,
+              models: [{
+                id: 'glm-4.5-flash',
+                name: 'GLM 4.5 Flash',
+              }],
+            },
             { id: 'groq-free', name: 'Groq Cloud', models: [{ id: 'openai/gpt-oss-20b', name: 'GPT-OSS 20B' }] },
             {
               id: 'nvidia-nim',
@@ -103,7 +112,6 @@ async function run() {
               models: [{
                 id: 'nvidia/nemotron-3.5-lightning-30b-a3b',
                 name: 'Nemotron 3.5 Lightning',
-                fullDocumentChat: true,
               }],
             },
           ]
@@ -120,33 +128,13 @@ async function run() {
     });
 
     await page.route('**/api/documents/d1/provider-authorization**', async (route) => {
-      if (route.request().method() === 'POST') {
-        providerUploadAttempts += 1;
-        providerUploadKeyHeaders.push(route.request().headers()['x-provider-key'] || null);
-        providerAuthorizationRequests.push(route.request().postDataJSON());
-        if (providerUploadAttempts === 1) {
-          await route.fulfill({
-            status: 503,
-            contentType: 'application/json',
-            body: JSON.stringify({ detail: 'Temporary provider upload failure.' }),
-          });
-          return;
-        }
-        providerUploadCount += 1;
-        providerFileStatus = [{
-          documentId: 'd1',
-          fileName: 'Quantum Paper',
-          status: 'ready',
-          pageCount: 12,
-        }];
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ status: 'ready', pageCount: 12 }),
-        });
-        return;
-      }
-      providerFileStatus = [{ documentId: 'd1', fileName: 'Quantum Paper', status: 'delete_pending' }];
+      providerDeleteRequests.push(route.request().method());
+      providerFileStatus = [{
+        documentId: 'd1',
+        fileName: 'Quantum Paper',
+        status: 'delete_pending',
+        pageCount: 12,
+      }];
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -155,7 +143,13 @@ async function run() {
     });
 
     await page.route('**/api/provider-files/d1/retry-delete', async (route) => {
-      providerFileStatus = [];
+      providerRetryCount += 1;
+      providerFileStatus = [{
+        documentId: 'd1',
+        fileName: 'Quantum Paper',
+        status: 'revoked',
+        pageCount: 12,
+      }];
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -277,80 +271,67 @@ async function run() {
       throw new Error(`[${bp.name}] AI Wing sidebar did not reopen its document controls.`);
     }
 
-    // Full-document consent, provider-file lifecycle, and streaming chat.
-    const fullDocumentMode = page.getByRole('button', { name: 'Full documents' });
-    await fullDocumentMode.waitFor({ state: 'visible' });
-    if (await fullDocumentMode.isDisabled()) {
-      throw new Error(`[${bp.name}] NVIDIA full-document mode should be available.`);
+    // Document text consent, live chat, and cleanup-only provider-copy controls.
+    const questionInput = page.getByRole('textbox', {
+      name: 'Ask a question about your authorized documents',
+    });
+    const documentContextMode = page.getByRole('button', { name: 'Document text' });
+    await documentContextMode.waitFor({ state: 'visible' });
+    if (await documentContextMode.isDisabled()
+      || await page.getByRole('button', { name: 'Full documents' }).count() !== 0) {
+      throw new Error(`[${bp.name}] Text-only document mode should be available and the retired mode absent.`);
     }
-    await fullDocumentMode.click();
-    const questionInput = page.getByPlaceholder('Ask across every AI-enabled original document…');
-    await questionInput.fill('Compare the key claims in the authorized originals.');
+    await documentContextMode.click();
+    await questionInput.fill('Explain the authorized document in detail.');
     await page.getByRole('button', { name: 'Ask AI' }).click();
+    const contextDialog = page.getByRole('dialog', { name: 'Send extracted text?' });
+    await contextDialog.waitFor({ state: 'visible' });
+    if (!(await contextDialog.getByText('Quantum Paper').isVisible())
+      || await contextDialog.getByText('Lecture Notes').count()
+      || !(await contextDialog.getByText(/Z\.AI GLM.*GLM 4\.5 Flash/i).isVisible())
+      || !(await contextDialog.getByText(/original files, images, charts, and visual layout will not be sent/i).isVisible())) {
+      throw new Error(`[${bp.name}] Consent dialog omitted provider, model, authorized scope, or text-only disclosure.`);
+    }
+    await contextDialog.getByRole('button', { name: 'Cancel' }).click();
+    await contextDialog.waitFor({ state: 'hidden' });
+    if (chatRequests.length !== 0
+      || await questionInput.inputValue() !== 'Explain the authorized document in detail.') {
+      throw new Error(`[${bp.name}] Cancelling consent must preserve the question and send no request.`);
+    }
 
-    const transferDialog = page.getByRole('dialog', { name: 'Confirm document transfer' });
-    await transferDialog.waitFor({ state: 'visible' });
-    if (!(await transferDialog.getByText('Quantum Paper').isVisible())) {
-      throw new Error(`[${bp.name}] Transfer dialog did not list the authorized document.`);
-    }
-    if (await transferDialog.getByText('Lecture Notes').count()) {
-      throw new Error(`[${bp.name}] Transfer dialog included a document without AI authorization.`);
-    }
-    if (!(await transferDialog.getByText(/server-managed key/i).isVisible())) {
-      throw new Error(`[${bp.name}] Transfer dialog omitted the server-managed key disclosure.`);
-    }
-    if (!(await transferDialog.getByText(/NVIDIA NIM.*Nemotron 3\.5 Lightning/i).isVisible())) {
-      throw new Error(`[${bp.name}] Transfer dialog did not name the selected provider and model.`);
-    }
-    await transferDialog.getByRole('button', { name: 'Cancel' }).click();
-    await transferDialog.waitFor({ state: 'hidden' });
-    if (providerUploadAttempts !== 0 || chatRequests.length !== 0) {
-      throw new Error(`[${bp.name}] Cancelling transfer must not upload or start a chat.`);
-    }
     await page.getByRole('button', { name: 'Ask AI' }).click();
-    await transferDialog.waitFor({ state: 'visible' });
-    if (await questionInput.inputValue() !== 'Compare the key claims in the authorized originals.') {
-      throw new Error(`[${bp.name}] Cancelling consent did not preserve the pending question.`);
-    }
-    await transferDialog.getByRole('button', { name: 'Confirm and upload' }).click();
-    await transferDialog.getByRole('alert').getByText(/Temporary provider upload failure/i)
-      .waitFor({ state: 'visible' });
-    await transferDialog.getByRole('button', { name: 'Confirm and upload' }).click();
+    await contextDialog.waitFor({ state: 'visible' });
+    await contextDialog.getByRole('button', { name: 'Confirm and ask AI' }).click();
     await page.getByText('QA response 1', { exact: true }).waitFor({ state: 'visible' });
     if (chatRequests.length !== 1
-      || chatRequests[0].mode !== 'full-document'
-      || chatRequests[0].providerId !== 'nvidia-nim'
-      || chatRequests[0].model !== 'nvidia/nemotron-3.5-lightning-30b-a3b'
-      || chatRequests[0].question !== 'Compare the key claims in the authorized originals.'
-      || providerUploadCount !== 1
-      || providerUploadAttempts !== 2
-      || providerAuthorizationRequests.some((request) =>
-        request.providerId !== 'nvidia-nim'
-        || request.model !== 'nvidia/nemotron-3.5-lightning-30b-a3b'
-        || request.confirmed !== true)
-      || providerUploadKeyHeaders.some(Boolean)) {
-      throw new Error(`[${bp.name}] Full-document upload/chat request did not preserve the question and mode.`);
+      || chatRequests[0].mode !== 'document-context'
+      || chatRequests[0].confirmed !== true
+      || chatRequests[0].providerId !== 'zai-glm-free'
+      || chatRequests[0].model !== 'glm-4.5-flash'
+      || chatRequests[0].documentIds.join(',') !== 'd1'
+      || chatRequests[0].question !== 'Explain the authorized document in detail.') {
+      throw new Error(`[${bp.name}] Confirmed extracted-text request did not preserve its provider, scope, mode, and question.`);
     }
 
     await page.getByRole('button', { name: 'Revoke provider copy for Quantum Paper' }).click();
     const retryInline = page.getByRole('button', { name: 'Retry provider deletion for Quantum Paper' });
     await retryInline.waitFor({ state: 'visible' });
-    await questionInput.fill('Check the follow-up after revoking the provider copy.');
-    await page.getByRole('button', { name: 'Ask AI' }).click();
-    await transferDialog.waitFor({ state: 'visible' });
-    await transferDialog.getByRole('button', { name: 'Retry deletion' }).click();
-    await transferDialog.getByText('Upload required').waitFor({ state: 'visible' });
-    await transferDialog.getByRole('button', { name: 'Confirm and upload' }).click();
-    await page.getByText('QA response 2', { exact: true }).waitFor({ state: 'visible' });
-    if (chatRequests.length !== 2 || providerUploadCount !== 2
-      || providerUploadAttempts !== 3
-      || providerUploadKeyHeaders.some(Boolean)
-      || chatRequests[1].mode !== 'full-document'
-      || chatRequests[1].providerId !== 'nvidia-nim'
-      || chatRequests[1].model !== 'nvidia/nemotron-3.5-lightning-30b-a3b'
-      || chatRequests[1].question !== 'Check the follow-up after revoking the provider copy.') {
-      throw new Error(`[${bp.name}] Retry-delete and re-upload flow did not complete.`);
+    await retryInline.click();
+    await page.getByText(/Provider copy revoked/i).waitFor({ state: 'visible' });
+    if (providerDeleteRequests.join(',') !== 'DELETE' || providerRetryCount !== 1) {
+      throw new Error(`[${bp.name}] Provider-copy cleanup did not use the retained revoke route.`);
     }
+
+    await page.getByRole('button', { name: 'Retrieval', exact: true }).click();
+    await questionInput.fill('Check retrieved evidence.');
+    await page.getByRole('button', { name: 'Ask AI' }).click();
+    await page.getByText('QA response 2', { exact: true }).waitFor({ state: 'visible' });
+    if (chatRequests.length !== 2
+      || chatRequests[1].mode !== 'retrieval'
+      || Object.hasOwn(chatRequests[1], 'confirmed')) {
+      throw new Error(`[${bp.name}] Existing Retrieval chat behavior changed.`);
+    }
+
     const dimensions = await page.evaluate(() => ({
       width: document.documentElement.clientWidth,
       scrollWidth: document.documentElement.scrollWidth,
@@ -358,7 +339,7 @@ async function run() {
     if (dimensions.scrollWidth > dimensions.width + 1) {
       throw new Error(`[${bp.name}] AI Wing caused horizontal page overflow: ${JSON.stringify(dimensions)}.`);
     }
-    console.log(`[PASS] ${bp.name} (${bp.width}px): consent, upload retry, full-document SSE, revoke, deletion retry, and no horizontal overflow`);
+    console.log(`[PASS] ${bp.name} (${bp.width}px): text consent/cancel, streaming, cleanup-only revoke/retry, Retrieval, and no horizontal overflow`);
 
     // 4. Test Study Artifacts tab
     await studyArtifactsTab.click();

@@ -1,8 +1,9 @@
 # PRD: Knoprix Final Project
 
 **Type:** College project / document knowledge platform  
-**Status:** Product direction approved; full-document backend and provider-
-consent UI slices implemented; live provider compatibility remains unverified
+**Status:** Product direction approved; Retrieval and consented extracted-text
+chat implemented; provider-file upload and full-document chat are retired.
+Live provider compatibility remains unverified
 **Source baseline:** Current Knoprix mid-review version  
 **Project folder:** `knoprix-final-project/`
 
@@ -27,10 +28,10 @@ your documents.
 - Improve the interface as a deliberate, mobile-first reading workspace.
 - Keep document search explainable through the existing Trie and inverted index.
 - Keep bookmark ordering explainable through Hash Table + Doubly Linked List.
-- Support user-controlled cloud AI provider connections with explicit,
-  provider-specific document-transfer consent.
-- Let a user explicitly authorize original selected documents for a named
-  provider/model, including visual content such as diagrams, charts, and images.
+- Support user-controlled AI provider connections with explicit,
+  provider/model-specific consent before each extracted-text chat request.
+- Send extracted page text only; do not upload original files or send images,
+  charts, diagrams, or visual layout in document chat.
 - Support document chat first, then summaries, flashcards, quizzes, and
   opt-in web research as separate slices.
 - Show source citations for AI answers whenever document evidence is used.
@@ -113,40 +114,32 @@ your documents.
   page/text anchor without loading every document's highlights at startup.
 - Any backend behavior change is proposed and approved separately.
 
-### AI integration — backend and consent UI slices implemented; live verification pending
+### AI integration — Retrieval and extracted-text chat implemented
 
-- Retrieval chat remains the default. Full-document mode uses the explicitly
-  authorized original selected documents and does not fall back to RAG.
-- The backend requires both an active Knoprix AI grant and a separate,
-  per-document confirmation naming the external provider and model.
-- Provider uploads are reusable where supported, split into ordered
-  20-page/50-MB PDF parts, and tracked per provider/model/key fingerprint.
-- NVIDIA analyzes every rendered page in four-page visual batches for each
-  question and synthesizes the batch results.
-- Revocation blocks local use immediately; a failed remote deletion remains
-  visible and retryable.
-- AI Wing offers a Retrieval / Full documents segmented control, a batch
-  provider/model transfer confirmation, inline per-document status and
-  revoke/retry actions, plus upload and analysis progress. UI decisions for
-  this slice are recorded in `UI-UX.md`.
+- Retrieval remains the default and retains its existing RAG path and structured
+  citations.
+- Document text mode sends extracted text for all currently AI-authorized
+  documents in the active project (maximum 10) and does not run RAG. It requires
+  a separate confirmation for every request, naming the provider, model, and
+  documents. Cancel sends nothing and preserves the question.
+- The backend checks ownership, active AI grants, complete contiguous page
+  coverage, the provider/model allowlist, and an 80,000-character context cap.
+  It rejects incomplete text rather than silently truncating it.
+- Document text mode sends no original files, images, charts, diagrams, or
+  visual layout. It asks the model to cite filenames/pages when available, but
+  those are not returned as verified structured citations.
+- New provider-file uploads and full-document visual chat are retired. Existing
+  provider-copy records remain visible for cleanup; revoke and retry-delete
+  actions are retained for remote copies created by the earlier feature.
 - Provider adapters are tested with mocked responses only; no live provider
-  request has been made. Gemini's `generateContent` file-reference field names
-  match Google's public API discovery schema; Google's current PDF guide
-  demonstrates the newer Interactions API, so end-to-end model/account
-  compatibility must still be verified before production use.
-- A user can add a supported provider key; it is sent to Knoprix backend
-  request handlers in headers and is never persisted server-side.
-- The provider and model are visible before a request is sent.
-- The user selects the document scope explicitly and grants AI access for
-  those documents.
-- Third-party processing requires a separate consent that names the provider
-  and model before document content is sent.
-- Retrieval responses include structured source citations. Full-document
-  responses are prompted to cite source filenames and pages when available;
-  those provider-generated references remain unverified and are not yet
-  returned as structured citations.
+  request has been made. End-to-end provider/account compatibility remains
+  unverified.
+- BYOK keys remain browser-local and are sent only in request headers to
+  Knoprix; raw keys are never persisted server-side. NVIDIA uses a
+  server-managed key.
+- Provider/model and document scope are visible before each text-context send.
 - Provider failure, invalid key, rate limit, and unsupported model errors are
-  visible and actionable.
+  surfaced to the user.
 
 ### Sharing — first implementation slice
 
@@ -172,11 +165,11 @@ your documents.
 
 The existing API remains the baseline. The backend exposes
 `GET /api/providers/allowlist`, `POST /api/chat/ask`, `POST /api/chat/stream`,
-and provider-document authorization/status/revoke/retry routes. Chat supports
-both retrieval (default) and full-document mode; the latter requires previously
-authorized provider files. These are legacy `/api` routes. The `/api/v1`
-contracts below remain future work and must enforce ownership/share access and
-AI grants before returning content:
+and provider-document status/revoke/retry routes for legacy provider copies.
+Chat supports Retrieval (default) and consented `document-context` mode; the
+retired upload and full-document chat routes are not available. These are
+legacy `/api` routes. The `/api/v1` contracts below remain future work and must
+enforce ownership/share access and AI grants before returning content:
 
 ```text
 GET    /api/health                         (legacy)
@@ -194,7 +187,8 @@ POST   /api/v1/shares
 No provider-key endpoint is planned. The complete request/response, data,
 authorization, idempotency, pagination, expiry, deletion, and verification
 rules are in `docs/api-data-permission-contract.md`, which distinguishes the
-implemented provider-file routes from the future `/api/v1` target.
+implemented legacy chat and provider-copy cleanup routes from the future
+`/api/v1` target.
 
 ## 6. UI/UX Contract
 
@@ -259,7 +253,11 @@ Required responsive checks: 390px, 425px, 768px, and 1024px.
 - Deployment direction: Render + Vercel + Supabase.
 - Initial scale planning assumption: 100–1,000 users.
 
-## 9a. Full-document AI decisions recorded 2026-10-20
+## 9a. Historical full-document AI decisions recorded 2026-10-20
+
+These decisions describe the earlier implementation and were superseded by
+the extracted-text-only chat direction below. Cleanup routes remain for old
+provider copies; upload and full-document chat are retired.
 
 - Require both existing Knoprix AI access and separate confirmation naming
   the external provider/model before transferring a document.
@@ -278,6 +276,17 @@ Required responsive checks: 390px, 425px, 768px, and 1024px.
 - No separate per-chat document checkbox is added in this slice: the current
   chat scope is all documents with an active Knoprix AI grant in the project.
 - No live provider calls, deployment, or remote push are authorized.
+
+## 9b. Current AI Wing document-text behavior
+
+- Retrieval remains the default and is not replaced.
+- Document text mode sends extracted text only after a separate confirmation
+  naming the provider, model, and authorized documents on every request.
+- The backend rejects missing/noncontiguous page text, contexts over 80,000
+  serialized characters, ungranted documents, and unallowlisted models.
+- Original files and visual content are not sent. Existing remote provider
+  copies can still be revoked or have deletion retried; no new provider copies
+  are created by chat.
 
 ## 10. Success Criteria
 

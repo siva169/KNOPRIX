@@ -1,14 +1,14 @@
 # BYOK Provider Security Contract — Knoprix Final Project
 
-**Status:** Approved policy. Chat and study-artifact routes enforce persisted
-per-document grants. The backend full-document transfer routes are implemented;
-provider-consent UI and live-provider verification remain pending.
+**Status:** Approved policy. Retrieval and extracted-text chat enforce persisted
+per-document grants; per-request provider/model consent is implemented.
+Full-document uploads are retired. Legacy provider-copy cleanup remains.
 **Decisions (2026-10-04; NVIDIA relay approved 2026-10-17):** user-supplied
 trial/free-tier providers plus one deployment-managed NVIDIA key
 · selected documents only · Knoprix backend processing and third-party AI
 transfer are separate consent boundaries.
-**Scope:** This contract covers document chat, full-document transfers, and AI
-study tools. The frontend stores user-supplied provider keys in browser
+**Scope:** This contract covers document chat, legacy provider-copy cleanup,
+and AI study tools. The frontend stores user-supplied provider keys in browser
 localStorage and sends them in request headers to Knoprix for provider
 operations. Keys are used only in request memory. NVIDIA calls use the
 server-managed key. Do not treat this backend slice as proof that all consent
@@ -47,7 +47,7 @@ controls are implemented in the UI.
 | Provider keys | User BYOK keys; shared NVIDIA API key | BYOK keys are browser-local and sent in request headers to backend-routed provider operations; only volatile request memory is allowed. NVIDIA key MUST be configured only in the deployment secret environment. No raw key may be logged, returned, or persisted. |
 | Knoprix document processing | Uploaded source files, extracted text, indexes | Stored/processed by Knoprix-controlled backend and storage after upload; disclose this at upload. Derived records must be deleted with their source, subject to the documented backup purge window. |
 | AI access grant | User, document, purpose, state, expiry/revocation | MUST be checked for every AI content read. A frontend checkbox alone is not authorization. |
-| Third-party AI content | Selected PDF files/pages, question, answer | Requires a separate provider/model-specific opt-in and active document grant. MUST contain selected, authorized documents only; MUST NEVER include whole-project or unselected docs. |
+| Third-party AI content | Extracted text for granted documents, question, answer | Document-text chat requires a separate provider/model confirmation on every request and an active document grant. MUST contain authorized documents only; MUST NEVER include original files, visual content, whole-project or unselected docs. |
 | Chat history | Past Q/A pairs | MUST remain browser-local in v1. CAN export/delete by user action; MUST NOT sync to Knoprix servers under the approved v1 policy. |
 | Diagnostics | Error codes, latency, model name | CAN go to backend logs. MUST NEVER include keys or doc text. |
 
@@ -57,47 +57,42 @@ controls are implemented in the UI.
    parsing/indexing by Knoprix services, which must be disclosed. Any AI
    operation must separately have an active per-document grant. The backend
    must authorize content reads before returning chunks.
-2. **Browser → Knoprix → Provider (BYOK):** for backend-routed chat and
-   full-document file operations, the browser sends the selected provider key
-   in a request header. Knoprix uses it only in volatile request memory and
-   MUST NOT log or persist the raw key. The UI MUST describe that path and ask
-   for separate consent naming the provider and model before document content
-   is uploaded or sent.
+2. **Browser → Knoprix → Provider (BYOK):** for backend-routed chat, the
+   browser sends the selected provider key in a request header. Knoprix uses
+   it only in volatile request memory and MUST NOT log or persist the raw key.
+   Before each document-text request, the UI MUST show the provider, model,
+   authorized document names, and ask for confirmation. Only extracted text
+   and the question are sent; original files and visual content are excluded.
+   The old provider-copy cleanup routes may use a key to delete a previously
+   uploaded copy.
 3. **Browser → Backend chat metadata:** backend may validate provider/model,
    authorization, scope, and retrieve citation metadata, but MUST reject
    key-like request fields (fail closed: `400 + "keys stay in browser"`).
 4. **Backend → NVIDIA:** the backend may use `NVIDIA_API_KEY` from its private
-   environment. Full-document chat renders all selected pages and sends visual
-   batches of four pages, then synthesizes the answer from the page evidence.
-   The key MUST never be returned or logged. No client-supplied NVIDIA key may
-   be accepted.
+   environment for chat. Document chat sends only extracted text, not rendered
+   pages or image batches. The key MUST never be returned or logged. No
+   client-supplied NVIDIA key may be accepted.
 
-## 4a. Full-document transfer and chat
+## 4a. Extracted-text chat and legacy provider-copy cleanup
 
-- `POST /api/documents/{documentId}/provider-authorization` requires
-  `{"providerId":"...","model":"...","confirmed":true}`, an active Knoprix AI
-  grant, an allowlisted visual-capable model, ownership, and a provider key
-  (except NVIDIA, which uses the server key). A confirmation is not inferred
-  from the internal AI grant.
-- PDFs are sent as ordered 20-page PDF parts, each limited to 50 MB.
-  PPTX/DOCX/TXT/MD/images/SVG are converted to PDF first. Conversion preserves
-  rendered content but cannot promise perfect fidelity for every source file.
-- OpenAI and Anthropic file references are reused. Gemini files are refreshed
-  automatically after their 48-hour expiry. NVIDIA has no reusable remote
-  upload: each question renders and sends every selected page in four-page
-  image batches and synthesizes the result across batches.
-- `/api/chat/ask` and `/api/chat/stream` accept optional `mode`. The default
-  remains `retrieval`; `full-document` requires a ready provider/model/key-
-  scoped file mapping for every selected document and never falls back to RAG.
-- `GET /api/projects/{projectId}/provider-documents` returns `ready`, `failed`,
-  `revoked`, and `delete_pending` statuses without exposing remote IDs or
-  credential fingerprints. Revoke blocks local use
-  immediately; failed provider deletion is retained as `delete_pending` for
-  retry with the same provider key. Gemini expiry/re-upload and provider-side
-  retention remain subject to the provider's own policy.
-- Raw keys are not stored. A keyed HMAC fingerprint scopes reusable provider
-  file references to the provider account/key; provider file IDs and URIs are
-  stored server-side and never returned to clients.
+- `/api/chat/ask` and `/api/chat/stream` default to `mode: "retrieval"`.
+  `mode: "document-context"` requires `confirmed: true` on every request,
+  active grants, and owned documents. It sends extracted text and the question
+  only; it does not call RAG, upload original files, or include visual content.
+- The backend requires complete page text numbered consecutively from 1 to
+  `page_count`, accepts at most 10 documents, and rejects serialized context
+  above 80,000 characters instead of truncating it.
+- The UI shows the provider, model, and all active-grant documents in a
+  blocking confirmation each time. Cancel sends no request. This consent is
+  separate from the persistent Knoprix document grant.
+- New provider-file uploads and full-document visual chat are removed.
+  Existing provider file mappings remain available through
+  `GET /api/projects/{projectId}/provider-documents` for status and cleanup.
+  `DELETE /api/documents/{documentId}/provider-authorization` blocks local use
+  and attempts provider deletion; `POST /api/provider-files/{documentId}/retry-delete`
+  retries pending deletion. Neither route creates a provider copy.
+- Raw keys are not stored. Existing keyed fingerprints and remote file IDs
+  remain only to manage prior uploads and are never returned to clients.
 
 ## 5. Auth / session policy
 
@@ -106,8 +101,8 @@ controls are implemented in the UI.
   uses one shared deployment account and is not individually attributable.
 - `localStorage` is convenience storage, not a secure vault. Browser extensions
   or anyone with access to the browser profile may read it; state this clearly.
-  BYOK keys are sent to Knoprix request handlers for backend-routed provider
-  file operations and streaming, not directly from the browser to providers.
+  BYOK keys are sent to Knoprix request handlers for backend-routed streaming
+  and cleanup of old provider files, not directly from the browser to providers.
 
 ## 6. Allowlist policy (FREE only)
 
@@ -155,9 +150,9 @@ controls are implemented in the UI.
   derived content.
 - Backups: encrypted backups may retain deleted data for up to 30 days before
   purge; this window must be disclosed and purge behavior tested.
-- Backend: retains no raw provider key material. It stores a keyed credential
-  fingerprint plus remote file identifiers for provider lifecycle management;
-  provider file deletion is available through revoke/retry routes.
+- Backend: retains no raw provider key material. It retains keyed fingerprints
+  and remote file identifiers only for legacy provider copies; revoke/retry
+  deletion remains available and new chat requests create no provider files.
 
 ## 9. Provider errors (contract)
 
@@ -173,9 +168,10 @@ controls are implemented in the UI.
 > Your provider key is stored in this browser and sent in a request header to
 > Knoprix when a provider operation is made. Knoprix uses it only in memory and
 > does not store or log the raw key. Selected documents are sent to the named
-> provider only after separate provider/model consent and an active Knoprix
-> document grant. Providers apply their own data policies (linked below).
-> Clear browser-stored keys anytime in Settings.
+> provider only after a separate confirmation for each request and an active
+> Knoprix document grant. Only extracted text and your question are sent; the
+> original files and visual content are not. Providers apply their own data
+> policies (linked below). Clear browser-stored keys anytime in Settings.
 
 ## 11. Incident mini-runbook
 
@@ -191,13 +187,13 @@ controls are implemented in the UI.
 - [ ] No key string in backend logs (log-scan test passes).
 - [ ] Backend rejects key-like fields with 400.
 - [ ] Non-allowlisted model blocked client AND server side.
-- [ ] Unselected documents are never uploaded or sent to a provider.
+- [ ] Documents without an active AI grant are never sent to a provider.
 - [ ] Privacy notice shown before first key entry.
 - [ ] "Clear keys" wipes all stored key material (verified in browser).
 - [ ] Free-tier candidates re-verified at build time (each link checked).
 - [ ] Per-document AI grants are enforced by the backend on every content
   retrieval.
 - [ ] Third-party provider consent is separate from Knoprix backend processing
-  and is provider/model-specific.
+  and names the provider/model on every extracted-text request.
 - [ ] User deletion removes live source and derived data; backup purge is
   completed within the documented 30-day window.

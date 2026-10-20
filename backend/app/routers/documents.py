@@ -24,7 +24,7 @@ from ..database import get_db
 from ..security import get_current_user, get_owned_document, get_owned_project
 from .social import has_active_document_share, revoke_resource_shares
 from ..services import storage
-from ..services import document_ai
+from ..services import provider_file_cleanup
 from ..services.document_io import (
     materialize_document,
     object_key,
@@ -660,10 +660,6 @@ def _provider_document_model(provider_id: str, model_id: str) -> tuple[dict, dic
     )
     if model is None:
         raise HTTPException(400, f"Model '{model_id}' is not allowlisted for '{provider_id}'.")
-    if not model.get("fullDocumentChat"):
-        raise HTTPException(
-            400, "This provider model does not support full-document visual chat."
-        )
     return provider, model
 
 
@@ -677,55 +673,6 @@ def _provider_key(
     return resolve_api_key(
         provider_id, None if provider_id == "nvidia-nim" else supplied_key
     )
-
-
-@router.post("/documents/{document_id}/provider-authorization")
-def authorize_provider_document(
-    document_id: str,
-    body: dict,
-    user=Depends(get_current_user),
-    db=Depends(get_db),
-    x_provider_key: str | None = Header(None, alias="X-Provider-Key"),
-    x_api_key: str | None = Header(None, alias="X-API-Key"),
-):
-    """Upload one explicitly confirmed document to the selected AI provider."""
-    provider_id = body.get("providerId")
-    model_id = body.get("model")
-    if body.get("confirmed") is not True:
-        raise HTTPException(400, "Confirm provider-specific document transfer first.")
-    if not isinstance(provider_id, str) or not isinstance(model_id, str):
-        raise HTTPException(400, "Provider and model are required.")
-    _provider_document_model(provider_id, model_id)
-
-    supplied_key = x_provider_key if x_provider_key else x_api_key
-    api_key = _provider_key(provider_id, supplied_key)
-    if not api_key:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "Add a valid provider key before authorizing this document.",
-        )
-    document = get_owned_document(db, user["id"], document_id)
-    grant = db.execute(
-        """SELECT id FROM ai_document_grants
-           WHERE user_id = ? AND document_id = ? AND purpose = 'all'
-             AND revoked_at IS NULL""",
-        (user["id"], document_id),
-    ).fetchone()
-    if grant is None:
-        raise HTTPException(403, "Grant Knoprix AI access before provider transfer.")
-
-    try:
-        result = document_ai.authorize_document(
-            db, user["id"], document, provider_id, model_id, api_key
-        )
-    except document_ai.ProviderFileError as exc:
-        raise HTTPException(exc.status_code, str(exc)) from exc
-    return {
-        "documentId": document_id,
-        "providerId": provider_id,
-        "model": model_id,
-        **result,
-    }
 
 
 @router.delete("/documents/{document_id}/provider-authorization")
@@ -743,7 +690,7 @@ def revoke_provider_document(
     api_key = _provider_key(
         providerId, x_provider_key if x_provider_key else x_api_key
     )
-    result = document_ai.revoke_document(
+    result = provider_file_cleanup.revoke_document(
         db, user["id"], document_id, providerId, model, api_key
     )
     return {
@@ -771,7 +718,7 @@ def retry_provider_document_deletion(
     api_key = _provider_key(
         provider_id, x_provider_key if x_provider_key else x_api_key
     )
-    result = document_ai.retry_pending_deletions(
+    result = provider_file_cleanup.retry_pending_deletions(
         db, user["id"], provider_id, api_key, document_id, model_id
     )
     return {
@@ -797,7 +744,7 @@ def list_provider_documents(
     api_key = _provider_key(
         providerId, x_provider_key if x_provider_key else x_api_key
     )
-    return document_ai.list_provider_documents(
+    return provider_file_cleanup.list_provider_documents(
         db, user["id"], project_id, providerId, model, api_key
     )
 

@@ -263,20 +263,23 @@ No visual choice is treated as approved until it is selected here.
 - Decisions: allowlist presentation, capability labels, speed/cost indicators.
 - Reference URLs: _add here_
 
-### F5. `ProviderPrivacyNotice` — explains external document processing
-- Used for: before the first document is sent to a cloud provider.
-- Full-document decision: one blocking batch confirmation lists all currently
-  AI-enabled documents and names the provider/model. It discloses the key
-  handling and provider-retention policy, and warns about possible charges or
-  quota use and latency without inventing unavailable price estimates.
+### F5. `DocumentContextConsentDialog` — explains external document processing
+- Used for: before each extracted-text request is sent to a provider.
+- Approved interaction: a blocking confirmation names the provider/model and
+  lists all currently AI-enabled documents. It states that only extracted text
+  and the question are sent; original files and visual content are excluded.
+  It discloses key handling and warns about possible charges/quota without
+  inventing unavailable price estimates. Cancel sends nothing and preserves
+  the pending question.
 - Reference URLs: _add here_
 
 ### F6. `DocumentScopePicker` — selects exactly which documents AI may use
 - Used for: every AI conversation or explicit session scope.
 - Decisions: one document versus multiple, project-wide option, remembered
   scope, clear selection.
-- Current full-document scope: all project documents with an active Knoprix AI
-  grant; this slice does not add a second per-chat document-selection control.
+- Current chat scope: all project documents with an active Knoprix AI grant;
+  document-text mode supports up to 10 documents and does not add a second
+  per-chat document-selection control.
 - Reference URLs: _add here_
 
 ### F7. `DocumentChatWorkspace` — conversation about selected documents
@@ -387,10 +390,11 @@ Boss choice: [selected option / changes requested]
 - Product mode names: **Reading Desk** and **AI Wing** — approved 2026-10-04.
 - Global layouts, navigation, and interactions outside the approved surfaces:
   pending boss choices.
-- Full-document AI Wing slice: approved 2026-10-20 — Retrieval / Full
-  documents segmented control, one batch transfer confirmation, and inline
-  per-document status/actions. The full-document scope is all AI-enabled
-  documents in the active project.
+- AI Wing document-text slice: approved — Retrieval / Document text controls,
+  per-request confirmation naming the provider/model and active-grant
+  documents, and extracted-text-only disclosure. Existing provider-copy
+  status, revoke, and retry-delete controls remain for historical remote files;
+  no upload or prepare action is available.
 - First surface: `DashboardOverview` — selected for the first UI/UX review
 - Reference URLs: pending boss input
 - Global foundation: Not selected

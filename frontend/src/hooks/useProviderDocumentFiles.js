@@ -69,36 +69,6 @@ export default function useProviderDocumentFiles({
     }
   };
 
-  const authorizeDocument = (document) => runAction(
-    document.id,
-    'upload',
-    async () => {
-      const headers = providerId !== 'nvidia-nim' && apiKey
-        ? { 'X-Provider-Key': apiKey }
-        : undefined;
-      try {
-        const { data } = await api.post(
-          `/documents/${document.id}/provider-authorization`,
-          { providerId, model, confirmed: true },
-          { headers },
-        );
-        setStatusByDocumentId((current) => ({
-          ...current,
-          [document.id]: {
-            ...current[document.id],
-            documentId: document.id,
-            fileName: document.title || document.filename || document.file_name,
-            pageCount: data.pageCount,
-            status: data.status,
-          },
-        }));
-        return data;
-      } finally {
-        setRefreshVersion((version) => version + 1);
-      }
-    },
-  );
-
   const revokeDocument = (document) => runAction(
     document.id,
     'revoke',
@@ -162,7 +132,6 @@ export default function useProviderDocumentFiles({
     loading,
     loadError,
     refresh: () => setRefreshVersion((version) => version + 1),
-    authorizeDocument,
     revokeDocument,
     retryDeletion,
   };

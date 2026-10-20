@@ -1,5 +1,19 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-20 — Replace full-document AI Wing with consented text chat
+
+- Kept Retrieval/RAG as the default and added extracted-text chat with a
+  provider/model/document confirmation before each request; backend rejects
+  incomplete page coverage and oversized context.
+- Retired new provider-file uploads and visual full-document chat while
+  preserving status, revoke, and retry-delete for copies created earlier.
+- Updated the current product, API, security, UI/UX, and upload-support
+  contracts. The earlier full-document decision remains marked historical.
+- Verification: backend QA passes (31 tests); Python compilation and browser
+  QA syntax checks pass; frontend production build passes with the existing
+  large-chunk advisory; mocked browser QA passes at 390/425/768/1024px;
+  `git diff --check` passes. No live provider calls were made.
+
 ## 2026-10-20 — Complete full-document provider-consent UI
 
 - Wired the approved Retrieval / Full documents control to a blocking batch
