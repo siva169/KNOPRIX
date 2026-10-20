@@ -757,6 +757,8 @@ def list_provider_documents(
         status = (
             "delete_pending"
             if "delete_pending" in statuses
+            else "revoked"
+            if statuses == {"revoked"}
             else "ready"
             if _complete_page_coverage(parts)
             else "failed"

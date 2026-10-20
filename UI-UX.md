@@ -265,14 +265,18 @@ No visual choice is treated as approved until it is selected here.
 
 ### F5. `ProviderPrivacyNotice` — explains external document processing
 - Used for: before the first document is sent to a cloud provider.
-- Decisions: blocking confirmation or inline notice, provider/model details,
-  link to privacy policy.
+- Full-document decision: one blocking batch confirmation lists all currently
+  AI-enabled documents and names the provider/model. It discloses the key
+  handling and provider-retention policy, and warns about possible charges or
+  quota use and latency without inventing unavailable price estimates.
 - Reference URLs: _add here_
 
 ### F6. `DocumentScopePicker` — selects exactly which documents AI may use
 - Used for: every AI conversation or explicit session scope.
 - Decisions: one document versus multiple, project-wide option, remembered
   scope, clear selection.
+- Current full-document scope: all project documents with an active Knoprix AI
+  grant; this slice does not add a second per-chat document-selection control.
 - Reference URLs: _add here_
 
 ### F7. `DocumentChatWorkspace` — conversation about selected documents
@@ -381,8 +385,12 @@ Boss choice: [selected option / changes requested]
 ## Approval status
 
 - Product mode names: **Reading Desk** and **AI Wing** — approved 2026-10-04.
-- Mode layouts, switch control, navigation, interactions, and responsive
-  behavior: pending boss choices.
+- Global layouts, navigation, and interactions outside the approved surfaces:
+  pending boss choices.
+- Full-document AI Wing slice: approved 2026-10-20 — Retrieval / Full
+  documents segmented control, one batch transfer confirmation, and inline
+  per-document status/actions. The full-document scope is all AI-enabled
+  documents in the active project.
 - First surface: `DashboardOverview` — selected for the first UI/UX review
 - Reference URLs: pending boss input
 - Global foundation: Not selected

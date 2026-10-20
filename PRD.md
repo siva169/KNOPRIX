@@ -1,8 +1,8 @@
 # PRD: Knoprix Final Project
 
 **Type:** College project / document knowledge platform  
-**Status:** Product direction approved; full-document backend slice in progress;
-provider-consent UI and detailed UI/UX decisions remain pending
+**Status:** Product direction approved; full-document backend and provider-
+consent UI slices implemented; live provider compatibility remains unverified
 **Source baseline:** Current Knoprix mid-review version  
 **Project folder:** `knoprix-final-project/`
 
@@ -113,7 +113,7 @@ your documents.
   page/text anchor without loading every document's highlights at startup.
 - Any backend behavior change is proposed and approved separately.
 
-### AI integration — backend slice implemented; UI and live verification pending
+### AI integration — backend and consent UI slices implemented; live verification pending
 
 - Retrieval chat remains the default. Full-document mode uses the explicitly
   authorized original selected documents and does not fall back to RAG.
@@ -125,8 +125,10 @@ your documents.
   question and synthesizes the batch results.
 - Revocation blocks local use immediately; a failed remote deletion remains
   visible and retryable.
-- The frontend consent/status/progress/revoke/retry experience remains to be
-  implemented after the pending UI/UX decisions.
+- AI Wing offers a Retrieval / Full documents segmented control, a batch
+  provider/model transfer confirmation, inline per-document status and
+  revoke/retry actions, plus upload and analysis progress. UI decisions for
+  this slice are recorded in `UI-UX.md`.
 - Provider adapters are tested with mocked responses only; no live provider
   request has been made. Gemini's `generateContent` file-reference field names
   match Google's public API discovery schema; Google's current PDF guide
@@ -268,6 +270,13 @@ Required responsive checks: 390px, 425px, 768px, and 1024px.
   with progress and cost/latency notices in the UI.
 - Keep provider-specific statuses, immediate local revocation, and a
   retryable remote-deletion-pending state.
+- AI Wing uses a Retrieval / Full documents segmented control. Before a
+  transfer, one confirmation lists every currently AI-enabled document and
+  names the provider/model; per-document status and revoke/retry actions remain
+  inline. If reliable pricing is unavailable, disclose possible provider
+  charges/quota use and latency without inventing a price.
+- No separate per-chat document checkbox is added in this slice: the current
+  chat scope is all documents with an active Knoprix AI grant in the project.
 - No live provider calls, deployment, or remote push are authorized.
 
 ## 10. Success Criteria

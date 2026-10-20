@@ -462,7 +462,8 @@ documents/projects; shared-document full-document transfer is not supported.
   not a general-purpose provider-consent audit record.
 - `GET /api/projects/{projectId}/provider-documents?providerId=...&model=...`
   returns selected-document statuses without remote file IDs or credential
-  fingerprints. Statuses include `ready`, `failed`, and `delete_pending`.
+  fingerprints. Statuses include `ready`, `failed`, `revoked`, and
+  `delete_pending`.
 - `DELETE /api/documents/{documentId}/provider-authorization?providerId=...&model=...`
   immediately blocks local use and attempts provider-side deletion. Failed
   deletion remains retryable.

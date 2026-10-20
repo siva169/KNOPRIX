@@ -9,6 +9,9 @@ import {
 import { useApp } from '../context/AppContext.jsx';
 import api, { getAccessToken } from '../api';
 import KnowledgeMap from './KnowledgeMap.jsx';
+import ProviderDocumentStatus from './ProviderDocumentStatus.jsx';
+import ProviderTransferDialog from './ProviderTransferDialog.jsx';
+import useProviderDocumentFiles from '../hooks/useProviderDocumentFiles.js';
 import { isProviderAvailable } from '../services/providerAvailability.js';
 
 const KEYS_KEY = 'knoprix_mr_provider_keys';
@@ -46,8 +49,34 @@ export default function AIWingView({ onNavigateToDocument }) {
   const [keys, setKeys] = useState(loadKeys);
   const [keyDraft, setKeyDraft] = useState('');
   const [showKeyInput, setShowKeyInput] = useState(false);
+  const selectedProvider = providers.find((provider) => provider.id === providerId);
+  const selectedModel = selectedProvider?.models?.find((item) => item.id === model);
+  const hasProviderKey = providerId === 'nvidia-nim'
+    || Boolean(keys[providerId])
+    || Boolean(selectedProvider?.hasServerKey);
+  const providerKeyNotice = providerId !== 'nvidia-nim' && keys[providerId]
+    ? 'Your BYOK key stays saved in this browser, is sent to Knoprix in a request header for provider operations, and is used only in request memory.'
+    : 'Knoprix uses its configured server-managed key for this provider. The key is not returned to this browser.';
+  const supportsFullDocumentChat = Boolean(selectedModel?.fullDocumentChat);
+  const authorizedDocs = documents.filter((document) => document.ai_granted);
+  const {
+    statusByDocumentId,
+    actionByDocumentId,
+    loading: providerFilesLoading,
+    loadError: providerFilesError,
+    refresh: refreshProviderFiles,
+    authorizeDocument,
+    revokeDocument,
+    retryDeletion,
+  } = useProviderDocumentFiles({
+    projectId: selectedProvider ? activeProject?.id : null,
+    providerId,
+    model,
+    apiKey: keys[providerId] || '',
+  });
 
   // Chat State
+  const [chatMode, setChatMode] = useState('retrieval');
   const [messages, setMessages] = useState([
     {
       id: 'welcome',
@@ -62,8 +91,13 @@ export default function AIWingView({ onNavigateToDocument }) {
   const [streamingContent, setStreamingContent] = useState('');
   const [streamingThought, setStreamingThought] = useState('');
   const [streamingCitations, setStreamingCitations] = useState([]);
+  const [streamingProgress, setStreamingProgress] = useState(null);
   const [showThought, setShowThought] = useState(false);
   const [streamError, setStreamError] = useState(null);
+  const [providerTransferQuestion, setProviderTransferQuestion] = useState(null);
+  const [providerTransferBusy, setProviderTransferBusy] = useState(false);
+  const [providerTransferProgress, setProviderTransferProgress] = useState(null);
+  const [providerTransferError, setProviderTransferError] = useState('');
   const messagesEndRef = useRef(null);
 
   // Artifacts State
@@ -159,7 +193,14 @@ export default function AIWingView({ onNavigateToDocument }) {
     setSubmittingGrant((prev) => ({ ...prev, [doc.id]: true }));
     try {
       await api.post(`/documents/${doc.id}/grant`, { granted: targetStatus });
-      notify(targetStatus ? `Granted AI access to "${docLabel(doc)}"` : `Revoked AI access to "${docLabel(doc)}"`, 'info');
+      notify(
+        targetStatus
+          ? `Granted AI access to "${docLabel(doc)}"`
+          : statusByDocumentId[doc.id]?.status === 'ready'
+            ? `AI access revoked. The provider copy of "${docLabel(doc)}" remains until you revoke it separately.`
+            : `Revoked AI access to "${docLabel(doc)}"`,
+        'info',
+      );
       if (activeProject?.id) {
         await fetchDocuments(activeProject.id);
       }
@@ -183,16 +224,14 @@ export default function AIWingView({ onNavigateToDocument }) {
     }
   };
 
-  // Send Chat with real SSE streaming
-  const handleSendChat = async () => {
-    const q = question.trim();
+  // Send Chat with real SSE streaming once provider-document preflight passes.
+  const streamChat = async (q) => {
     if (!q || streaming) return;
-    const selectedProvider = providers.find((provider) => provider.id === providerId);
     if (!isProviderAvailable(selectedProvider)) {
       notify(selectedProvider?.availabilityNote || 'Select an available AI provider.', 'error');
       return;
     }
-    const grantedDocIds = documents.filter((d) => d.ai_granted).map((d) => d.id);
+    const grantedDocIds = authorizedDocs.map((document) => document.id);
     if (grantedDocIds.length === 0) {
       notify('Please authorize at least one document for AI access first', 'error');
       return;
@@ -205,6 +244,7 @@ export default function AIWingView({ onNavigateToDocument }) {
     setStreamingContent('');
     setStreamingThought('');
     setStreamingCitations([]);
+    setStreamingProgress(null);
     setStreamError(null);
 
     const customKey = keys[providerId] || '';
@@ -227,6 +267,7 @@ export default function AIWingView({ onNavigateToDocument }) {
           question: q,
           providerId,
           model,
+          mode: chatMode,
         }),
       });
 
@@ -282,6 +323,8 @@ export default function AIWingView({ onNavigateToDocument }) {
         if (eventType === 'thought') {
           accumulatedThought += payload.text || '';
           setStreamingThought(accumulatedThought);
+        } else if (eventType === 'progress') {
+          setStreamingProgress(payload);
         } else if (eventType === 'token') {
           accumulatedContent += payload.text ?? payload.token ?? '';
           setStreamingContent(accumulatedContent);
@@ -316,8 +359,9 @@ export default function AIWingView({ onNavigateToDocument }) {
         citations: finalCitations,
       };
       if (!assistantMessage.content) {
-        assistantMessage.content =
-          'The provider returned no text for this question. Your authorized passages are cited below.';
+        assistantMessage.content = chatMode === 'full-document'
+          ? 'The provider returned no text for the selected original documents.'
+          : 'The provider returned no text for this question. Your authorized passages are cited below.';
       }
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
@@ -339,7 +383,159 @@ export default function AIWingView({ onNavigateToDocument }) {
       setStreamingContent('');
       setStreamingThought('');
       setStreamingCitations([]);
+      setStreamingProgress(null);
     }
+  };
+
+  const handleSendChat = async () => {
+    const q = question.trim();
+    if (!q || streaming || providerTransferBusy) return;
+    if (!isProviderAvailable(selectedProvider)) {
+      notify(selectedProvider?.availabilityNote || 'Select an available AI provider.', 'error');
+      return;
+    }
+    if (authorizedDocs.length === 0) {
+      notify('Please authorize at least one document for AI access first', 'error');
+      return;
+    }
+    if (chatMode === 'full-document') {
+      if (!supportsFullDocumentChat) {
+        notify('Choose a visual-capable provider model for full-document chat.', 'error');
+        return;
+      }
+      if (authorizedDocs.length > 10) {
+        notify('Full-document chat supports at most 10 AI-enabled documents at a time.', 'error');
+        return;
+      }
+      if (!hasProviderKey) {
+        setShowKeyInput(true);
+        notify('Add this provider key before transferring documents.', 'error');
+        return;
+      }
+      if (providerFilesLoading) {
+        notify('Checking provider file status. Try again in a moment.', 'info');
+        return;
+      }
+      if (providerFilesError) {
+        notify('Could not verify provider file status. Retry the status check before continuing.', 'error');
+        return;
+      }
+      if (authorizedDocs.some((document) => statusByDocumentId[document.id]?.status !== 'ready')) {
+        setProviderTransferError('');
+        setProviderTransferProgress(null);
+        setProviderTransferQuestion(q);
+        return;
+      }
+    }
+    await streamChat(q);
+  };
+
+  const handlePrepareProviderDocuments = () => {
+    if (!supportsFullDocumentChat) {
+      notify('Choose a visual-capable provider model before preparing documents.', 'error');
+      return;
+    }
+    if (!isProviderAvailable(selectedProvider)) {
+      notify(selectedProvider?.availabilityNote || 'Select an available AI provider.', 'error');
+      return;
+    }
+    if (!hasProviderKey) {
+      setShowKeyInput(true);
+      notify('Add this provider key before transferring documents.', 'error');
+      return;
+    }
+    if (!authorizedDocs.length) {
+      notify('Authorize at least one document for Knoprix AI first.', 'error');
+      return;
+    }
+    if (authorizedDocs.length > 10) {
+      notify('Full-document chat supports at most 10 AI-enabled documents at a time.', 'error');
+      return;
+    }
+    setProviderTransferError('');
+    setProviderTransferProgress(null);
+    setProviderTransferQuestion('');
+  };
+
+  const handleConfirmProviderTransfer = async () => {
+    if (providerTransferBusy || providerTransferQuestion === null) return;
+    const pendingDeletion = authorizedDocs.find(
+      (document) => statusByDocumentId[document.id]?.status === 'delete_pending',
+    );
+    if (pendingDeletion) {
+      setProviderTransferError(
+        `Retry provider deletion for "${docLabel(pendingDeletion)}" before uploading it again.`,
+      );
+      return;
+    }
+    const toUpload = authorizedDocs.filter(
+      (document) => statusByDocumentId[document.id]?.status !== 'ready',
+    );
+    setProviderTransferBusy(true);
+    setProviderTransferError('');
+    const failures = [];
+    try {
+      for (const [index, document] of toUpload.entries()) {
+        setProviderTransferProgress({
+          current: index + 1,
+          total: toUpload.length,
+          detail: `Uploading ${docLabel(document)} to ${selectedProvider?.name || providerId}.`,
+        });
+        try {
+          await authorizeDocument(document);
+        } catch (error) {
+          failures.push(`${docLabel(document)}: ${error.response?.data?.detail || error.message}`);
+        }
+      }
+      if (failures.length) {
+        setProviderTransferError(`Some uploads failed. ${failures.join(' ')}`);
+        return;
+      }
+
+      const questionToResume = providerTransferQuestion;
+      setProviderTransferQuestion(null);
+      setProviderTransferProgress(null);
+      if (questionToResume) {
+        await streamChat(questionToResume);
+      } else {
+        notify('Selected documents are ready for full-document chat.', 'success');
+      }
+    } finally {
+      setProviderTransferBusy(false);
+      setProviderTransferProgress(null);
+    }
+  };
+
+  const handleRevokeProviderDocument = async (document) => {
+    try {
+      const result = await revokeDocument(document);
+      notify(
+        result.deletePending
+          ? `Local access blocked; provider deletion is pending for "${docLabel(document)}".`
+          : `Provider copy revoked for "${docLabel(document)}".`,
+        result.deletePending ? 'info' : 'success',
+      );
+    } catch (error) {
+      notify(error.response?.data?.detail || error.message || 'Could not revoke provider copy.', 'error');
+    }
+  };
+
+  const handleRetryProviderDeletion = async (document) => {
+    try {
+      const result = await retryDeletion(document);
+      notify(
+        result.deletePending
+          ? `Provider deletion is still pending for "${docLabel(document)}".`
+          : `Provider copy deleted for "${docLabel(document)}".`,
+        result.deletePending ? 'info' : 'success',
+      );
+    } catch (error) {
+      notify(error.response?.data?.detail || error.message || 'Could not retry provider deletion.', 'error');
+    }
+  };
+
+  const handleCloseProviderTransfer = () => {
+    if (!providerTransferBusy) setProviderTransferQuestion(null);
   };
 
   // Generate Study Artifacts
@@ -394,8 +590,6 @@ export default function AIWingView({ onNavigateToDocument }) {
       setGeneratingArtifact(false);
     }
   };
-
-  const authorizedDocs = documents.filter((d) => d.ai_granted);
 
   return (
     <div className="flex-1 flex flex-col md:flex-row h-full overflow-hidden bg-midnight text-ivory">
@@ -463,6 +657,19 @@ export default function AIWingView({ onNavigateToDocument }) {
                         {isGranted ? 'AI Enabled' : 'Excluded'}
                       </span>
                     </p>
+                    <ProviderDocumentStatus
+                      document={doc}
+                      providerName={selectedProvider?.name || providerId}
+                      status={statusByDocumentId[doc.id]}
+                      loading={providerFilesLoading}
+                      action={actionByDocumentId[doc.id]}
+                      supported={supportsFullDocumentChat && isProviderAvailable(selectedProvider)}
+                      hasProviderKey={hasProviderKey}
+                      onPrepare={handlePrepareProviderDocuments}
+                      onRevoke={handleRevokeProviderDocument}
+                      onRetryDeletion={handleRetryProviderDeletion}
+                      onAddKey={() => setShowKeyInput(true)}
+                    />
                   </div>
                   <button
                     onClick={() => toggleGrant(doc)}
@@ -558,6 +765,9 @@ export default function AIWingView({ onNavigateToDocument }) {
 
           {showKeyInput && providerId !== 'nvidia-nim' && (
             <div className="mt-2 space-y-1.5 bg-midnight-panel p-2 rounded-xl border border-glass-borderDark">
+              <p className="text-[10px] leading-relaxed text-ivory/55">
+                Stored in this browser. Knoprix receives it in a request header for provider operations and does not store the raw key.
+              </p>
               <input
                 type="password"
                 value={keyDraft}
@@ -576,7 +786,7 @@ export default function AIWingView({ onNavigateToDocument }) {
                   onClick={saveKey}
                   className="px-2.5 py-0.5 rounded bg-accent/20 border border-accent/40 text-accent text-[10px] font-semibold"
                 >
-                  Save (Browser Only)
+                  Save on this device
                 </button>
               </div>
             </div>
@@ -633,6 +843,94 @@ export default function AIWingView({ onNavigateToDocument }) {
         {/* Tab 1: Grounded Chat */}
         {activeTab === 'chat' && (
           <div className="flex-1 flex flex-col h-full overflow-hidden">
+            <section
+              className="shrink-0 border-b border-glass-borderDark bg-midnight-panel/70 px-3 py-3 sm:px-5"
+              aria-label="Chat analysis mode"
+            >
+              <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div
+                  role="group"
+                  aria-label="Choose how documents are analyzed"
+                  className="inline-flex w-full rounded-xl border border-glass-borderDark bg-midnight-deep p-1 sm:w-auto"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={chatMode === 'retrieval'}
+                    disabled={streaming || providerTransferBusy}
+                    onClick={() => setChatMode('retrieval')}
+                    className={`min-h-10 flex-1 rounded-lg px-3 text-xs font-semibold transition sm:flex-none ${
+                      chatMode === 'retrieval'
+                        ? 'bg-accent/20 text-accent shadow-inner'
+                        : 'text-ivory/60 hover:text-ivory'
+                    }`}
+                  >
+                    Retrieval
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={chatMode === 'full-document'}
+                    disabled={!supportsFullDocumentChat || streaming || providerTransferBusy}
+                    title={!supportsFullDocumentChat ? 'Choose a visual-capable provider model' : undefined}
+                    onClick={() => setChatMode('full-document')}
+                    className={`min-h-10 flex-1 rounded-lg px-3 text-xs font-semibold transition sm:flex-none ${
+                      chatMode === 'full-document'
+                        ? 'bg-accent/20 text-accent shadow-inner'
+                        : 'text-ivory/60 hover:text-ivory'
+                    } disabled:cursor-not-allowed disabled:opacity-40`}
+                  >
+                    Full documents
+                  </button>
+                </div>
+                {chatMode === 'full-document' && authorizedDocs.length > 0 && (
+                  <p className="text-[11px] text-ivory/60 sm:text-right">
+                    {authorizedDocs.length} document{authorizedDocs.length === 1 ? '' : 's'} ·{' '}
+                    {authorizedDocs.reduce((total, document) => total + (Number(document.page_count) || 1), 0)} pages ·{' '}
+                    {selectedProvider?.name || providerId} / {selectedModel?.label || model}
+                  </p>
+                )}
+              </div>
+              {chatMode === 'full-document' && (
+                <div className="mx-auto mt-3 max-w-3xl rounded-lg border border-amber-300/20 bg-amber-300/5 px-3 py-2 text-[11px] leading-relaxed text-amber-100/85" role="status">
+                  {authorizedDocs.length === 0
+                    ? 'Grant Knoprix AI access to documents in the sidebar before using full-document analysis.'
+                    : authorizedDocs.length > 10
+                      ? 'Full-document analysis supports up to 10 AI-enabled documents at once. Reduce the authorized scope before continuing.'
+                      : !hasProviderKey
+                        ? 'Add a provider key before transferring these original documents.'
+                        : 'Full-document analysis sends every AI-enabled original to the named provider. Usage may consume quota or incur charges, and responses can take longer; a reliable price estimate is unavailable for this provider/model.'}
+                </div>
+              )}
+              {chatMode === 'full-document'
+                && authorizedDocs.length > 0
+                && authorizedDocs.length <= 10
+                && hasProviderKey
+                && !providerFilesLoading
+                && authorizedDocs.some((document) => statusByDocumentId[document.id]?.status !== 'ready')
+                && (
+                  <div className="mx-auto mt-2 flex max-w-3xl justify-end">
+                    <button
+                      type="button"
+                      onClick={handlePrepareProviderDocuments}
+                      className="min-h-9 rounded-lg border border-accent/35 px-3 text-[11px] font-semibold text-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+                    >
+                      Review and prepare documents
+                    </button>
+                  </div>
+                )}
+              {providerFilesError && chatMode === 'full-document' && (
+                <div className="mx-auto mt-2 flex max-w-3xl items-center justify-between gap-3 text-[11px] text-rose-200" role="alert">
+                  <span>Provider file status could not be loaded: {providerFilesError}</span>
+                  <button
+                    type="button"
+                    onClick={refreshProviderFiles}
+                    className="min-h-9 shrink-0 rounded-lg border border-rose-200/30 px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+                  >
+                    Retry status
+                  </button>
+                </div>
+              )}
+            </section>
+
             {/* Messages Scroll Area */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
               {messages.map((msg) => (
@@ -698,8 +996,20 @@ export default function AIWingView({ onNavigateToDocument }) {
                     {streamingThought && (
                       <div className="mb-2 text-[11px] font-mono text-accent/80 flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-accent animate-ping" />
-                        <span>Synthesizing authorized document passages…</span>
+                        <span>
+                          {chatMode === 'full-document'
+                            ? 'Analyzing selected original documents…'
+                            : 'Synthesizing authorized document passages…'}
+                        </span>
                       </div>
+                    )}
+                    {streamingProgress && (
+                      <p className="mb-2 text-xs text-accent" role="status" aria-live="polite">
+                        {streamingProgress.detail}
+                        {streamingProgress.total
+                          ? ` (${streamingProgress.current}/${streamingProgress.total})`
+                          : ''}
+                      </p>
                     )}
                     <div className="whitespace-pre-wrap">{streamingContent || '…'}</div>
                     {streamError && (
@@ -725,16 +1035,22 @@ export default function AIWingView({ onNavigateToDocument }) {
               <div className="max-w-3xl mx-auto flex items-center gap-2">
                 <input
                   type="text"
+                  aria-label="Ask a question about your authorized documents"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleSendChat(); }}
                   disabled={streaming}
-                  placeholder={authorizedDocs.length === 0 ? "Authorize documents in the left sidebar to start asking questions…" : "Ask questions grounded in your authorized documents…"}
+                  placeholder={authorizedDocs.length === 0
+                    ? 'Authorize documents in the left sidebar to start asking questions…'
+                    : chatMode === 'full-document'
+                      ? 'Ask across every AI-enabled original document…'
+                      : 'Ask questions grounded in your authorized documents…'}
                   className="flex-1 bg-midnight-deep border border-glass-borderDark rounded-xl px-4 py-2.5 text-sm text-ivory placeholder:text-ivory/40 focus:outline-none focus:border-accent transition shadow-inner"
                 />
                 <button
                   onClick={handleSendChat}
-                  disabled={streaming || !question.trim() || authorizedDocs.length === 0}
+                  disabled={streaming || providerTransferBusy || !question.trim() || authorizedDocs.length === 0}
+                  aria-label="Ask AI"
                   className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-semibold shadow-lg shadow-primary/30 hover:opacity-95 disabled:opacity-40 transition flex items-center gap-1.5"
                 >
                   <Send className="w-3.5 h-3.5" />
@@ -1023,6 +1339,21 @@ export default function AIWingView({ onNavigateToDocument }) {
           </div>
         )}
       </div>
+      <ProviderTransferDialog
+        open={providerTransferQuestion !== null}
+        providerName={selectedProvider?.name || providerId}
+        modelName={selectedModel?.name || selectedModel?.label || model}
+        documents={authorizedDocs}
+        statusByDocumentId={statusByDocumentId}
+        actionByDocumentId={actionByDocumentId}
+        keyHandlingNotice={providerKeyNotice}
+        busy={providerTransferBusy}
+        progress={providerTransferProgress}
+        error={providerTransferError}
+        onConfirm={handleConfirmProviderTransfer}
+        onClose={handleCloseProviderTransfer}
+        onRetryDeletion={handleRetryProviderDeletion}
+      />
     </div>
   );
 }

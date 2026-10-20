@@ -89,8 +89,9 @@ controls are implemented in the UI.
 - `/api/chat/ask` and `/api/chat/stream` accept optional `mode`. The default
   remains `retrieval`; `full-document` requires a ready provider/model/key-
   scoped file mapping for every selected document and never falls back to RAG.
-- `GET /api/projects/{projectId}/provider-documents` returns statuses without
-  exposing remote IDs or credential fingerprints. Revoke blocks local use
+- `GET /api/projects/{projectId}/provider-documents` returns `ready`, `failed`,
+  `revoked`, and `delete_pending` statuses without exposing remote IDs or
+  credential fingerprints. Revoke blocks local use
   immediately; failed provider deletion is retained as `delete_pending` for
   retry with the same provider key. Gemini expiry/re-upload and provider-side
   retention remain subject to the provider's own policy.

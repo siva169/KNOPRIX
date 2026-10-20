@@ -653,6 +653,15 @@ class BacklogRAGTests(unittest.TestCase):
                 "gpt-4o-mini",
             )
         self.assertEqual(retried, {"deleted": 1, "deletePending": 0})
+        status = document_ai.list_provider_documents(
+            self.db,
+            USER["id"],
+            PROJECT_ID,
+            "openai",
+            "gpt-4o-mini",
+            api_key,
+        )
+        self.assertEqual(status["documents"][0]["status"], "revoked")
 
     def test_nvidia_visual_chat_processes_all_pages_in_four_page_batches(self):
         self.upload_dir.mkdir(parents=True, exist_ok=True)

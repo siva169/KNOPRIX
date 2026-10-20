@@ -1,5 +1,25 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-20 — Complete full-document provider-consent UI
+
+- Wired the approved Retrieval / Full documents control to a blocking batch
+  transfer confirmation that names the provider/model, lists all currently
+  AI-enabled documents, and explains key handling, retention, possible quota
+  use/charges, and latency without inventing prices.
+- Added inline provider-file status, revoke and deletion-retry actions;
+  transfer upload errors remain visible and can be retried. The chat resumes
+  with the original question only after every required upload succeeds.
+- Extended mocked browser QA to cover consent scope, failed-upload recovery,
+  cancel-without-transfer, full-document SSE request mode/question, revocation,
+  retryable deletion, stale NVIDIA browser-key handling, and horizontal
+  overflow at 390/425/768/1024px.
+- Updated PRD and UI/UX decision records. The project-wide 33-point checklist
+  remains pending as recorded in the PRD; this slice does not claim it complete.
+- Verification: frontend production build passes (existing large-chunk
+  advisory); mocked browser QA passes at all four widths; provider/RAG backend
+  QA passes (33 tests); Python compilation and nested-project `git diff
+  --check` pass. No live provider calls, deployment, or remote push performed.
+
 ## 2026-10-20 — Add provider-authorized full-document AI backend
 
 - Added explicit provider/model document authorization, reusable provider-file
