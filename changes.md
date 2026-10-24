@@ -1,5 +1,17 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-25 — Add verified Gemini web search to general chat
+
+- Added provider-native Google Search for allowlisted Gemini 2.5 Flash and
+  Gemini 2.5 Flash-Lite via the Interactions API, with `store: false`.
+- Normalized HTTPS-only web citations and kept them distinct from document
+  citations; search availability/use is included in chat response metadata.
+- Search-enabled replies are buffered before SSE answer chunks so citations
+  can be captured; other providers retain their existing streaming behavior.
+- Added mocked provider and chat QA for grounding, citations, unsupported
+  models, malformed responses, and surfaced provider failures. No live provider
+  call was made.
+
 ## 2026-10-25 — Add synced conversation history API
 
 - Added append-only migration 8 for owner-scoped conversations and ordered

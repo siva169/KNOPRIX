@@ -143,6 +143,7 @@ class SourceAwareChatTests(unittest.TestCase):
         self.assertEqual(
             json.loads(stored[1]["citations_json"]),
             [{
+                "sourceType": "document",
                 "documentId": "document-a",
                 "fileName": "notes.txt",
                 "pageNumber": 2,
@@ -257,6 +258,83 @@ class SourceAwareChatTests(unittest.TestCase):
             )
         self.assertEqual(result["answer"], "A concise answer.")
         self.assertEqual([row["role"] for row in self.messages()], ["user", "assistant"])
+
+    def test_native_search_streams_answer_and_persists_web_citations(self):
+        citation = {
+            "sourceType": "web",
+            "url": "https://example.com/source",
+            "title": "Example source",
+        }
+        with patch(
+            "app.routers.chat.complete_gemini_search_response",
+            return_value=("A grounded answer.", [citation], True),
+        ):
+            response = chat.chat_stream(
+                self.request(
+                    providerId="gemini-free",
+                    model="gemini-2.5-flash",
+                ),
+                user=self.users["user-a"],
+                db=self.db,
+                x_provider_key="mock-provider-key",
+            )
+            events = self.read_stream(response)
+
+        self.assertIn('"searchAvailable": true', events)
+        self.assertIn('"searchUsed": true', events)
+        self.assertIn('"text": "A grounded answer."', events)
+        self.assertIn('"sourceType": "web"', events)
+        stored = self.messages()
+        self.assertEqual(stored[-1]["content"], "A grounded answer.")
+        self.assertEqual(json.loads(stored[-1]["citations_json"]), [citation])
+
+    def test_native_search_errors_do_not_persist_partial_exchanges(self):
+        with patch(
+            "app.routers.chat.complete_gemini_search_response",
+            side_effect=chat.ProviderSearchError("Gemini Search request failed (HTTP 429)."),
+        ):
+            response = chat.chat_stream(
+                self.request(
+                    providerId="gemini-free",
+                    model="gemini-2.5-flash",
+                ),
+                user=self.users["user-a"],
+                db=self.db,
+                x_provider_key="mock-provider-key",
+            )
+            events = self.read_stream(response)
+
+        self.assertIn("event: error\n", events)
+        self.assertIn("HTTP 429", events)
+        self.assertEqual(self.messages(), [])
+
+    def test_non_streaming_native_search_returns_search_metadata(self):
+        citation = {
+            "sourceType": "web",
+            "url": "https://example.com/source",
+            "title": "Example source",
+        }
+        with patch(
+            "app.routers.chat.complete_gemini_search_response",
+            return_value=("A grounded answer.", [citation], True),
+        ):
+            result = chat.chat_ask(
+                self.request(
+                    providerId="gemini-free",
+                    model="gemini-2.5-flash-lite",
+                ),
+                user=self.users["user-a"],
+                db=self.db,
+                x_provider_key="mock-provider-key",
+            )
+
+        self.assertTrue(result["searchAvailable"])
+        self.assertTrue(result["searchUsed"])
+        self.assertEqual(result["citations"], [citation])
+        self.assertEqual(
+            json.loads(self.messages()[-1]["citations_json"]),
+            [citation],
+        )
 
 
 if __name__ == "__main__":

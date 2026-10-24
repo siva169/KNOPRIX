@@ -1088,15 +1088,22 @@ boss approval before frontend implementation.
 - **Description:** Use only documented search tools exposed by the selected
   provider API; let each supported model decide whether to search. Keep other
   models usable and visibly mark live search unavailable.
+- **Progress:** Backend grounding is implemented for Gemini 2.5 Flash and
+  Gemini 2.5 Flash-Lite through Google's Interactions API with `store: false`.
+  HTTPS citations are persisted separately from document citations, and
+  search availability/use is returned by both chat routes. The provider's
+  grounded response is buffered to preserve citations before SSE chunks are
+  emitted. UI disclosure, citation rendering, and responsive verification
+  remain part of Task 6.
 - **Acceptance:** Only verified provider/model pairs receive native search
-  tools; streaming text and web citations are normalized; provider errors are
+  tools; answer text and web citations are normalized; provider errors are
   surfaced; no separate search vendor/API is added.
 - **Verify:** Mocked provider responses test search invocation, no-search
-  responses, citation parsing, malformed events, and provider errors. No live
-  web/provider request is made.
+  responses, citation parsing, malformed response shapes, and provider errors.
+  No live web/provider request is made.
 - **Dependencies:** Tasks 1 and 4.
 - **Files:** `backend/app/services/rag.py`, `backend/app/routers/chat.py`,
-  `backend/qa_provider_search.py`, `frontend/qa-chatlive.mjs`.
+  `backend/qa_provider_search.py`, `backend/qa_chat_context.py`.
 - **Scope:** Medium (4 files).
 
 ### Task 6: Unifying the AI Wing chat and source feedback

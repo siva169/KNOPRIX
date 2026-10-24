@@ -17,6 +17,7 @@ import re
 import urllib.request
 import urllib.error
 from typing import Any, AsyncGenerator, Generator
+from urllib.parse import urlsplit
 
 from ..config import cfg
 from ..dsa.minheap import top_k
@@ -39,6 +40,164 @@ _OPENAI_COMPATIBLE_URLS = {
 }
 NVIDIA_MODEL_ID = "nvidia/nemotron-3.5-lightning-30b-a3b"
 _NATIVE_PROVIDERS = {"gemini-free", "anthropic", "ollama"}
+_GEMINI_SEARCH_MODELS = {
+    ("gemini-free", "gemini-2.5-flash"),
+    ("gemini-free", "gemini-2.5-flash-lite"),
+}
+
+
+class ProviderSearchError(RuntimeError):
+    """A provider-native search request failed or returned invalid data."""
+
+
+def provider_supports_native_search(provider_id: str, model: str) -> bool:
+    return ((provider_id or "").strip().lower(), model) in _GEMINI_SEARCH_MODELS
+
+
+def _safe_web_citation(annotation: dict, offset: int, text: str) -> dict | None:
+    url = annotation.get("url")
+    if (
+        not isinstance(url, str)
+        or len(url) > 2048
+        or any(ord(char) < 32 for char in url)
+    ):
+        return None
+    try:
+        parsed = urlsplit(url)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+            return None
+        parsed.port
+    except ValueError:
+        return None
+    citation = {
+        "sourceType": "web",
+        "url": url,
+        "title": (
+            annotation.get("title", "")[:300]
+            if isinstance(annotation.get("title"), str)
+            else ""
+        ) or parsed.hostname,
+    }
+    start = annotation.get("start_index")
+    end = annotation.get("end_index")
+    if (
+        isinstance(start, int)
+        and not isinstance(start, bool)
+        and isinstance(end, int)
+        and not isinstance(end, bool)
+        and 0 <= start <= end <= len(text.encode("utf-8"))
+    ):
+        citation["startIndex"] = offset + start
+        citation["endIndex"] = offset + end
+    return citation
+
+
+def complete_gemini_search_response(
+    model: str,
+    api_key: str,
+    system_instruction: str,
+    user_prompt: str,
+) -> tuple[str, list[dict], bool]:
+    """Run one Gemini Interaction with optional Google Search grounding."""
+    if not provider_supports_native_search("gemini-free", model):
+        raise ValueError("Google Search is not enabled for this Gemini model.")
+    request_body = {
+        "model": model,
+        "input": user_prompt,
+        "system_instruction": system_instruction,
+        "tools": [{"type": "google_search"}],
+        "generation_config": {"max_output_tokens": 1024},
+        "store": False,
+    }
+    req = urllib.request.Request(
+        "https://generativelanguage.googleapis.com/v1beta/interactions",
+        data=json.dumps(request_body).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": api_key,
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as response:
+            raw = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        logger.error("Gemini Search request failed with HTTP %s", exc.code)
+        raise ProviderSearchError(
+            f"Gemini Search request failed (HTTP {exc.code})."
+        ) from exc
+    except urllib.error.URLError as exc:
+        logger.error("Gemini Search connection failed")
+        raise ProviderSearchError("Gemini Search connection failed.") from exc
+    except TimeoutError as exc:
+        logger.error("Gemini Search request timed out")
+        raise ProviderSearchError("Gemini Search request timed out.") from exc
+    except UnicodeDecodeError as exc:
+        raise ProviderSearchError("Gemini Search returned invalid text data.") from exc
+    except json.JSONDecodeError as exc:
+        raise ProviderSearchError("Gemini Search returned invalid JSON.") from exc
+
+    if not isinstance(raw, dict):
+        raise ProviderSearchError("Gemini Search returned an invalid response.")
+    interaction = raw.get("interaction", raw)
+    if not isinstance(interaction, dict) or not isinstance(interaction.get("steps"), list):
+        raise ProviderSearchError("Gemini Search returned an invalid response.")
+    if interaction.get("status") != "completed":
+        raise ProviderSearchError("Gemini Search did not complete successfully.")
+    answer_parts = []
+    citations = []
+    seen_urls = set()
+    search_used = False
+    for step in interaction.get("steps", []):
+        if not isinstance(step, dict):
+            raise ProviderSearchError("Gemini Search returned an invalid response.")
+        if step.get("type") == "google_search_call":
+            search_used = True
+        if step.get("type") != "model_output":
+            continue
+        content = step.get("content")
+        if not isinstance(content, list):
+            raise ProviderSearchError("Gemini Search returned an invalid response.")
+        for block in content:
+            if not isinstance(block, dict):
+                raise ProviderSearchError("Gemini Search returned an invalid response.")
+            if block.get("type") != "text":
+                continue
+            text = block.get("text")
+            if not isinstance(text, str):
+                raise ProviderSearchError("Gemini Search returned invalid text output.")
+            offset = sum(len(part.encode("utf-8")) for part in answer_parts)
+            answer_parts.append(text)
+            annotations = block.get("annotations", [])
+            if not isinstance(annotations, list):
+                raise ProviderSearchError("Gemini Search returned invalid citations.")
+            for annotation in annotations:
+                if not isinstance(annotation, dict) or annotation.get("type") != "url_citation":
+                    continue
+                citation = _safe_web_citation(annotation, offset, text)
+                if citation and citation["url"] not in seen_urls:
+                    seen_urls.add(citation["url"])
+                    citations.append(citation)
+    untrimmed_answer = "".join(answer_parts)
+    answer = untrimmed_answer.strip()
+    if not answer:
+        raise ProviderSearchError("Gemini Search returned an empty answer.")
+    leading_text = untrimmed_answer[
+        : len(untrimmed_answer) - len(untrimmed_answer.lstrip())
+    ]
+    leading_bytes = len(leading_text.encode("utf-8"))
+    answer_bytes = len(answer.encode("utf-8"))
+    for citation in citations:
+        if "startIndex" not in citation:
+            continue
+        start, end = citation["startIndex"], citation["endIndex"]
+        if start >= leading_bytes and end <= leading_bytes + answer_bytes:
+            citation["startIndex"] = start - leading_bytes
+            citation["endIndex"] = end - leading_bytes
+        else:
+            citation.pop("startIndex")
+            citation.pop("endIndex")
+    return answer, citations, search_used
 
 
 def provider_is_supported(provider_id: str) -> bool:

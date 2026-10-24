@@ -21,7 +21,10 @@ from ..database import get_db
 from ..security import get_current_user, get_owned_document, get_owned_project
 from ..services.rag import (
     build_rag_prompt,
+    complete_gemini_search_response,
     provider_has_server_key,
+    provider_supports_native_search,
+    ProviderSearchError,
     resolve_api_key,
     retrieve_hybrid_passages,
     stream_llm_response,
@@ -496,6 +499,7 @@ def _build_source_aware_prompt(passages: list[dict], prior_messages: list[dict],
 def _source_citations(passages: list[dict]) -> list[dict]:
     return [
         {
+            "sourceType": "document",
             "documentId": passage["documentId"],
             "fileName": passage["fileName"],
             "pageNumber": passage["pageNumber"],
@@ -623,6 +627,36 @@ def _source_aware_provider_key(provider, x_provider_key, x_api_key):
     return api_key
 
 
+def _source_aware_answer(
+    provider_id, model, api_key, system_instruction, user_prompt
+):
+    if provider_supports_native_search(provider_id, model):
+        if not api_key:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "A provider key is required for general chat.",
+            )
+        try:
+            return complete_gemini_search_response(
+                model, api_key, system_instruction, user_prompt
+            )
+        except ProviderSearchError as exc:
+            raise HTTPException(502, str(exc)) from exc
+
+    answer_parts = []
+    for token in stream_llm_response(
+        provider_id, model, api_key, system_instruction, user_prompt
+    ):
+        error = _provider_stream_error(token)
+        if error:
+            raise HTTPException(502, error)
+        answer_parts.append(token)
+    answer = "".join(answer_parts).strip()
+    if not answer:
+        raise HTTPException(502, "The provider returned an empty answer.")
+    return answer, [], False
+
+
 @router.post("/chat/ask", status_code=status.HTTP_200_OK)
 def chat_ask(
     body: dict,
@@ -650,18 +684,10 @@ def chat_ask(
                 status.HTTP_503_SERVICE_UNAVAILABLE,
                 "A provider key is required for general chat.",
             )
-        tokens = []
-        for token in stream_llm_response(
+        answer, web_citations, search_used = _source_aware_answer(
             provider["id"], model, api_key, system_instruction, user_prompt
-        ):
-            error = _provider_stream_error(token)
-            if error:
-                raise HTTPException(502, error)
-            tokens.append(token)
-        answer = "".join(tokens).strip()
-        if not answer:
-            raise HTTPException(502, "The provider returned an empty answer.")
-        citations = _source_citations(passages)
+        )
+        citations = _source_citations(passages) + web_citations
         _persist_source_aware_exchange(
             db,
             user["id"],
@@ -680,6 +706,10 @@ def chat_ask(
             "model": model,
             "selectedDocuments": len(_docs),
             "includedChatMessages": len(_prior_messages),
+            "searchAvailable": provider_supports_native_search(
+                provider["id"], model
+            ),
+            "searchUsed": search_used,
             "mocked": False,
         }
 
@@ -800,6 +830,7 @@ def chat_stream(
         ) = _source_aware_inputs(db, user, body)
         api_key = _source_aware_provider_key(provider, x_provider_key, x_api_key)
         citations = _source_citations(passages)
+        search_available = provider_supports_native_search(provider["id"], model)
 
         def frame(event: str, payload: dict) -> str:
             return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
@@ -810,7 +841,7 @@ def chat_stream(
                 {
                     "provider": provider["id"],
                     "model": model,
-                    "searchAvailable": False,
+                    "searchAvailable": search_available,
                     "documents": len(docs),
                     "savedChatMessages": len(prior_messages),
                     "hasKey": bool(api_key) or provider["id"] == "ollama",
@@ -822,15 +853,30 @@ def chat_stream(
                     {"detail": "A provider key is required for general chat."},
                 )
                 return
-            for token in stream_llm_response(
-                provider["id"], model, api_key, system_instruction, user_prompt
-            ):
-                error = _provider_stream_error(token)
-                if error:
-                    yield frame("error", {"detail": error})
+            if search_available:
+                yield frame("thought", {"text": "Checking whether live web sources can help."})
+                try:
+                    answer, web_citations, search_used = complete_gemini_search_response(
+                        model, api_key, system_instruction, user_prompt
+                    )
+                except ProviderSearchError as exc:
+                    yield frame("error", {"detail": str(exc)})
                     return
-                yield frame("token", {"text": token})
-                answer_parts.append(token)
+                answer_parts.append(answer)
+                for start in range(0, len(answer), 64):
+                    yield frame("token", {"text": answer[start : start + 64]})
+                citations.extend(web_citations)
+            else:
+                search_used = False
+                for token in stream_llm_response(
+                    provider["id"], model, api_key, system_instruction, user_prompt
+                ):
+                    error = _provider_stream_error(token)
+                    if error:
+                        yield frame("error", {"detail": error})
+                        return
+                    yield frame("token", {"text": token})
+                    answer_parts.append(token)
             answer = "".join(answer_parts).strip()
             if not answer:
                 yield frame("error", {"detail": "The provider returned an empty answer."})
@@ -853,6 +899,8 @@ def chat_stream(
                 {
                     "citations": citations,
                     "includedChatMessages": len(prior_messages),
+                    "searchAvailable": search_available,
+                    "searchUsed": search_used,
                     "done": True,
                 },
             )

@@ -458,9 +458,9 @@ clients that omit `conversationId`; it is not the target contract.
 
 The cleanup routes below are implemented under `/api`, not `/api/v1`; the
 conversation routes are implemented under `/api` as well. The unified chat
-contract remains the target until its implementation is complete. Existing
-chat currently uses the older document-required request shape. Shared-document
-AI chat is not part of this change.
+contract is implemented in the `conversationId` request path; the older
+document-required shape remains temporarily available to existing clients
+that omit it. Shared-document AI chat is not part of this change.
 
 - `GET /api/projects/{projectId}/provider-documents?providerId=...&model=...`
   lists existing provider-copy records without remote file IDs or credential
@@ -502,13 +502,21 @@ AI chat is not part of this change.
   Unsupported combinations receive no search tool and report live search as
   unavailable. The adapter normalizes supported web citations into structured
   source records, accepting only `https:` URLs. Provider search can incur
-  provider-defined usage charges.
+  provider-defined usage charges. The implemented pair is Gemini 2.5 Flash
+  and Gemini 2.5 Flash-Lite through Google's Interactions API. Requests set
+  `store: false`; the provider returns the grounded response and citations
+  before Knoprix emits its SSE answer chunks, so search-enabled replies are
+  buffered while citations are preserved. Other models retain their existing
+  live streaming path.
 
   `POST /api/chat/stream` retains named SSE events (`meta`, `thought`,
   `token`, `citation`, `error`, `done`). `meta` reports provider/model, search
   availability, and included context classes; document and web citations are
   emitted separately from answer tokens. Completed user/assistant messages
-  and citations are persisted to the conversation. No key or full prompt is
+  and citations are persisted to the conversation. The final event reports
+  `searchAvailable` and `searchUsed`; `/api/chat/ask` returns the same fields.
+  Document citations use `sourceType: "document"` and web citations use
+  `sourceType: "web"` with a validated HTTPS URL. No key or full prompt is
   logged. Retrieved passage text is not stored as a separate chat record.
 - New provider uploads, provider-file creation, and full-document visual chat
   are removed. Existing provider file IDs/URIs and keyed credential
@@ -521,7 +529,7 @@ All routes below require authentication and scope reads/writes to
 `current_user.id`. API fields use camelCase. Unknown and other-user IDs return
 the same `404` response. CRUD routes and successful source-aware chat message
 persistence are implemented. Frontend integration and provider-native web
-search remain pending.
+search citation rendering remain pending.
 
 #### `GET /api/chat/conversations?search=&limit=20&offset=0`
 

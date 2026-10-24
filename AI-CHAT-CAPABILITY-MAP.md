@@ -25,4 +25,5 @@ Build order: `synced-chat-history` → `source-aware-chat`.
 - Chat context is limited to relevant messages from the signed-in user's saved conversations; do not send every conversation wholesale.
 - Persist conversation messages and citations, not provider keys or retrieved document passages as separate chat records.
 - Provider calls may send the current question and selected context to that provider; native web-search usage is governed by that provider's API and billing terms.
+- Current verified native search support is Gemini 2.5 Flash and Gemini 2.5 Flash-Lite through the Google Interactions API; those requests set `store: false`. Search answers are buffered so provider citations are preserved before Knoprix sends answer chunks to the client.
 - No live provider requests, deployment, or remote Git operation are part of local implementation verification.

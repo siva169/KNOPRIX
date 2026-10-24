@@ -54,7 +54,11 @@ provider decides whether a query needs live web results.
   instructed to reject questions merely because evidence is absent.
 - Pass native search tools only to compatible provider APIs/models. Preserve
   streamed text and extract provider citation metadata where the documented
-  response format supports it.
+  response format supports it. Google Search is currently enabled only for
+  Gemini 2.5 Flash and Gemini 2.5 Flash-Lite through the Interactions API;
+  requests set `store: false`. Its non-streaming response is buffered before
+  Knoprix emits SSE text chunks so documented web citations can be saved.
+  Other models retain provider-token streaming.
 - Persist user/assistant messages and citations in the conversation contract;
   never persist keys or log provider prompts, retrieved passages, or credentials.
 - Keep legacy provider-copy cleanup and study-artifact behavior unchanged.
@@ -91,6 +95,18 @@ provider decides whether a query needs live web results.
 - Run backend focused QA and full QA suite, frontend production build, and
   available mocked browser QA.
 
+## Verified provider support
+
+- Google documents Google Search grounding for Gemini 2.5 Flash and
+  Gemini 2.5 Flash-Lite, including `google_search_call` steps and
+  `url_citation` annotations:
+  <https://ai.google.dev/gemini-api/docs/google-search>.
+- The Interactions API supports `store: false` and the `system_instruction`
+  and `tools` request fields:
+  <https://ai.google.dev/gemini-api/docs/interactions-overview>.
+- Search grounding may incur provider-defined usage charges. No live provider
+  request is used by implementation QA.
+
 ## Boundaries
 
 - Always: enforce active grants server-side, limit included context, preserve
@@ -114,5 +130,7 @@ provider decides whether a query needs live web results.
 
 ## Open questions
 
-- None from the approved requirements. Exact per-provider model support must be
-  verified against official documentation before enabling its search tool.
+- Remaining Recent Chats and citation presentation choices must be confirmed
+  before frontend implementation.
+- Verify more provider/model pairs against official documentation before
+  enabling their native search tools.
