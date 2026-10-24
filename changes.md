@@ -19,7 +19,10 @@
   passed at 390/425/768/1024px. `qa_chat.py` was skipped because it requires
   `KNOPRIX_QA_PASSWORD`; no live provider calls were made.
 - Local checkpoint created with the approved `siva169` identity. No remote
-  operation or deployment was performed.
+  operation was performed at that initial checkpoint.
+- After boss's authorization, pushed the verified commits to
+  `siva169/KNOPRIX` (`master`) using the `siva169` GitHub account; verified
+  remote `master` matches local commit `4e9d39e`.
 
 ## 2026-10-25 — Add verified Gemini web search to general chat
 
