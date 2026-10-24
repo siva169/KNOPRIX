@@ -272,7 +272,7 @@ class SourceAwareChatTests(unittest.TestCase):
             response = chat.chat_stream(
                 self.request(
                     providerId="gemini-free",
-                    model="gemini-2.5-flash",
+                    model="gemini-3.8-flash",
                 ),
                 user=self.users["user-a"],
                 db=self.db,
@@ -296,7 +296,7 @@ class SourceAwareChatTests(unittest.TestCase):
             response = chat.chat_stream(
                 self.request(
                     providerId="gemini-free",
-                    model="gemini-2.5-flash",
+                    model="gemini-3.8-flash",
                 ),
                 user=self.users["user-a"],
                 db=self.db,
@@ -321,7 +321,7 @@ class SourceAwareChatTests(unittest.TestCase):
             result = chat.chat_ask(
                 self.request(
                     providerId="gemini-free",
-                    model="gemini-2.5-flash-lite",
+                    model="gemini-3.8-flash",
                 ),
                 user=self.users["user-a"],
                 db=self.db,

@@ -41,8 +41,7 @@ _OPENAI_COMPATIBLE_URLS = {
 NVIDIA_MODEL_ID = "nvidia/nemotron-3.5-lightning-30b-a3b"
 _NATIVE_PROVIDERS = {"gemini-free", "anthropic", "ollama"}
 _GEMINI_SEARCH_MODELS = {
-    ("gemini-free", "gemini-2.5-flash"),
-    ("gemini-free", "gemini-2.5-flash-lite"),
+    ("gemini-free", "gemini-3.8-flash"),
 }
 
 

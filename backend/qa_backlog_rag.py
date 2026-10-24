@@ -60,7 +60,7 @@ class ProviderAdapterTests(unittest.TestCase):
 
         self.assertEqual(
             [model["id"] for model in provider["models"]],
-            ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+            ["gemini-3.8-flash"],
         )
 
     def test_provider_allowlists_avoid_retired_groq_and_anthropic_models(self):
@@ -302,7 +302,7 @@ class BacklogRAGTests(unittest.TestCase):
         # 1. Document has grant initially -> query succeeds
         body = {
             "providerId": "gemini-free",
-            "model": "gemini-2.5-flash",
+            "model": "gemini-3.8-flash",
             "documentIds": [doc_id],
             "question": "What is a supernova?",
         }
@@ -923,7 +923,7 @@ class BacklogRAGTests(unittest.TestCase):
 
         body = {
             "providerId": "gemini-free",
-            "model": "gemini-2.5-flash",
+            "model": "gemini-3.8-flash",
             "documentIds": [doc_id],
             "question": "Explain relativity",
             "api_key": "secret-key-that-must-not-be-in-body",
@@ -941,7 +941,7 @@ class BacklogRAGTests(unittest.TestCase):
 
         body = {
             "providerId": "gemini-free",
-            "model": "gemini-2.5-flash",
+            "model": "gemini-3.8-flash",
             "documentIds": [doc_id],
             "question": "What is cosmic microwave background?",
         }

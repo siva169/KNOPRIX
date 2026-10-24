@@ -1,5 +1,14 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-25 — Replace retired Gemini 2.5 chat model
+
+- Google reports Gemini 2.5 Flash is unavailable to new API users. Replaced
+  the Gemini chat allowlist and artifact default with Gemini 3.8 Flash, and
+  aligned native Search support, QA fixtures, and current API/product docs.
+- Google documents Gemini 3.8 Flash as supporting Search grounding. Local
+  provider, RAG, heap, and browser QA are used; no live Gemini key/request is
+  part of verification.
+
 ## 2026-10-25 — Preserve safe Gemini provider error detail
 
 - Gemini Search errors now include the provider's structured error message

@@ -55,8 +55,8 @@ provider decides whether a query needs live web results.
 - Pass native search tools only to compatible provider APIs/models. Preserve
   streamed text and extract provider citation metadata where the documented
   response format supports it. Google Search is currently enabled only for
-  Gemini 2.5 Flash and Gemini 2.5 Flash-Lite through the Interactions API;
-  requests set `store: false`. Its non-streaming response is buffered before
+  Gemini 3.8 Flash through the Interactions API; requests set `store: false`.
+  Its non-streaming response is buffered before
   Knoprix emits SSE text chunks so documented web citations can be saved.
   Other models retain provider-token streaming.
 - Persist user/assistant messages and citations in the conversation contract;

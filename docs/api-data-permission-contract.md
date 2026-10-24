@@ -504,8 +504,8 @@ that omit it. Shared-document AI chat is not part of this change.
   Unsupported combinations receive no search tool and report live search as
   unavailable. The adapter normalizes supported web citations into structured
   source records, accepting only `https:` URLs. Provider search can incur
-  provider-defined usage charges. The implemented pair is Gemini 2.5 Flash
-  and Gemini 2.5 Flash-Lite through Google's Interactions API. Requests set
+  provider-defined usage charges. The implemented model is Gemini 3.8 Flash
+  through Google's Interactions API. Requests set
   `store: false`; the provider returns the grounded response and citations
   before Knoprix emits its SSE answer chunks, so search-enabled replies are
   buffered while citations are preserved. Other models retain their existing

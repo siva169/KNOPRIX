@@ -70,7 +70,7 @@ if PID:
 prov = provs[0] if provs else {}
 ASK = {
     "providerId": prov.get("id", "gemini-free"),
-    "model": (prov.get("models", [{}])[0] or {}).get("id", "gemini-2.5-flash"),
+    "model": (prov.get("models", [{}])[0] or {}).get("id", "gemini-3.8-flash"),
     "documentIds": DOCS,
     "question": "signal",
 }

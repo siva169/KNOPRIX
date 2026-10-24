@@ -27,7 +27,7 @@ const loadKeys = () => {
 const docLabel = (doc) => doc.title || doc.filename || doc.file_name || doc.fileName || 'Untitled document';
 const supportsLiveSearch = (selectedProviderId, selectedModelId) =>
   selectedProviderId === 'gemini-free'
-  && ['gemini-2.5-flash', 'gemini-2.5-flash-lite'].includes(selectedModelId);
+  && selectedModelId === 'gemini-3.8-flash';
 const titleFromQuestion = (value) => {
   const compact = value.replace(/\s+/g, ' ').trim();
   const characters = Array.from(compact);

@@ -127,8 +127,8 @@ async function run() {
               name: 'Google Gemini',
               hasServerKey: true,
               models: [{
-                id: 'gemini-2.5-flash',
-                name: 'Gemini 2.5 Flash',
+                id: 'gemini-3.8-flash',
+                name: 'Gemini 3.8 Flash',
               }],
             },
           ]
@@ -293,7 +293,7 @@ async function run() {
           endIndex: responseText.length,
         }];
       const searchAvailable = requestBody.providerId === 'gemini-free'
-        && requestBody.model === 'gemini-2.5-flash';
+        && requestBody.model === 'gemini-3.8-flash';
       const searchUsed = searchAvailable && requestBody.documentIds.length === 0;
       const conversation = conversations.get(requestBody.conversationId);
       if (!conversation) throw new Error('Chat request used an unknown conversation.');
@@ -563,7 +563,7 @@ async function run() {
       || Object.hasOwn(chatRequests[1], 'confirmed')
       || Object.hasOwn(chatRequests[1], 'mode')
       || chatRequests[1].providerId !== 'gemini-free'
-      || chatRequests[1].model !== 'gemini-2.5-flash') {
+      || chatRequests[1].model !== 'gemini-3.8-flash') {
       throw new Error(`[${bp.name}] General chat incorrectly required or sent document context.`);
     }
     if (await page.getByText(/Grounded Citations/i).count()) {

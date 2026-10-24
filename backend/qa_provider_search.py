@@ -17,19 +17,14 @@ class GeminiSearchTests(unittest.TestCase):
     def test_supported_models_are_explicit_and_provider_scoped(self):
         self.assertTrue(
             rag.provider_supports_native_search(
-                "gemini-free", "gemini-2.5-flash"
-            )
-        )
-        self.assertTrue(
-            rag.provider_supports_native_search(
-                "gemini-free", "gemini-2.5-flash-lite"
+                "gemini-free", "gemini-3.8-flash"
             )
         )
         self.assertFalse(
-            rag.provider_supports_native_search("openai", "gemini-2.5-flash")
+            rag.provider_supports_native_search("openai", "gemini-3.8-flash")
         )
         self.assertFalse(
-            rag.provider_supports_native_search("gemini-free", "gemini-2.0-flash")
+            rag.provider_supports_native_search("gemini-free", "gemini-2.5-flash")
         )
 
     def test_search_request_is_stateless_and_citations_are_normalized(self):
@@ -76,7 +71,7 @@ class GeminiSearchTests(unittest.TestCase):
             return_value=response,
         ) as open_url:
             answer, citations, search_used = rag.complete_gemini_search_response(
-                "gemini-2.5-flash",
+                "gemini-3.8-flash",
                 "mock-api-key",
                 "System rules",
                 "Question",
@@ -90,6 +85,7 @@ class GeminiSearchTests(unittest.TestCase):
         )
         headers = {key.lower(): value for key, value in request.header_items()}
         self.assertEqual(headers["x-goog-api-key"], "mock-api-key")
+        self.assertEqual(payload["model"], "gemini-3.8-flash")
         self.assertEqual(payload["tools"], [{"type": "google_search"}])
         self.assertIs(payload["store"], False)
         self.assertEqual(payload["input"], "Question")
@@ -115,7 +111,7 @@ class GeminiSearchTests(unittest.TestCase):
             ]),
         ):
             answer, citations, search_used = rag.complete_gemini_search_response(
-                "gemini-2.5-flash-lite", "key", "system", "question"
+                "gemini-3.8-flash", "key", "system", "question"
             )
         self.assertEqual((answer, citations, search_used), ("Answer.", [], False))
 
@@ -124,7 +120,7 @@ class GeminiSearchTests(unittest.TestCase):
             return_value=io.BytesIO(b'{"steps": {}}'),
         ), self.assertRaises(rag.ProviderSearchError):
             rag.complete_gemini_search_response(
-                "gemini-2.5-flash", "key", "system", "question"
+                "gemini-3.8-flash", "key", "system", "question"
             )
 
     def test_provider_http_errors_are_surfaceable(self):
@@ -141,7 +137,7 @@ class GeminiSearchTests(unittest.TestCase):
             side_effect=response_error,
         ), self.assertRaisesRegex(rag.ProviderSearchError, "HTTP 429"):
             rag.complete_gemini_search_response(
-                "gemini-2.5-flash", "key", "system", "question"
+                "gemini-3.8-flash", "key", "system", "question"
             )
 
     def test_provider_error_message_is_reported_without_request_data(self):
@@ -151,7 +147,7 @@ class GeminiSearchTests(unittest.TestCase):
             "Not Found",
             None,
             io.BytesIO(
-                b'{"error":{"message":"models/gemini-2.5-flash-lite not found"}}'
+                b'{"error":{"message":"models/gemini-3.8-flash not found"}}'
             ),
         )
         self.addCleanup(response_error.close)
@@ -160,7 +156,7 @@ class GeminiSearchTests(unittest.TestCase):
             side_effect=response_error,
         ), self.assertRaises(rag.ProviderSearchError) as context:
             rag.complete_gemini_search_response(
-                "gemini-2.5-flash-lite",
+                "gemini-3.8-flash",
                 "secret-key-not-in-error",
                 "private system prompt",
                 "private user question",
@@ -168,7 +164,7 @@ class GeminiSearchTests(unittest.TestCase):
         self.assertEqual(
             str(context.exception),
             "Gemini Search request failed (HTTP 404): "
-            "models/gemini-2.5-flash-lite not found",
+            "models/gemini-3.8-flash not found",
         )
 
 

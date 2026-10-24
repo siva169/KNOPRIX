@@ -49,7 +49,7 @@ def _verify_documents_for_artifacts(db, user_id: str, document_ids: list[str]):
 # --- provider/model selection -------------------------------------------
 _ARTIFACT_MODELS = {
     "zai-glm-free": "glm-4.5-flash",
-    "gemini-free": "gemini-2.5-flash",
+    "gemini-free": "gemini-3.8-flash",
     "groq-free": "openai/gpt-oss-120b",
     "openrouter-free": "meta-llama/llama-3.3-70b-instruct:free",
     "nvidia-nim": NVIDIA_MODEL_ID,

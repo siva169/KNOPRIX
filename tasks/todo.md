@@ -1093,8 +1093,8 @@ are recorded in `UI-UX.md` and implemented.
 - **Description:** Use only documented search tools exposed by the selected
   provider API; let each supported model decide whether to search. Keep other
   models usable and visibly mark live search unavailable.
-- **Progress:** Backend grounding is implemented for Gemini 2.5 Flash and
-  Gemini 2.5 Flash-Lite through Google's Interactions API with `store: false`.
+- **Progress:** Backend grounding is implemented for Gemini 3.8 Flash through
+  Google's Interactions API with `store: false`.
   HTTPS citations are persisted separately from document citations, and
   search availability/use is returned by both chat routes. The provider's
   grounded response is buffered to preserve citations before SSE chunks are

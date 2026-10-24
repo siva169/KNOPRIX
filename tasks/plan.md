@@ -322,8 +322,8 @@ recorded in `UI-UX.md` and implemented.
    implemented.
 3. **General/context chat backend:** general questions work without documents;
    bounded document/chat context preserves grants and account isolation.
-4. **Native provider search:** Gemini 2.5 Flash and Flash-Lite use the
-   documented native tool; unsupported models remain usable without search.
+4. **Native provider search:** Gemini 3.8 Flash uses the documented native
+   tool; unsupported models remain usable without search.
 5. **AI Wing integration:** one chat flow, per-request disclosure, persisted
    history, inline citations, and feature checklist are synchronized.
 
