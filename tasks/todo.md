@@ -1067,6 +1067,11 @@ boss approval before frontend implementation.
 - **Description:** Make document scope optional, preserve ordinary model
   answers, retrieve bounded authorized-document passages and relevant
   account-owned prior messages, and persist completed messages/citations.
+- **Progress:** The source-aware `conversationId` request path now supports
+  general questions, bounded account-owned saved-chat context, granted
+  document passages, and successful-exchange persistence. The legacy
+  document-required/mode path remains temporarily for existing UI clients;
+  completing this task includes retiring that path during UI integration.
 - **Acceptance:** General questions work with zero documents; no
   document-only refusal remains; revoked/ungranted documents and other users'
   chats never enter context; provider/key allowlists remain enforced.

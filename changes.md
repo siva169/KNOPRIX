@@ -10,6 +10,18 @@
 - Added focused migration/history QA; no frontend or chat-provider behavior
   changed in this slice.
 
+## 2026-10-25 — Add source-aware general chat backend path
+
+- Added a `conversationId` chat path that answers general questions with
+  optional bounded passages from confirmed, granted documents and relevant
+  messages selected only from the signed-in user's saved chats.
+- Successful answers persist ordered user/assistant messages and document
+  citations; provider errors and empty answers are surfaced without persisting
+  an incomplete exchange.
+- Added mocked streaming QA for general-only, document/history context,
+  account isolation, confirmation/grant gates, mode rejection, and persistence.
+  The current UI's legacy mode path remains until frontend integration.
+
 ## 2026-10-25 — Approve general AI chat and synced conversation history
 
 - Updated the PRD, API/data permission contract, and BYOK security contract

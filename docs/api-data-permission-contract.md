@@ -448,9 +448,11 @@ provider/model or any key-like field is rejected before retrieval.
 ```
 
 If the provider is null, `provider` in the response is null. Retrieved
-context is short-lived and not persisted as conversation history. The current
-`POST /api/chat/ask` and `/api/chat/stream` routes still use their legacy
-request shape; the unified target is specified below.
+context is short-lived and not persisted as conversation history. Requests to
+`POST /api/chat/ask` and `/api/chat/stream` with `conversationId` use the
+source-aware target below and persist successful exchanges. The older
+document-required request shape remains temporarily supported for existing
+clients that omit `conversationId`; it is not the target contract.
 
 ### Provider-copy cleanup routes, conversation API, and unified chat target
 
@@ -517,8 +519,9 @@ AI chat is not part of this change.
 
 All routes below require authentication and scope reads/writes to
 `current_user.id`. API fields use camelCase. Unknown and other-user IDs return
-the same `404` response. These CRUD routes are implemented; streaming-chat
-message persistence and frontend integration remain pending.
+the same `404` response. CRUD routes and successful source-aware chat message
+persistence are implemented. Frontend integration and provider-native web
+search remain pending.
 
 #### `GET /api/chat/conversations?search=&limit=20&offset=0`
 
