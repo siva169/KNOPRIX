@@ -16,6 +16,7 @@ from .routers import (
     auth,
     bookmarks,
     chat,
+    conversations,
     documents,
     dsa,
     graph,
@@ -58,6 +59,7 @@ app.include_router(projects.router)
 app.include_router(documents.router)
 app.include_router(search.router)
 app.include_router(chat.router)
+app.include_router(conversations.router)
 app.include_router(summary.router)
 app.include_router(graph.router)
 app.include_router(dsa.router)

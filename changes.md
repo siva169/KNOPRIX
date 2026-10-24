@@ -1,5 +1,15 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-25 — Add synced conversation history API
+
+- Added append-only migration 8 for owner-scoped conversations and ordered
+  user/assistant messages, with citation metadata and cascade deletion.
+- Added authenticated create/list/title-search/get/rename/delete routes with
+  owner checks, project ownership validation, title validation, and bounded
+  pagination.
+- Added focused migration/history QA; no frontend or chat-provider behavior
+  changed in this slice.
+
 ## 2026-10-25 — Approve general AI chat and synced conversation history
 
 - Updated the PRD, API/data permission contract, and BYOK security contract

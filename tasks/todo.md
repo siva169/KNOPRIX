@@ -1004,7 +1004,7 @@ Wing dark/gold tokens and modal styling, full-width on mobile and centered on
 larger screens. Other meaningful dialog/chat UI decisions remain gated for
 boss approval before frontend implementation.
 
-### Task 1: Updating chat, data, and UI contracts
+### [x] Task 1: Updating chat, data, and UI contracts
 
 - **Description:** Sync the approved source-aware chat and server-history scope
   into the PRD, API/data permission contract, provider security contract, and
@@ -1024,7 +1024,7 @@ boss approval before frontend implementation.
  `checklists/033-vibecoding-complete-33-checklist.md`.
 - **Scope:** Medium (5 files).
 
-### Task 2: Adding account-scoped conversation storage and API
+### [x] Task 2: Adding account-scoped conversation storage and API
 
 - **Description:** Add a safe append-only migration and authenticated
   conversation/message APIs for the existing SQLite/PostgreSQL layer.
@@ -1038,6 +1038,12 @@ boss approval before frontend implementation.
 - **Files:** `backend/app/database.py`, `backend/app/routers/conversations.py`,
   `backend/app/main.py`, `backend/qa_chat_history.py`,
   `backend/qa_database_migrations.py`.
+- **Verification evidence:** Migration 8 (`account-scoped-chat-history`) is
+  append-only and rerun-tested. Focused tests pass for create/list,
+  case-insensitive literal title search, pagination, get/rename/delete,
+  validation, project ownership, message order/citations, foreign-owner 404
+  parity, and account/message cascade behavior. Tests run with the project's
+  `.venv`.
 - **Scope:** Medium (5 files).
 
 ### Task 3: Building the Recent Chats dialog

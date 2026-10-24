@@ -657,6 +657,36 @@ def _create_provider_document_files_schema(conn) -> None:
         conn.execute(statement)
 
 
+def _create_chat_history_schema(conn) -> None:
+    for statement in (
+        """CREATE TABLE IF NOT EXISTS conversations (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+            title TEXT NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_conversations_user_updated
+            ON conversations(user_id, updated_at, id)""",
+        """CREATE TABLE IF NOT EXISTS messages (
+            id TEXT PRIMARY KEY,
+            conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            sequence INTEGER NOT NULL,
+            role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+            content TEXT NOT NULL,
+            provider_id TEXT,
+            model_id TEXT,
+            citations_json TEXT NOT NULL DEFAULT '[]',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(conversation_id, sequence)
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_messages_conversation_sequence
+            ON messages(conversation_id, sequence)""",
+    ):
+        conn.execute(statement)
+
+
 # Migration versions are append-only; never edit a migration after it is released.
 MIGRATIONS = (
     (1, "baseline-schema", _create_base_schema),
@@ -666,6 +696,7 @@ MIGRATIONS = (
     (5, "production-backlog-foundations", _create_production_backlog_schema),
     (6, "precise-highlight-anchors", _add_precise_highlight_anchors),
     (7, "provider-specific-document-files", _create_provider_document_files_schema),
+    (8, "account-scoped-chat-history", _create_chat_history_schema),
 )
 
 

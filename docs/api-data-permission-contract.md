@@ -452,13 +452,13 @@ context is short-lived and not persisted as conversation history. The current
 `POST /api/chat/ask` and `/api/chat/stream` routes still use their legacy
 request shape; the unified target is specified below.
 
-### Provider-copy cleanup routes and unified chat target
+### Provider-copy cleanup routes, conversation API, and unified chat target
 
 The cleanup routes below are implemented under `/api`, not `/api/v1`; the
-unified chat and conversation routes are the approved target until their
-implementation is complete. Existing chat currently uses the older
-document-required request shape. Shared-document AI chat is not part of this
-change.
+conversation routes are implemented under `/api` as well. The unified chat
+contract remains the target until its implementation is complete. Existing
+chat currently uses the older document-required request shape. Shared-document
+AI chat is not part of this change.
 
 - `GET /api/projects/{projectId}/provider-documents?providerId=...&model=...`
   lists existing provider-copy records without remote file IDs or credential
@@ -517,7 +517,8 @@ change.
 
 All routes below require authentication and scope reads/writes to
 `current_user.id`. API fields use camelCase. Unknown and other-user IDs return
-the same `404` response.
+the same `404` response. These CRUD routes are implemented; streaming-chat
+message persistence and frontend integration remain pending.
 
 #### `GET /api/chat/conversations?search=&limit=20&offset=0`
 

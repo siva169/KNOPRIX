@@ -50,6 +50,8 @@ class DatabaseMigrationTests(unittest.TestCase):
                 (4, "contacts-sharing-and-annotation-links"),
                 (5, "production-backlog-foundations"),
                 (6, "precise-highlight-anchors"),
+                (7, "provider-specific-document-files"),
+                (8, "account-scoped-chat-history"),
             ],
         )
         self.assertTrue({
@@ -72,7 +74,31 @@ class DatabaseMigrationTests(unittest.TestCase):
             "document_chunks",
             "study_artifacts",
             "data_export_jobs",
+            "conversations",
+            "messages",
         } <= tables)
+        with closing(self.connect()) as conn:
+            self.assertTrue(
+                {
+                    "user_id",
+                    "project_id",
+                    "title",
+                    "created_at",
+                    "updated_at",
+                }.issubset(database._table_columns(conn, "conversations"))
+            )
+            self.assertTrue(
+                {
+                    "conversation_id",
+                    "sequence",
+                    "role",
+                    "content",
+                    "provider_id",
+                    "model_id",
+                    "citations_json",
+                    "created_at",
+                }.issubset(database._table_columns(conn, "messages"))
+            )
         with closing(self.connect()) as conn:
             self.assertTrue(
                 {
