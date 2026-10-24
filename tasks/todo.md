@@ -1145,6 +1145,5 @@ are recorded in `UI-UX.md` and implemented.
 - [x] API/security/PRD/UI-UX docs and feature checklist match the behavior.
 - [x] Nested Knoprix diff reviewed; unrelated parent-repository changes remain
   untouched and unstaged.
-- [ ] Local identity disclosed; commit is pending boss's direction because
-  configured identity differs from the project-local identity recorded in
-  `docs/changes.md`.
+- [x] Local identity disclosed and approved; Knoprix changes and the parent
+  submodule pointer were committed locally. No remote push was performed.

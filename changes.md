@@ -18,7 +18,7 @@
   Frontend build passed with the existing >500 kB advisory; mocked browser QA
   passed at 390/425/768/1024px. `qa_chat.py` was skipped because it requires
   `KNOPRIX_QA_PASSWORD`; no live provider calls were made.
-- Local commit is pending disclosure/confirmation of Git identity. No remote
+- Local checkpoint created with the approved `siva169` identity. No remote
   operation or deployment was performed.
 
 ## 2026-10-25 — Add verified Gemini web search to general chat
