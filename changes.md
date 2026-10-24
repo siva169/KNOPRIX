@@ -1,5 +1,14 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-25 — Fix tied-score passage ranking
+
+- Prevented `top_k` from comparing payload values when scores tie by adding a
+  stable input-order tie breaker. This fixes RAG chat failures when two
+  matching passage records both contain dictionaries.
+- Added unit and end-to-end retrieval regressions for tied scores and dict
+  payloads; heap QA now runs its unit checks without credentials and skips only
+  authenticated API checks when `KNOPRIX_QA_PASSWORD` is unset.
+
 ## 2026-10-25 — Complete unified AI chat and Recent Chats UI
 
 - Replaced the Retrieval/Document mode selector with general chat, optional

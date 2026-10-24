@@ -8,8 +8,6 @@ from app.dsa.minheap import MinHeap, top_k
 
 QA_EMAIL = os.getenv("KNOPRIX_QA_EMAIL", "demo@knoprix.io")
 QA_PASSWORD = os.getenv("KNOPRIX_QA_PASSWORD", "")
-if not QA_PASSWORD:
-    raise SystemExit("Set KNOPRIX_QA_PASSWORD to run the local heap API test.")
 
 results = []
 
@@ -42,6 +40,23 @@ got = top_k(scored, 5)
 check("top_k best-first top5", [s for s, _ in got] == sorted([float(v) for v in vals], reverse=True)[:5])
 check("top_k k=0 empty", top_k(scored, 0) == [])
 check("top_k k>n returns all sorted", len(top_k(scored[:3], 10)) == 3)
+dict_scored = [
+    (5.0, {"id": "first"}),
+    (4.0, {"id": "second"}),
+    (4.0, {"id": "third"}),
+    (4.0, {"id": "fourth"}),
+]
+dict_top = top_k(dict_scored, 2)
+check(
+    "top_k handles tied scores with dict items",
+    dict_top == dict_scored[:2],
+)
+
+if not QA_PASSWORD:
+    print("SKIP  endpoint tests — set KNOPRIX_QA_PASSWORD to run them")
+    passed = sum(1 for _, ok in results if ok)
+    print(f"\n{passed}/{len(results)} heap checks passed")
+    raise SystemExit(0 if passed == len(results) else 1)
 
 # --- Endpoint ---
 BASE = "http://127.0.0.1:8011/api"

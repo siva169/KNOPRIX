@@ -266,6 +266,32 @@ class BacklogRAGTests(unittest.TestCase):
             documents.upload_document(PROJECT_ID, upload, USER, self.db)
         )
 
+    def test_hybrid_retrieval_handles_tied_passage_scores(self):
+        doc_res = self.upload_doc("signals.txt", b"Signal passages.")
+        doc_id = doc_res["document"]["id"]
+        self.db.execute(
+            "DELETE FROM document_chunks WHERE document_id = ?",
+            (doc_id,),
+        )
+        self.db.executemany(
+            """
+            INSERT INTO document_chunks
+                (id, document_id, page_number, chunk_index, content)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                (f"chunk-{index}", doc_id, index + 1, index, "Signal appears here.")
+                for index in range(4)
+            ],
+        )
+        self.db.commit()
+
+        passages = rag.retrieve_hybrid_passages(
+            self.db, PROJECT_ID, [doc_id], "signal", top_n=2
+        )
+
+        self.assertEqual([passage["pageNumber"] for passage in passages], [1, 2])
+
     def test_document_grants_enforcement_blocks_unauthorized_documents(self):
         doc_res = self.upload_doc(
             "supernova.txt",

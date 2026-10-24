@@ -88,13 +88,16 @@ def top_k(scored: list[tuple[float, Any]], k: int) -> list[tuple[float, Any]]:
     if k <= 0:
         return []
     heap = MinHeap()
-    for score, item in scored:
+    for index, (score, item) in enumerate(scored):
+        entry = (score, index, item)
         if heap.size() < k:
-            heap.push((score, item))
+            heap.push(entry)
         elif score > heap.peek()[0]:
             heap.pop()
-            heap.push((score, item))
+            heap.push(entry)
     out = []
     while not heap.is_empty():
-        out.append(heap.pop())
-    return sorted(out, key=lambda t: -t[0])
+        score, index, item = heap.pop()
+        out.append((score, index, item))
+    ranked = sorted(out, key=lambda entry: (-entry[0], entry[1]))
+    return [(score, item) for score, _, item in ranked]
