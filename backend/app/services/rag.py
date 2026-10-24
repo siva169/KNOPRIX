@@ -128,9 +128,28 @@ def complete_gemini_search_response(
         with urllib.request.urlopen(req, timeout=120) as response:
             raw = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
-        logger.error("Gemini Search request failed with HTTP %s", exc.code)
+        try:
+            error_body = json.loads(exc.read(4096).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            error_body = {}
+        provider_message = (
+            error_body.get("error", {}).get("message")
+            if isinstance(error_body, dict)
+            and isinstance(error_body.get("error"), dict)
+            else None
+        )
+        if isinstance(provider_message, str):
+            provider_message = " ".join(provider_message.split())[:500]
+        else:
+            provider_message = None
+        logger.error(
+            "Gemini Search request failed with HTTP %s: %s",
+            exc.code,
+            provider_message or "No provider error message was returned.",
+        )
         raise ProviderSearchError(
-            f"Gemini Search request failed (HTTP {exc.code})."
+            f"Gemini Search request failed (HTTP {exc.code})"
+            + (f": {provider_message}" if provider_message else ".")
         ) from exc
     except urllib.error.URLError as exc:
         logger.error("Gemini Search connection failed")

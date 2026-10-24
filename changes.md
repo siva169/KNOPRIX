@@ -1,5 +1,12 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-25 — Preserve safe Gemini provider error detail
+
+- Gemini Search errors now include the provider's structured error message
+  (bounded and whitespace-normalized) in backend logs and the surfaced chat
+  error, while never logging the request or API key.
+- Added a mocked 404 regression test for provider error detail.
+
 ## 2026-10-25 — Fix tied-score passage ranking
 
 - Prevented `top_k` from comparing payload values when scores tie by adding a

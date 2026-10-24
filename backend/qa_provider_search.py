@@ -144,6 +144,33 @@ class GeminiSearchTests(unittest.TestCase):
                 "gemini-2.5-flash", "key", "system", "question"
             )
 
+    def test_provider_error_message_is_reported_without_request_data(self):
+        response_error = HTTPError(
+            "https://generativelanguage.googleapis.com/v1beta/interactions",
+            404,
+            "Not Found",
+            None,
+            io.BytesIO(
+                b'{"error":{"message":"models/gemini-2.5-flash-lite not found"}}'
+            ),
+        )
+        self.addCleanup(response_error.close)
+        with patch(
+            "app.services.rag.urllib.request.urlopen",
+            side_effect=response_error,
+        ), self.assertRaises(rag.ProviderSearchError) as context:
+            rag.complete_gemini_search_response(
+                "gemini-2.5-flash-lite",
+                "secret-key-not-in-error",
+                "private system prompt",
+                "private user question",
+            )
+        self.assertEqual(
+            str(context.exception),
+            "Gemini Search request failed (HTTP 404): "
+            "models/gemini-2.5-flash-lite not found",
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
