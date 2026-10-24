@@ -1,5 +1,22 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-25 — Approve general AI chat and synced conversation history
+
+- Updated the PRD, API/data permission contract, and BYOK security contract
+  for one general chat with bounded, authorized document/chat context and
+  provider-native search only where officially supported.
+- Recorded account-owned conversation CRUD, retention/deletion, disclosure,
+  citation, and provider-safety requirements. Provider keys remain separate
+  from saved conversations.
+- Added the approved Recent Chats design choice: existing AI Wing dark/gold
+  styling, full-width dialog on mobile, centered dialog on larger screens.
+  Remaining meaningful UI details stay gated for boss approval.
+- Added a feature-scoped 33-point polish/fix evaluation. Applicable items are
+  pending the UI implementation and responsive verification; unrelated items
+  are marked N/A for this feature.
+- No application code or provider calls were made in this documentation
+  checkpoint.
+
 ## 2026-10-20 — Replace full-document AI Wing with consented text chat
 
 - Kept Retrieval/RAG as the default and added extracted-text chat with a

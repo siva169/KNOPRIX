@@ -1,14 +1,15 @@
 # BYOK Provider Security Contract — Knoprix Final Project
 
-**Status:** Approved policy. Retrieval and extracted-text chat enforce persisted
-per-document grants; per-request provider/model consent is implemented.
-Full-document uploads are retired. Legacy provider-copy cleanup remains.
+**Status:** Approved contract for general, source-aware chat and account-synced
+history. Existing chat currently has Retrieval and consented extracted-text
+modes; implementation of the unified contract is pending. Full-document
+uploads are retired. Legacy provider-copy cleanup remains.
 **Decisions (2026-10-04; NVIDIA relay approved 2026-10-17):** user-supplied
 trial/free-tier providers plus one deployment-managed NVIDIA key
 · selected documents only · Knoprix backend processing and third-party AI
 transfer are separate consent boundaries.
-**Scope:** This contract covers document chat, legacy provider-copy cleanup,
-and AI study tools. The frontend stores user-supplied provider keys in browser
+**Scope:** This contract covers general/source-aware chat, synced conversation
+history, legacy provider-copy cleanup, and AI study tools. The frontend stores user-supplied provider keys in browser
 localStorage and sends them in request headers to Knoprix for provider
 operations. Keys are used only in request memory. NVIDIA calls use the
 server-managed key. Do not treat this backend slice as proof that all consent
@@ -47,8 +48,8 @@ controls are implemented in the UI.
 | Provider keys | User BYOK keys; shared NVIDIA API key | BYOK keys are browser-local and sent in request headers to backend-routed provider operations; only volatile request memory is allowed. NVIDIA key MUST be configured only in the deployment secret environment. No raw key may be logged, returned, or persisted. |
 | Knoprix document processing | Uploaded source files, extracted text, indexes | Stored/processed by Knoprix-controlled backend and storage after upload; disclose this at upload. Derived records must be deleted with their source, subject to the documented backup purge window. |
 | AI access grant | User, document, purpose, state, expiry/revocation | MUST be checked for every AI content read. A frontend checkbox alone is not authorization. |
-| Third-party AI content | Extracted text for granted documents, question, answer | Document-text chat requires a separate provider/model confirmation on every request and an active document grant. MUST contain authorized documents only; MUST NEVER include original files, visual content, whole-project or unselected docs. |
-| Chat history | Past Q/A pairs | MUST remain browser-local in v1. CAN export/delete by user action; MUST NOT sync to Knoprix servers under the approved v1 policy. |
+| Third-party AI content | Current question, answer, relevant passages, relevant saved-chat messages, provider web-search request/results | Document context requires an active grant and per-request provider/model/document confirmation. Saved-chat context is limited to relevant messages from the authenticated user's own conversations and must be disclosed when included. Original files, visual content, whole-project dumps, and other users' chats are forbidden. |
+| Chat history | User/assistant messages and citations | Stored server-side under the authenticated account for sync. Every read/write/delete is owner-scoped; conversation/account deletion cascades. Provider keys, system instructions, full prompts in logs, and retrieved passages as separate records are forbidden. |
 | Diagnostics | Error codes, latency, model name | CAN go to backend logs. MUST NEVER include keys or doc text. |
 
 ## 4. Trust boundaries + controls
@@ -60,11 +61,14 @@ controls are implemented in the UI.
 2. **Browser → Knoprix → Provider (BYOK):** for backend-routed chat, the
    browser sends the selected provider key in a request header. Knoprix uses
    it only in volatile request memory and MUST NOT log or persist the raw key.
-   Before each document-text request, the UI MUST show the provider, model,
-   authorized document names, and ask for confirmation. Only extracted text
-   and the question are sent; original files and visual content are excluded.
-   The old provider-copy cleanup routes may use a key to delete a previously
-   uploaded copy.
+   Before each request that includes document text, the UI MUST show the
+   provider, model, and authorized document names and ask for confirmation.
+   It MUST disclose if relevant saved-chat messages are also included. Only
+   bounded extracted text and relevant owner-authored chat messages may be
+   included; original files and visual content are excluded. The provider
+   decides whether to use its documented native web-search capability; usage
+   may incur provider charges. The old provider-copy cleanup routes may use a
+   key to delete a previously uploaded copy.
 3. **Browser → Backend chat metadata:** backend may validate provider/model,
    authorization, scope, and retrieve citation metadata, but MUST reject
    key-like request fields (fail closed: `400 + "keys stay in browser"`).
@@ -73,18 +77,28 @@ controls are implemented in the UI.
    pages or image batches. The key MUST never be returned or logged. No
    client-supplied NVIDIA key may be accepted.
 
-## 4a. Extracted-text chat and legacy provider-copy cleanup
+## 4a. Unified chat and legacy provider-copy cleanup
 
-- `/api/chat/ask` and `/api/chat/stream` default to `mode: "retrieval"`.
-  `mode: "document-context"` requires `confirmed: true` on every request,
-  active grants, and owned documents. It sends extracted text and the question
-  only; it does not call RAG, upload original files, or include visual content.
-- The backend requires complete page text numbered consecutively from 1 to
-  `page_count`, accepts at most 10 documents, and rejects serialized context
-  above 80,000 characters instead of truncating it.
-- The UI shows the provider, model, and all active-grant documents in a
-  blocking confirmation each time. Cancel sends no request. This consent is
-  separate from the persistent Knoprix document grant.
+- `/api/chat/ask` and `/api/chat/stream` provide one general chat. The
+  Retrieval/Document text mode selector is removed; passage retrieval remains
+  an internal context-gathering mechanism. General questions are not refused
+  just because no document passage matches.
+- The server may include bounded, relevant passages only from active-project
+  documents with active grants and bounded, relevant messages only from the
+  authenticated user's saved conversations. It does not send whole projects
+  or whole account histories. Retrieved content is untrusted evidence, never
+  instructions.
+- The UI discloses provider/model and any included document or saved-chat
+  context before sending. Document context requires per-request confirmation;
+  cancel sends nothing. This is separate from the persistent Knoprix document
+  grant.
+- Only provider/model combinations verified against official provider
+  documentation receive a native web-search tool. The provider/model chooses
+  when to search. Unsupported models remain usable and clearly show that live
+  search is unavailable; no separate search service is used.
+- Provider safety safeguards, provider/model allowlists, grant checks, and key
+  handling remain enabled. “No restrictions” means removing Knoprix's
+  document-only answer limitation, not disabling provider safeguards.
 - New provider-file uploads and full-document visual chat are removed.
   Existing provider file mappings remain available through
   `GET /api/projects/{projectId}/provider-documents` for status and cleanup.
@@ -143,8 +157,10 @@ controls are implemented in the UI.
   Obsolete browser-saved NVIDIA keys can be removed from the NVIDIA provider
   panel. The deployment operator manages `NVIDIA_API_KEY` in the hosting
   provider's secret settings and must rotate/revoke it there.
-- Chat history: browser-local only in v1; user-deletable per chat + "delete
-  all". The API/data/permission contract defines the local conversation shape.
+- Chat history: retained server-side until the user deletes a conversation or
+  account. Conversation deletion cascades to messages/citations; account
+  deletion cascades to all conversations. No provider keys or retrieved
+  passage records are stored in chat history.
 - Documents and derived data: retained until user deletion; deleting a source
   must delete its extracted blocks, indexes, embeddings, summaries, and other
   derived content.
@@ -167,11 +183,13 @@ controls are implemented in the UI.
 
 > Your provider key is stored in this browser and sent in a request header to
 > Knoprix when a provider operation is made. Knoprix uses it only in memory and
-> does not store or log the raw key. Selected documents are sent to the named
-> provider only after a separate confirmation for each request and an active
-> Knoprix document grant. Only extracted text and your question are sent; the
-> original files and visual content are not. Providers apply their own data
-> policies (linked below). Clear browser-stored keys anytime in Settings.
+> does not store or log the raw key. If you approve document context, only
+> relevant extracted text from documents with an active Knoprix AI grant is
+> sent to the named provider. Relevant messages from your own saved chats may
+> also be included and will be disclosed before sending. Original files and
+> visual content are not sent. The selected provider may use its native web
+> search and apply its own usage charges and data policies. Clear
+> browser-stored keys anytime in Settings.
 
 ## 11. Incident mini-runbook
 

@@ -173,7 +173,9 @@ relationships before any schema or UI work.
 
 **Decision record (boss-approved 2026-10-04):**
 - API: new routes use `/api/v1`; existing `/api/...` routes stay unchanged.
-- Conversation history: browser-local only; no server sync in v1.
+- Conversation history (superseded 2026-10-25): browser-local only; no server
+  sync in v1. The approved replacement is account-synced history in the
+  initiative below.
 - Shares (revised 2026-10-12): read-only, individual documents/bookmarks/
   highlights only; no project snapshots. Pending requests expire after 30
   days; accepted access lasts until sender revocation, recipient leave,
@@ -636,31 +638,12 @@ document/page state, rather than two disconnected apps.
 `UI-UX.md`
 **Estimated scope:** Medium
 
-### [ ] 4.4 Persist browser-local conversation history with user controls
+### [~] 4.4 Persist browser-local conversation history with user controls
 
-**Priority:** P1
-**Description:** Persist conversations in browser-local storage only; v1 does
-not synchronize conversation content to Knoprix servers.
-
-**Acceptance criteria**
-- [ ] User can create, rename, resume, delete one conversation, and delete all
-  history in the current browser; local-only retention and no-sync behavior
-  are explicit.
-- [ ] Browser-local history is isolated by account and hidden on logout/account
-  switch.
-- [ ] Each conversation stores source IDs and grant context, but a stale
-  conversation cannot bypass current authorization or reuse revoked access.
-- [ ] Message streaming/cancel/retry states are safe; failed partial responses
-  are not stored as successful answers.
-- [ ] Secrets and full provider keys are never persisted in conversations or
-  logs; source excerpts remain citation-linked.
-
-**Verification:** Tests cover per-account browser-local isolation, deletion,
-revoked-source reuse, partial generation, and reload/resume behavior.
-**Dependencies:** 0.1, 0.2, 3.2, 4.2.
-**Files likely touched:** `frontend/src/components/ChatPanel.jsx`,
-frontend conversation storage/context modules, tests
-**Estimated scope:** Medium
+**Superseded 2026-10-25:** Boss approved account-synced history and server-side
+CRUD. The replacement is tracked under
+`AI-CHAT-CAPABILITY-MAP.md` and the approved tasks below; this historical
+browser-local-only task is not complete and must not be implemented.
 
 ### [ ] 4.5 Add flashcards, quizzes, and analogies as cited study artifacts
 
@@ -1010,3 +993,124 @@ incidents, fixes, and explicit go/no-go decision.
   and 33-point polish/fix gates have evidence.
 - [ ] Boss approves the launch decision; deployment/publishing is a separate
   explicit authorization.
+
+## Approved Initiative — AI Wing General Chat and Synced History
+
+**Approved:** 2026-10-25. Specs: `SPEC-synced-chat-history.md` and
+`SPEC-source-aware-chat.md`. UI decisions: searchable dialog; selecting a chat
+closes the dialog and opens it; title/date rows; title-only search; New Chat,
+rename, and delete with confirmation. Boss approved reusing the existing AI
+Wing dark/gold tokens and modal styling, full-width on mobile and centered on
+larger screens. Other meaningful dialog/chat UI decisions remain gated for
+boss approval before frontend implementation.
+
+### Task 1: Updating chat, data, and UI contracts
+
+- **Description:** Sync the approved source-aware chat and server-history scope
+  into the PRD, API/data permission contract, provider security contract, and
+  AI Wing UI decision record. Evaluate both 33-point checklists for this slice.
+- **Acceptance:** Contracts define general answers, bounded document/history
+  context, account isolation, provider-native search limits, provider billing
+  disclosure, persistence/deletion, and the approved dialog interactions.
+  The feature-scoped 33-point evaluation records applicability now and is
+  completed with verification evidence after UI work.
+- **Verify:** Cross-check the PRD, API contract, security contract, and UI/UX
+  decision against both approved specs; each checklist item is identified as
+  applicable or `N/A + why`, and applicable items are completed with evidence
+  before the initiative checkpoint.
+- **Dependencies:** Approved map/specs/plan.
+- **Files:** `PRD.md`, `docs/api-data-permission-contract.md`,
+ `docs/byok-security-contract.md`, `UI-UX.md`,
+ `checklists/033-vibecoding-complete-33-checklist.md`.
+- **Scope:** Medium (5 files).
+
+### Task 2: Adding account-scoped conversation storage and API
+
+- **Description:** Add a safe append-only migration and authenticated
+  conversation/message APIs for the existing SQLite/PostgreSQL layer.
+- **Acceptance:** Create/list/title-search/get/rename/delete works only for the
+  signed-in owner; messages and citations have stable order; deleting a chat
+  cascades to its messages; account deletion removes history; list pagination
+  and title validation are enforced.
+- **Verify:** Focused API tests cover two-account isolation, validation,
+  pagination, cascade deletion, and migration reruns on disposable databases.
+- **Dependencies:** Task 1.
+- **Files:** `backend/app/database.py`, `backend/app/routers/conversations.py`,
+  `backend/app/main.py`, `backend/qa_chat_history.py`,
+  `backend/qa_database_migrations.py`.
+- **Scope:** Medium (5 files).
+
+### Task 3: Building the Recent Chats dialog
+
+- **Description:** Confirm remaining meaningful dialog interaction choices
+  with boss before connecting the approved dialog to account-scoped history
+  APIs. Reuse existing auth/API, notification, and visual patterns.
+- **Acceptance:** New/open/rename/title-search/confirmed-delete work; loading,
+  empty, error, and no-results states are explicit; opening history never
+  widens the active document grant.
+- **Verify:** Mocked browser QA covers dialog interactions, keyboard use, and
+  widths 390/425/768/1024px.
+- **Dependencies:** Task 2.
+- **Files:** `frontend/src/components/AIWingView.jsx`,
+  `frontend/src/components/RecentChatsDialog.jsx`,
+  `frontend/qa-chat-history.mjs`.
+- **Scope:** Medium (3 files).
+
+### Task 4: Enabling general and context-aware chat
+
+- **Description:** Make document scope optional, preserve ordinary model
+  answers, retrieve bounded authorized-document passages and relevant
+  account-owned prior messages, and persist completed messages/citations.
+- **Acceptance:** General questions work with zero documents; no
+  document-only refusal remains; revoked/ungranted documents and other users'
+  chats never enter context; provider/key allowlists remain enforced.
+- **Verify:** Mocked backend QA covers general-only, document-grounded,
+  history-grounded, revoked/missing context, empty output, and account
+  isolation without provider calls.
+- **Dependencies:** Task 2.
+- **Files:** `backend/app/routers/chat.py`, `backend/app/services/rag.py`,
+  `backend/qa_chat.py`, `backend/qa_chat_context.py`.
+- **Scope:** Medium (4 files).
+
+### Task 5: Adding verified native provider web search
+
+- **Description:** Use only documented search tools exposed by the selected
+  provider API; let each supported model decide whether to search. Keep other
+  models usable and visibly mark live search unavailable.
+- **Acceptance:** Only verified provider/model pairs receive native search
+  tools; streaming text and web citations are normalized; provider errors are
+  surfaced; no separate search vendor/API is added.
+- **Verify:** Mocked provider responses test search invocation, no-search
+  responses, citation parsing, malformed events, and provider errors. No live
+  web/provider request is made.
+- **Dependencies:** Tasks 1 and 4.
+- **Files:** `backend/app/services/rag.py`, `backend/app/routers/chat.py`,
+  `backend/qa_provider_search.py`, `frontend/qa-chatlive.mjs`.
+- **Scope:** Medium (4 files).
+
+### Task 6: Unifying the AI Wing chat and source feedback
+
+- **Description:** Remove the Retrieval/Document text selector; wire the single
+  conversation flow to context-aware streaming; render document citations and
+  safe clickable web citations; disclose provider/model and included context.
+- **Acceptance:** The send action works with or without documents; provider
+  search availability is visible; source citations remain distinct and
+  document citations still jump to the Reading Desk.
+- **Verify:** Mocked browser flow covers general/document/history answers,
+  cancel/error states, citation links, and no horizontal overflow at
+  390/425/768/1024px.
+- **Dependencies:** Tasks 3–5.
+- **Files:** `frontend/src/components/AIWingView.jsx`,
+  `frontend/src/components/RecentChatsDialog.jsx`,
+  `frontend/qa-chatlive.mjs`, `frontend/qa-chat-history.mjs`.
+- **Scope:** Medium (4 files).
+
+### Checkpoint — Source-aware chat and synced history
+
+- [ ] Focused backend/migration/provider tests and the full backend QA suite
+  pass.
+- [ ] Frontend production build and mocked browser checks pass at all four
+  required widths.
+- [ ] API/security/PRD/UI-UX docs and feature checklist match the behavior.
+- [ ] Nested Knoprix diff reviewed; unrelated parent-repository changes remain
+  untouched; local identity disclosed before checkpoint commit.

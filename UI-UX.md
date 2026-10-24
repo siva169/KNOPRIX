@@ -263,28 +263,31 @@ No visual choice is treated as approved until it is selected here.
 - Decisions: allowlist presentation, capability labels, speed/cost indicators.
 - Reference URLs: _add here_
 
-### F5. `DocumentContextConsentDialog` — explains external document processing
-- Used for: before each extracted-text request is sent to a provider.
+### F5. `AIContextConsentDialog` — explains external context sent to a provider
+- Used for: before a request sends authorized document text to a provider.
 - Approved interaction: a blocking confirmation names the provider/model and
-  lists all currently AI-enabled documents. It states that only extracted text
-  and the question are sent; original files and visual content are excluded.
-  It discloses key handling and warns about possible charges/quota without
-  inventing unavailable price estimates. Cancel sends nothing and preserves
-  the pending question.
+  identifies the authorized document context. It states that only relevant
+  extracted text and the question are sent; original files and visual content
+  are excluded. It discloses key handling and warns about possible
+  provider-defined charges/quota without inventing prices. Cancel sends
+  nothing and preserves the pending question.
+- Unified-chat update: if saved-chat context is included, disclose that
+  alongside the documents. Show provider-native search availability and
+  provider-defined usage/charge notice when applicable.
 - Reference URLs: _add here_
 
 ### F6. `DocumentScopePicker` — selects exactly which documents AI may use
 - Used for: every AI conversation or explicit session scope.
 - Decisions: one document versus multiple, project-wide option, remembered
   scope, clear selection.
-- Current chat scope: all project documents with an active Knoprix AI grant;
-  document-text mode supports up to 10 documents and does not add a second
-  per-chat document-selection control.
+- Approved target: the unified chat may use relevant passages from
+  active-project documents with active Knoprix AI grants. The
+  Retrieval/Document text mode selector is removed; retrieval remains internal.
 - Reference URLs: _add here_
 
 ### F7. `DocumentChatWorkspace` — conversation about selected documents
-- Used for: AI Wing's conversation workspace and optional AI panel from the
-  Reading Desk.
+- Used for: AI Wing's general conversation workspace and optional AI panel
+  from the Reading Desk.
 - Decisions: chat layout, source panel, streaming treatment, regenerate,
   copy, feedback, conversation history.
 - Reference URLs: _add here_
@@ -315,6 +318,23 @@ No visual choice is treated as approved until it is selected here.
 - Used for: later article/PDF research feature.
 - Decisions: consent wording, query preview, source display, citation format.
 - Reference URLs: _add here_
+
+### F13. `RecentChatsDialog` — find and manage saved AI conversations
+- Used for: opening and managing the signed-in user's server-synced chats.
+- Approved by boss, 2026-10-25: use a searchable dialog; show title and
+  updated date; search titles only; support New Chat, open, rename, and delete
+  with confirmation. Selecting a chat closes the dialog and opens that chat.
+- Approved visual direction: reuse the existing AI Wing dark/gold tokens and
+  modal styling; full-width on mobile and centered on larger screens.
+- Required states: loading, empty, no search results, API error with retry,
+  and per-action progress/success feedback. Only the signed-in user's history
+  is displayed.
+- Still requires boss choice before UI implementation: rename interaction,
+  exact keyboard-dismiss/focus behavior beyond accessible dialog basics, and
+  any motion treatment. These are not implied by the approved layout.
+- References:
+  - https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
+  - https://developer.apple.com/design/human-interface-guidelines/search-fields
 
 ## G. Shared states and quality surfaces
 
@@ -390,11 +410,14 @@ Boss choice: [selected option / changes requested]
 - Product mode names: **Reading Desk** and **AI Wing** — approved 2026-10-04.
 - Global layouts, navigation, and interactions outside the approved surfaces:
   pending boss choices.
-- AI Wing document-text slice: approved — Retrieval / Document text controls,
-  per-request confirmation naming the provider/model and active-grant
-  documents, and extracted-text-only disclosure. Existing provider-copy
-  status, revoke, and retry-delete controls remain for historical remote files;
-  no upload or prepare action is available.
+- Historical AI Wing document-text approval: superseded 2026-10-25 by the
+  unified general-chat decision below. Legacy provider-copy status, revoke,
+  and retry-delete controls remain for historical remote files; no new upload
+  or prepare action is available.
+- AI Wing general chat and Recent Chats: approved 2026-10-25 as recorded in
+  F5, F7, and F13. Remaining conversation-layout and chat-message choices
+  must be confirmed before implementing UI; the backend contract is not gated
+  on those visual decisions.
 - First surface: `DashboardOverview` — selected for the first UI/UX review
 - Reference URLs: pending boss input
 - Global foundation: Not selected

@@ -248,7 +248,9 @@ deployment or public release.
 
 ## Open decisions tracked in `tasks/todo.md`
 
-- Visual and interaction decisions for Reading Desk and AI Wing.
+- Visual and interaction decisions for Reading Desk and AI Wing generally;
+  Recent Chats theme and responsive dialog container are approved, while
+  remaining chat/dialog details still need boss choices before UI work.
 - Google OAuth account/linking policy and provider configuration.
 - CAPTCHA provider, privacy implications, risk thresholds, and accessible
   fallback.
@@ -272,3 +274,99 @@ deployment or public release.
   browser-local key policy and separate Knoprix/provider consent boundaries)
 - Completed work and verification history: `changes.md`
 - Consumer polish/fix gates: `checklists/033-vibecoding-complete-33-checklist.md`
+
+## Addendum — AI Wing General Chat and Synced History
+
+**Status:** Approved by boss on 2026-10-25. Source of truth:
+`AI-CHAT-CAPABILITY-MAP.md`, `SPEC-synced-chat-history.md`, and
+`SPEC-source-aware-chat.md`.
+
+### Outcome
+
+Replace the separate Retrieval/Document text modes with one general
+conversation. The model may answer using its general knowledge and use
+relevant active-project document passages and relevant prior messages from the
+signed-in user's own saved chats. The provider decides whether to invoke its
+native web-search feature when the selected model supports it. Models without
+native search remain available for general/document/chat-context answers and
+show that live search is unavailable.
+
+Conversation data becomes account-synced and user-manageable through the
+approved Recent Chats dialog. Existing provider allowlists, document grants,
+per-send disclosure, citations, provider safeguards, and legacy cleanup
+behavior remain in force.
+Recent Chats visual choice approved 2026-10-25: reuse the existing AI Wing
+dark/gold tokens and modal styling; full-width on mobile, centered on larger
+screens. Other meaningful dialog/chat UI choices remain gated for boss
+approval before frontend implementation.
+
+### API/data contract to lock before implementation
+
+- Add account-owned `conversations` and ordered `messages` rows via a new
+  append-only database migration. Deletion cascades to messages; account
+  deletion removes conversations.
+- Add authenticated, owner-scoped list/create/get/rename/delete APIs. List is
+  paginated and filters by title only. Chat send/stream associates messages
+  with a conversation and accepts an empty document scope for general chat.
+- Store user/assistant messages and citations, but never provider keys,
+  retrieved document passages as separate records, full prompts in logs, or
+  another user's data.
+- Keep provider-specific native-search payloads and citation parsing inside
+  provider adapters. Unsupported models receive no search tool.
+
+### Dependency-ordered implementation slices
+
+1. **History persistence/API:** define exact request/response shapes; add
+   migration, user-scoped CRUD, message ordering, cascade behavior, and focused
+   two-account/migration QA. Verify SQLite and PostgreSQL-compatible SQL.
+2. **Recent Chats UI:** before implementation, confirm the remaining meaningful
+   dialog interaction choices with boss. Then implement the approved dialog
+   (title search, title/date rows, new/open/rename/confirmed delete) using the
+   existing API/auth and notification patterns. Verify loading, empty, error,
+   keyboard, and mobile states.
+3. **General/context chat backend:** accept general questions without
+   documents; preserve server-side grant enforcement; provide bounded relevant
+   document/chat candidates without document-only instructions; persist
+   messages and structured citations. Cover general-only, source-grounded,
+   missing/revoked source, and account-isolation cases.
+4. **Native provider search:** for each provider/model verified as supported,
+   pass its native search tool and parse streamed output/citations. Test with
+   mocked HTTP only. Keep unsupported models usable with an explicit
+   unavailable indicator.
+5. **AI Wing integration and contract sync:** remove mode selection; connect
+   conversation lifecycle and context-aware streaming; show document/chat
+   disclosure and clickable web citations; update PRD, API/security contracts,
+   changes log, and the feature-scoped 33-point checklist evaluation. Preserve
+   existing presentation unless boss selects a different treatment.
+
+### Verification gates
+
+- Backend: focused migration/chat tests, then `python qa_database_migrations.py`
+  and backend QA scripts; no real provider or search requests.
+- Frontend: `npm run build` and mocked `frontend/qa-chatlive.mjs` (or an
+  updated focused browser script) at exactly 390, 425, 768, and 1024 px.
+- Review: verify no cross-account reads, no unauthorized document context, no
+  document-only refusal, and visible provider/web citations; inspect the
+  nested Knoprix diff and leave unrelated parent-worktree changes untouched.
+
+### Risks and controls
+
+| Risk | Control |
+|---|---|
+| Models/providers differ in native search support and streaming formats | Verify each allowlisted model against its provider's official docs; enable only verified combinations. |
+| Native search may add provider charges | Disclose this in the provider/search status and do not make live calls in QA. |
+| Persistent chats contain private user content | Enforce ownership on every read/write/delete; use parameterized SQL and cascade account deletion. |
+| Document/chat text is untrusted or prompt-injection content | Treat it as evidence, not instructions; do not expose server-side tools beyond the approved provider search. |
+| Context may exceed provider limits | Bound retrieved document/chat context and return explicit, actionable errors rather than silently truncating. |
+
+### Authoritative provider references
+
+- Gemini Google Search grounding:
+  <https://ai.google.dev/gemini-api/docs/google-search>
+- Anthropic Web Search tool:
+  <https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool>
+- OpenAI web search tool and Responses API:
+  <https://developers.openai.com/api/docs/guides/tools-web-search>
+
+These sources establish native, model-selected search behavior; support for
+each currently allowlisted model still must be checked before enabling it.

@@ -1,9 +1,9 @@
 # PRD: Knoprix Final Project
 
 **Type:** College project / document knowledge platform  
-**Status:** Product direction approved; Retrieval and consented extracted-text
-chat implemented; provider-file upload and full-document chat are retired.
-Live provider compatibility remains unverified
+**Status:** General AI chat and account-synced history are approved for
+implementation. Retrieval and consented extracted-text chat are the current
+behavior; native-search compatibility remains to be verified per model.
 **Source baseline:** Current Knoprix mid-review version  
 **Project folder:** `knoprix-final-project/`
 
@@ -29,11 +29,13 @@ your documents.
 - Keep document search explainable through the existing Trie and inverted index.
 - Keep bookmark ordering explainable through Hash Table + Doubly Linked List.
 - Support user-controlled AI provider connections with explicit,
-  provider/model-specific consent before each extracted-text chat request.
+  provider/model-specific confirmation before sending document context and
+  disclosure when saved-chat context is included.
 - Send extracted page text only; do not upload original files or send images,
   charts, diagrams, or visual layout in document chat.
-- Support document chat first, then summaries, flashcards, quizzes, and
-  opt-in web research as separate slices.
+- Support one general AI Wing chat that can use authorized document evidence
+  and provider-native live web search when the selected model supports it.
+  Summaries, flashcards, and quizzes remain separate feature slices.
 - Show source citations for AI answers whenever document evidence is used.
 - Keep a document-first **Reading Desk** and an AI-first **AI Wing** connected
   through shared reader state and explicit AI source permissions.
@@ -114,32 +116,32 @@ your documents.
   page/text anchor without loading every document's highlights at startup.
 - Any backend behavior change is proposed and approved separately.
 
-### AI integration — Retrieval and extracted-text chat implemented
+### AI integration — one general, source-aware chat
 
-- Retrieval remains the default and retains its existing RAG path and structured
-  citations.
-- Document text mode sends extracted text for all currently AI-authorized
-  documents in the active project (maximum 10) and does not run RAG. It requires
-  a separate confirmation for every request, naming the provider, model, and
-  documents. Cancel sends nothing and preserves the question.
-- The backend checks ownership, active AI grants, complete contiguous page
-  coverage, the provider/model allowlist, and an 80,000-character context cap.
-  It rejects incomplete text rather than silently truncating it.
-- Document text mode sends no original files, images, charts, diagrams, or
-  visual layout. It asks the model to cite filenames/pages when available, but
-  those are not returned as verified structured citations.
-- New provider-file uploads and full-document visual chat are retired. Existing
-  provider-copy records remain visible for cleanup; revoke and retry-delete
-  actions are retained for remote copies created by the earlier feature.
-- Provider adapters are tested with mocked responses only; no live provider
-  request has been made. End-to-end provider/account compatibility remains
-  unverified.
+- Replace the user-selectable Retrieval/Document text modes with one general
+  chat. Keep passage retrieval as an internal context-gathering mechanism.
+- The model may answer general questions without document evidence. When
+  relevant, the backend may provide bounded passages only from active-project
+  documents with active AI grants and bounded messages only from the signed-in
+  user's saved conversations.
+- Document context sent to an external provider requires the existing
+  per-request confirmation naming provider, model, and documents. Disclose
+  when relevant saved-chat context is also included. Cancel sends nothing.
+- The server checks account ownership, active document grants, conversation
+  ownership, provider/model allowlists, and context limits before reading or
+  sending context. Retrieved passages are evidence, never instructions.
+- Preserve structured document citations and add validated provider web
+  citations where supported. Do not claim that model output is verified fact.
+- Use provider-native web search only for provider/model combinations verified
+  against official documentation. The selected model decides whether to search.
+  Other models remain usable and clearly show that live search is unavailable.
+  Provider search may incur provider-defined usage charges.
+- New provider-file uploads and full-document visual chat remain retired.
+  Existing provider-copy records remain visible for cleanup; revoke and
+  retry-delete actions remain for legacy remote copies.
 - BYOK keys remain browser-local and are sent only in request headers to
   Knoprix; raw keys are never persisted server-side. NVIDIA uses a
-  server-managed key.
-- Provider/model and document scope are visible before each text-context send.
-- Provider failure, invalid key, rate limit, and unsupported model errors are
-  surfaced to the user.
+  server-managed key. Provider safety safeguards remain enabled.
 
 ### Sharing — first implementation slice
 
@@ -165,11 +167,14 @@ your documents.
 
 The existing API remains the baseline. The backend exposes
 `GET /api/providers/allowlist`, `POST /api/chat/ask`, `POST /api/chat/stream`,
-and provider-document status/revoke/retry routes for legacy provider copies.
-Chat supports Retrieval (default) and consented `document-context` mode; the
-retired upload and full-document chat routes are not available. These are
-legacy `/api` routes. The `/api/v1` contracts below remain future work and must
-enforce ownership/share access and AI grants before returning content:
+authenticated conversation list/create/read/rename/delete routes, and
+provider-document status/revoke/retry routes for legacy provider copies.
+The legacy `/api/chat/ask` and `/api/chat/stream` routes will provide one
+general chat flow with optional authorized context. Authenticated conversation
+CRUD routes will provide synced history. Retired provider-upload and
+full-document chat routes remain unavailable. The `/api/v1` contracts below
+remain future work and must enforce ownership/share access and AI grants before
+returning content:
 
 ```text
 GET    /api/health                         (legacy)
@@ -242,7 +247,8 @@ Required responsive checks: 390px, 425px, 768px, and 1024px.
 - Shared-document AI: sender explicitly enables AI access; the recipient
   separately grants document AI access and gives provider/model consent for
   external transfer.
-- Conversation history: browser-local only in v1; no Knoprix sync.
+- Conversation history: account-synced on Knoprix; only the authenticated
+  owner may list, read, rename, or delete it. Provider keys are never stored.
 - Extraction history: terminal job metadata expires after 30 days; this does
   not delete the source document.
 - Initial supported formats: PDF, PPTX, DOCX, TXT, MD, PNG, JPG/JPEG, and
@@ -256,7 +262,7 @@ Required responsive checks: 390px, 425px, 768px, and 1024px.
 ## 9a. Historical full-document AI decisions recorded 2026-10-20
 
 These decisions describe the earlier implementation and were superseded by
-the extracted-text-only chat direction below. Cleanup routes remain for old
+the approved general-chat direction below. Cleanup routes remain for old
 provider copies; upload and full-document chat are retired.
 
 - Require both existing Knoprix AI access and separate confirmation naming
@@ -277,16 +283,27 @@ provider copies; upload and full-document chat are retired.
   chat scope is all documents with an active Knoprix AI grant in the project.
 - No live provider calls, deployment, or remote push are authorized.
 
-## 9b. Current AI Wing document-text behavior
+## 9b. Approved AI Wing general chat and synced history
 
-- Retrieval remains the default and is not replaced.
-- Document text mode sends extracted text only after a separate confirmation
-  naming the provider, model, and authorized documents on every request.
-- The backend rejects missing/noncontiguous page text, contexts over 80,000
-  serialized characters, ungranted documents, and unallowlisted models.
-- Original files and visual content are not sent. Existing remote provider
-  copies can still be revoked or have deletion retried; no new provider copies
-  are created by chat.
+- The mode selector is removed; retrieval remains an internal method, not a
+  separate user-facing mode. General questions work without document context.
+- Relevant document context is restricted to active-project documents with
+  active AI grants. Relevant chat context is restricted to the signed-in
+  user's own saved messages. Context is bounded and disclosed before provider
+  transfer.
+- Provider-native search is enabled only for officially verified
+  provider/model pairs. Unsupported models remain usable with a visible
+  no-live-search status. Search may use provider quota or incur charges.
+- Conversations and ordered messages are stored in Knoprix for account sync.
+  Deleting a conversation deletes its messages; account deletion removes all
+  conversations. No keys, full prompts in logs, or retrieved passages as
+  separate chat records are stored.
+- Provider safety safeguards, model allowlists, document grants, and
+  provider/model disclosures remain in force. This removes the
+  document-only answer restriction, not provider safeguards.
+- The Recent Chats dialog supports title search, title/date rows, new/open,
+  rename, and confirmed deletion. Its dark/gold styling is retained; it is
+  full-width on mobile and centered on larger screens.
 
 ## 10. Success Criteria
 
@@ -300,7 +317,9 @@ provider copies; upload and full-document chat are retired.
 ## 11. Polish and Fixes
 
 The project follows the complete checklist at:
-`checklists/033-vibecoding-complete-33-checklist.md`.
+`checklists/033-vibecoding-complete-33-checklist.md`. The AI Wing feature
+evaluation is recorded in that project-local checklist; it does not claim
+whole-project completion.
 
 Progress is intentionally `0/33` until each item is evaluated against the new
 interface and either implemented or marked `N/A` with a reason.

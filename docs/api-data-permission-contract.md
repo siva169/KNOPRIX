@@ -161,7 +161,8 @@ metadata or bounded parser-specific details, not relationship lists.
 | `document_blocks` | Belongs to a document and has a stable page/block order. Stores extracted text, table cells, or image/OCR references and optional extraction confidence. |
 | `ai_grants` | One user/document/purpose grant. State is `active` or `revoked`; revocation prevents later AI retrieval. |
 | `provider_consents` | Records one user's consent for document(s), provider, model, purpose, and provider terms version. It never contains a key. |
-| `conversations` and `messages` | Browser-local only; there are no server persistence or history endpoints in v1. Their JSON shape is defined in section 7. |
+| `conversations` | One owner-scoped row per conversation; title and timestamps are stored for account sync. |
+| `messages` | Ordered user/assistant turns owned through `conversation_id`; stores message content, provider/model metadata, and citation metadata. A unique `(conversation_id, sequence)` preserves order. Conversation and user deletion cascade. |
 | `citations` | Evidence references embedded in generated messages/results: document, block/page, and excerpt. |
 | `mind_map_pins` | User/project/normalized concept unique tuple. Nodes and edges are derived from current document blocks and are not treated as factual relationships beyond their labeled evidence. |
 | `contact_requests` | Directed requester-to-recipient request with one pending request per canonical pair. Status is `pending`, `accepted`, `declined`, `canceled`, or `expired`. Accepted requests create a mutual contact relationship. |
@@ -215,6 +216,10 @@ this document-only task.
 8. Deleting a document removes its live file, blocks, indexes, summaries,
    grants, provider consents, and share access. Encrypted backups may retain
    deleted data for up to 30 days, as recorded in `PRD.md`.
+9. Conversation and message reads or mutations require authentication and an
+   owner-scoped query. An unknown conversation and another user's conversation
+   both return `404`; project membership, document grants, and chat context do
+   not grant access to saved conversations.
 
 ## 4. Extraction jobs and document blocks
 
@@ -444,14 +449,16 @@ provider/model or any key-like field is rejected before retrieval.
 
 If the provider is null, `provider` in the response is null. Retrieved
 context is short-lived and not persisted as conversation history. The current
-`POST /api/chat/ask` and `/api/chat/stream` routes use a separate legacy
-request shape; see the implemented legacy AI route contract below.
+`POST /api/chat/ask` and `/api/chat/stream` routes still use their legacy
+request shape; the unified target is specified below.
 
-### Implemented legacy AI and provider-copy cleanup routes
+### Provider-copy cleanup routes and unified chat target
 
-These routes are implemented under `/api`, not `/api/v1`. They do not replace
-the versioned target contracts above. Chat requires authenticated, owned
-documents and active AI grants; shared-document AI chat is not supported.
+The cleanup routes below are implemented under `/api`, not `/api/v1`; the
+unified chat and conversation routes are the approved target until their
+implementation is complete. Existing chat currently uses the older
+document-required request shape. Shared-document AI chat is not part of this
+change.
 
 - `GET /api/projects/{projectId}/provider-documents?providerId=...&model=...`
   lists existing provider-copy records without remote file IDs or credential
@@ -464,21 +471,131 @@ documents and active AI grants; shared-document AI chat is not supported.
   `{"providerId":"...","model":"..."}` and retries pending deletion with the
   provider key in a header. The NVIDIA server key is used only if a legacy
   record requires cleanup.
-- `POST /api/chat/ask` and `POST /api/chat/stream` accept the normal chat
-  fields plus optional `mode: "retrieval" | "document-context"`. Retrieval is
-  the default and keeps its RAG behavior. `document-context` requires
-  `confirmed: true` on every request, an active grant for each document, and
-  complete extracted page text with page numbers from 1 through `page_count`.
-  It accepts at most 10 documents and rejects serialized context over 80,000
-  characters with `413`; it does not silently truncate or run RAG. The selected
-  provider/model and document names must be shown before consent. Only
-  extracted text and the question are sent; original files and visual content
-  are excluded. This mode returns no verified structured citations. The
-  streaming route emits metadata, thought, token, error, and completion events.
+- `POST /api/chat/ask` and `POST /api/chat/stream` use one general-chat
+  contract; `mode` is not a public choice. Request:
+
+  ```json
+  {
+    "conversationId": "uuid",
+    "projectId": "uuid-or-null",
+    "providerId": "groq-free",
+    "model": "openai/gpt-oss-20b",
+    "question": "Explain this idea.",
+    "documentIds": [],
+    "confirmed": false
+  }
+  ```
+
+  `documentIds` may be empty for general chat. If non-empty, each ID must be
+  owned by the caller, belong to `projectId`, and have an active AI grant;
+  `confirmed` must be true before external transfer. The client discloses the
+  provider/model, documents, and whether saved-chat context may be included.
+  The backend selects bounded, relevant document passages and relevant
+  messages only from conversations owned by the authenticated caller. It never
+  reads another user's messages or dumps whole projects/accounts into context.
+  Missing document evidence does not prevent a general model answer.
+
+  Provider adapters receive native web-search tools only for verified
+  provider/model combinations; the model/API decides whether to search.
+  Unsupported combinations receive no search tool and report live search as
+  unavailable. The adapter normalizes supported web citations into structured
+  source records, accepting only `https:` URLs. Provider search can incur
+  provider-defined usage charges.
+
+  `POST /api/chat/stream` retains named SSE events (`meta`, `thought`,
+  `token`, `citation`, `error`, `done`). `meta` reports provider/model, search
+  availability, and included context classes; document and web citations are
+  emitted separately from answer tokens. Completed user/assistant messages
+  and citations are persisted to the conversation. No key or full prompt is
+  logged. Retrieved passage text is not stored as a separate chat record.
 - New provider uploads, provider-file creation, and full-document visual chat
   are removed. Existing provider file IDs/URIs and keyed credential
   fingerprints remain stored only so old copies can be revoked and deletion
   retried; raw provider keys are not stored.
+
+### Conversation history routes
+
+All routes below require authentication and scope reads/writes to
+`current_user.id`. API fields use camelCase. Unknown and other-user IDs return
+the same `404` response.
+
+#### `GET /api/chat/conversations?search=&limit=20&offset=0`
+
+Search is a case-insensitive substring match on title only. `limit` is 1–50
+(default 20); `offset` is non-negative (default 0). Results are ordered by
+`updatedAt DESC, id DESC` and include:
+
+```json
+{
+  "conversations": [
+    {
+      "id": "uuid",
+      "title": "Study session",
+      "projectId": "uuid-or-null",
+      "createdAt": "2026-10-25T00:00:00Z",
+      "updatedAt": "2026-10-25T00:01:00Z"
+    }
+  ],
+  "pagination": {"limit": 20, "offset": 0, "total": 1}
+}
+```
+
+#### `POST /api/chat/conversations`
+
+Creates an empty conversation. Body: `{"projectId":"uuid-or-null"}` (`projectId`
+may be omitted or null). A provided project must belong to the caller. The
+server assigns `New chat`; returns `201` with the conversation object above.
+
+#### `GET /api/chat/conversations/{conversationId}`
+
+Returns the conversation and ordered messages:
+
+```json
+{
+  "conversation": {
+    "id": "uuid",
+    "title": "Study session",
+    "projectId": "uuid-or-null",
+    "createdAt": "2026-10-25T00:00:00Z",
+    "updatedAt": "2026-10-25T00:01:00Z"
+  },
+  "messages": [
+    {
+      "id": "uuid",
+      "sequence": 1,
+      "role": "user",
+      "content": "Explain this idea.",
+      "createdAt": "2026-10-25T00:00:10Z",
+      "citations": []
+    },
+    {
+      "id": "uuid",
+      "sequence": 2,
+      "role": "assistant",
+      "content": "Here is an explanation.",
+      "createdAt": "2026-10-25T00:01:00Z",
+      "providerId": "groq-free",
+      "modelId": "openai/gpt-oss-20b",
+      "citations": []
+    }
+  ]
+}
+```
+
+Messages contain only `user` or `assistant` roles; system instructions are
+never persisted or returned. Citations store source pointers/metadata, not a
+second full copy of retrieved context.
+
+#### `PATCH /api/chat/conversations/{conversationId}`
+
+Accepts `{"title":"Study session"}` only. The title is trimmed, non-empty, and
+at most 120 characters. Invalid input returns `422`; success returns the
+updated conversation object.
+
+#### `DELETE /api/chat/conversations/{conversationId}`
+
+Deletes the conversation and cascades to its messages/citations; returns
+`204`. Deleting the account cascades to all owned conversations.
 
 ### `POST /api/v1/documents/{documentId}/summary`
 
@@ -540,22 +657,20 @@ Owner-only; pin/unpin is idempotent. Pin body is not accepted; the path term
 must be a normalized plain word of at most 40 characters. `PUT` returns
 `200 {"data":{"term":"...","pinned":true}}`; `DELETE` returns `204`.
 
-## 7. Conversation, message, and citation client contract
+## 7. Conversation, message, and citation contract
 
-Conversation history is browser-local only in v1. It is not submitted as
-history to Knoprix, synchronized across browsers, or backed up by the service.
-Store it under an account-scoped browser key so accounts on a shared browser
-do not see each other's history. Logout/account switching must hide the prior
-account's history. Users can delete one conversation or clear all local
-conversations; clearing site data may also remove them. Browser storage is
-not a secure vault. Provider keys and history remain separate.
+Conversation history is stored server-side for the authenticated Knoprix
+account and is available across that account's devices. Browser storage is not
+the source of truth. Provider keys remain browser-local and separate from
+history. Logout/account switching must not display the prior account's chats.
+Users can search titles, open, rename, and delete conversations; account
+deletion removes all conversations and messages.
 
 ```json
 {
   "id": "uuid",
   "title": "Study session",
   "projectId": "uuid-or-null",
-  "sourceDocumentIds": ["uuid"],
   "createdAt": "2026-10-04T00:00:00Z",
   "updatedAt": "2026-10-04T00:00:10Z",
   "messages": [
@@ -564,7 +679,6 @@ not a secure vault. Provider keys and history remain separate.
       "role": "user",
       "content": "Explain this passage.",
       "createdAt": "2026-10-04T00:00:01Z",
-      "status": "complete",
       "citations": []
     },
     {
@@ -572,7 +686,6 @@ not a secure vault. Provider keys and history remain separate.
       "role": "assistant",
       "content": "The cited passage says ...",
       "createdAt": "2026-10-04T00:00:10Z",
-      "status": "complete",
       "providerId": "groq-free",
       "modelId": "openai/gpt-oss-20b",
       "citations": [
@@ -589,10 +702,14 @@ not a secure vault. Provider keys and history remain separate.
 }
 ```
 
-`role` is `user`, `assistant`, or `system`; system instructions are not shown
-as user messages. A citation always points to an authorized source block/page.
-No v1 server conversation/message CRUD endpoints are defined. Any later sync
-proposal requires a separate retention and privacy decision.
+`role` is `user` or `assistant`; system instructions are not persisted or
+shown as user messages. A document citation points to a source/page; a web
+citation contains a provider citation title and validated HTTPS URL. The
+Recent Chats dialog searches titles only and shows each title
+and last-updated date. Selecting a row closes the dialog and opens the
+conversation. New, rename, and confirmed delete are supported. Its approved
+visual direction reuses the existing dark/gold tokens, with a full-width
+dialog on mobile and a centered dialog on larger screens.
 
 ## 8. Contacts, resource shares, inbox, and notifications
 
@@ -737,7 +854,7 @@ Contract tests must cover these behaviors before claiming implementation:
 | Sender revokes or recipient leaves accepted share | Immediate content and AI-share access removal |
 | Contact removed with pending/accepted shares | Pending requests become revoked; accepted access is revoked immediately |
 | Delete source document | Live source/blocks/indexes/grants/consents/share access removed; backup window disclosed |
-| Conversation deletion | Browser-local data removed; no backend conversation row exists |
+| Conversation deletion | Owner-scoped server conversation and child messages/citations are deleted |
 | Pagination across changing lists | Stable cursor ordering, no cross-user cursor reuse |
 
 ## 10. Legacy compatibility and implementation boundary
