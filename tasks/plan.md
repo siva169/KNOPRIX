@@ -297,57 +297,46 @@ per-send disclosure, citations, provider safeguards, and legacy cleanup
 behavior remain in force.
 Recent Chats visual choice approved 2026-10-25: reuse the existing AI Wing
 dark/gold tokens and modal styling; full-width on mobile, centered on larger
-screens. Other meaningful dialog/chat UI choices remain gated for boss
-approval before frontend implementation.
+screens. Rename-dialog, reduced-motion, and inline-citation choices are
+recorded in `UI-UX.md` and implemented.
 
-### API/data contract to lock before implementation
+### Implemented API/data contract
 
-- Add account-owned `conversations` and ordered `messages` rows via a new
-  append-only database migration. Deletion cascades to messages; account
-  deletion removes conversations.
-- Add authenticated, owner-scoped list/create/get/rename/delete APIs. List is
-  paginated and filters by title only. Chat send/stream associates messages
-  with a conversation and accepts an empty document scope for general chat.
-- Store user/assistant messages and citations, but never provider keys,
-  retrieved document passages as separate records, full prompts in logs, or
-  another user's data.
-- Keep provider-specific native-search payloads and citation parsing inside
-  provider adapters. Unsupported models receive no search tool.
+- Account-owned conversations and ordered messages use an append-only
+  migration. Deletion cascades to messages; account deletion removes chats.
+- Authenticated, owner-scoped list/create/get/rename/delete APIs provide
+  title-only search and bounded pagination. Chat send/stream accepts an empty
+  document scope for general chat.
+- User/assistant messages and citations are stored; provider keys, retrieved
+  passages as separate records, full prompts in logs, and other users' data
+  are excluded.
+- Provider-specific search payloads and citation parsing stay inside provider
+  adapters. Unsupported models receive no search tool.
 
-### Dependency-ordered implementation slices
+### Completed implementation slices
 
-1. **History persistence/API:** define exact request/response shapes; add
-   migration, user-scoped CRUD, message ordering, cascade behavior, and focused
-   two-account/migration QA. Verify SQLite and PostgreSQL-compatible SQL.
-2. **Recent Chats UI:** before implementation, confirm the remaining meaningful
-   dialog interaction choices with boss. Then implement the approved dialog
-   (title search, title/date rows, new/open/rename/confirmed delete) using the
-   existing API/auth and notification patterns. Verify loading, empty, error,
-   keyboard, and mobile states.
-3. **General/context chat backend:** accept general questions without
-   documents; preserve server-side grant enforcement; provide bounded relevant
-   document/chat candidates without document-only instructions; persist
-   messages and structured citations. Cover general-only, source-grounded,
-   missing/revoked source, and account-isolation cases.
-4. **Native provider search:** for each provider/model verified as supported,
-   pass its native search tool and parse streamed output/citations. Test with
-   mocked HTTP only. Keep unsupported models usable with an explicit
-   unavailable indicator.
-5. **AI Wing integration and contract sync:** remove mode selection; connect
-   conversation lifecycle and context-aware streaming; show document/chat
-   disclosure and clickable web citations; update PRD, API/security contracts,
-   changes log, and the feature-scoped 33-point checklist evaluation. Preserve
-   existing presentation unless boss selects a different treatment.
+1. **History persistence/API:** migration, owner-scoped CRUD, message order,
+   cascades, and two-account/migration QA are implemented.
+2. **Recent Chats UI:** approved search, new/open/rename/confirmed-delete,
+   loading/empty/error/retry/no-results, keyboard, and responsive states are
+   implemented.
+3. **General/context chat backend:** general questions work without documents;
+   bounded document/chat context preserves grants and account isolation.
+4. **Native provider search:** Gemini 2.5 Flash and Flash-Lite use the
+   documented native tool; unsupported models remain usable without search.
+5. **AI Wing integration:** one chat flow, per-request disclosure, persisted
+   history, inline citations, and feature checklist are synchronized.
 
-### Verification gates
+### Verification evidence
 
-- Backend: focused migration/chat tests, then `python qa_database_migrations.py`
-  and backend QA scripts; no real provider or search requests.
-- Frontend: `npm run build` and mocked `frontend/qa-chatlive.mjs` (or an
-  updated focused browser script) at exactly 390, 425, 768, and 1024 px.
-- Review: verify no cross-account reads, no unauthorized document context, no
-  document-only refusal, and visible provider/web citations; inspect the
-  nested Knoprix diff and leave unrelated parent-worktree changes untouched.
+- Focused history, context, provider-search, migration, and RAG QA passed; the
+  README-listed local backend QA scripts also passed. The credentialed
+  `qa_chat.py` was not run because `KNOPRIX_QA_PASSWORD` was unavailable and
+  no live provider call was authorized.
+- Frontend production build passed with the >500 kB chunk advisory. Mocked
+  browser QA passed at 390, 425, 768, and 1024 px, including context
+  consent/cancel, citations, history states/actions, focus, and overflow.
+- No live provider call, deployment, or remote Git operation was made.
 
 ### Risks and controls
 

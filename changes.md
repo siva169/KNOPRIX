@@ -1,5 +1,26 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-25 — Complete unified AI chat and Recent Chats UI
+
+- Replaced the Retrieval/Document mode selector with general chat, optional
+  authorized document context, per-request disclosure, account-synced
+  conversations, and provider-native search availability.
+- Added searchable Recent Chats with new/open/rename/confirmed-delete,
+  accessible loading/empty/error/retry/no-results states, focus handling,
+  reduced-motion behavior, and screen-reader-announced mutation success notices.
+- Rendered document citations inline as Reading Desk jumps and web citations
+  as validated HTTPS links; converted provider UTF-8 citation offsets to
+  JavaScript UTF-16 positions and made first-chat titles Unicode-safe.
+- Updated the PRD, UI/UX decisions, implementation plan/backlog, and the
+  feature-scoped 33-point checklist.
+- Verification: focused history/context/provider/migration/RAG tests and the
+  README-listed local backend QA scripts passed; Python compilation passed.
+  Frontend build passed with the existing >500 kB advisory; mocked browser QA
+  passed at 390/425/768/1024px. `qa_chat.py` was skipped because it requires
+  `KNOPRIX_QA_PASSWORD`; no live provider calls were made.
+- Local commit is pending disclosure/confirmation of Git identity. No remote
+  operation or deployment was performed.
+
 ## 2026-10-25 — Add verified Gemini web search to general chat
 
 - Added provider-native Google Search for allowlisted Gemini 2.5 Flash and

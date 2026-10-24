@@ -1001,8 +1001,8 @@ incidents, fixes, and explicit go/no-go decision.
 closes the dialog and opens it; title/date rows; title-only search; New Chat,
 rename, and delete with confirmation. Boss approved reusing the existing AI
 Wing dark/gold tokens and modal styling, full-width on mobile and centered on
-larger screens. Other meaningful dialog/chat UI decisions remain gated for
-boss approval before frontend implementation.
+larger screens. Rename-dialog, reduced-motion, and inline-citation choices
+are recorded in `UI-UX.md` and implemented.
 
 ### [x] Task 1: Updating chat, data, and UI contracts
 
@@ -1012,8 +1012,8 @@ boss approval before frontend implementation.
 - **Acceptance:** Contracts define general answers, bounded document/history
   context, account isolation, provider-native search limits, provider billing
   disclosure, persistence/deletion, and the approved dialog interactions.
-  The feature-scoped 33-point evaluation records applicability now and is
-  completed with verification evidence after UI work.
+  The feature-scoped 33-point evaluation records applicability and evidence
+  after implementation.
 - **Verify:** Cross-check the PRD, API contract, security contract, and UI/UX
   decision against both approved specs; each checklist item is identified as
   applicable or `N/A + why`, and applicable items are completed with evidence
@@ -1046,11 +1046,10 @@ boss approval before frontend implementation.
   `.venv`.
 - **Scope:** Medium (5 files).
 
-### Task 3: Building the Recent Chats dialog
+### [x] Task 3: Building the Recent Chats dialog
 
-- **Description:** Confirm remaining meaningful dialog interaction choices
-  with boss before connecting the approved dialog to account-scoped history
-  APIs. Reuse existing auth/API, notification, and visual patterns.
+- **Description:** Connect the boss-approved dialog to account-scoped history
+  APIs using existing auth/API, notification, and visual patterns.
 - **Acceptance:** New/open/rename/title-search/confirmed-delete work; loading,
   empty, error, and no-results states are explicit; opening history never
   widens the active document grant.
@@ -1059,19 +1058,22 @@ boss approval before frontend implementation.
 - **Dependencies:** Task 2.
 - **Files:** `frontend/src/components/AIWingView.jsx`,
   `frontend/src/components/RecentChatsDialog.jsx`,
-  `frontend/qa-chat-history.mjs`.
+  `frontend/qa/workspace-switcher.spec.mjs`.
+- **Verification evidence:** Mocked QA covers loading, API error/retry, empty
+  and no-results states, new/open/rename/delete, success feedback, Escape,
+  focus restoration, and 390/425/768/1024px layouts.
 - **Scope:** Medium (3 files).
 
-### Task 4: Enabling general and context-aware chat
+### [x] Task 4: Enabling general and context-aware chat
 
 - **Description:** Make document scope optional, preserve ordinary model
   answers, retrieve bounded authorized-document passages and relevant
   account-owned prior messages, and persist completed messages/citations.
-- **Progress:** The source-aware `conversationId` request path now supports
-  general questions, bounded account-owned saved-chat context, granted
-  document passages, and successful-exchange persistence. The legacy
-  document-required/mode path remains temporarily for existing UI clients;
-  completing this task includes retiring that path during UI integration.
+- **Progress:** The `conversationId` request path supports general questions,
+  bounded account-owned saved-chat context, granted document passages, and
+  successful-exchange persistence. That path rejects the retired `mode` field;
+  the UI no longer exposes or sends it. The older document-required API shape
+  remains only for legacy clients.
 - **Acceptance:** General questions work with zero documents; no
   document-only refusal remains; revoked/ungranted documents and other users'
   chats never enter context; provider/key allowlists remain enforced.
@@ -1081,9 +1083,12 @@ boss approval before frontend implementation.
 - **Dependencies:** Task 2.
 - **Files:** `backend/app/routers/chat.py`, `backend/app/services/rag.py`,
   `backend/qa_chat.py`, `backend/qa_chat_context.py`.
+- **Verification evidence:** Focused mocked chat-context QA covers
+  general-only, document-grounded, history-grounded, provider-error, invalid
+  conversation/document, confirmation, and account-isolation cases.
 - **Scope:** Medium (4 files).
 
-### Task 5: Adding verified native provider web search
+### [x] Task 5: Adding verified native provider web search
 
 - **Description:** Use only documented search tools exposed by the selected
   provider API; let each supported model decide whether to search. Keep other
@@ -1094,7 +1099,7 @@ boss approval before frontend implementation.
   search availability/use is returned by both chat routes. The provider's
   grounded response is buffered to preserve citations before SSE chunks are
   emitted. UI disclosure, citation rendering, and responsive verification
-  remain part of Task 6.
+  are complete.
 - **Acceptance:** Only verified provider/model pairs receive native search
   tools; answer text and web citations are normalized; provider errors are
   surfaced; no separate search vendor/API is added.
@@ -1104,9 +1109,12 @@ boss approval before frontend implementation.
 - **Dependencies:** Tasks 1 and 4.
 - **Files:** `backend/app/services/rag.py`, `backend/app/routers/chat.py`,
   `backend/qa_provider_search.py`, `backend/qa_chat_context.py`.
+- **Verification evidence:** Mocked provider tests cover supported/unsupported
+  models, normalized citations and offsets, malformed responses, and surfaced
+  HTTP errors. No live provider request was made.
 - **Scope:** Medium (4 files).
 
-### Task 6: Unifying the AI Wing chat and source feedback
+### [x] Task 6: Unifying the AI Wing chat and source feedback
 
 - **Description:** Remove the Retrieval/Document text selector; wire the single
   conversation flow to context-aware streaming; render document citations and
@@ -1120,15 +1128,23 @@ boss approval before frontend implementation.
 - **Dependencies:** Tasks 3–5.
 - **Files:** `frontend/src/components/AIWingView.jsx`,
   `frontend/src/components/RecentChatsDialog.jsx`,
-  `frontend/qa-chatlive.mjs`, `frontend/qa-chat-history.mjs`.
-- **Scope:** Medium (4 files).
+  `frontend/src/components/ChatAnswer.jsx`,
+  `frontend/src/components/ChatContextConsentDialog.jsx`,
+  `frontend/qa/workspace-switcher.spec.mjs`.
+- **Verification evidence:** Production build and mocked browser QA pass at
+  390/425/768/1024px; inline citations, consent/cancel, history states/actions,
+  focus behavior, and overflow are covered.
+- **Scope:** Medium (5 files).
 
 ### Checkpoint — Source-aware chat and synced history
 
-- [ ] Focused backend/migration/provider tests and the full backend QA suite
-  pass.
-- [ ] Frontend production build and mocked browser checks pass at all four
+- [x] Focused history/context/provider/migration tests and documented local
+  backend QA scripts pass; credentialed `qa_chat.py` was not run.
+- [x] Frontend production build and mocked browser checks pass at all four
   required widths.
-- [ ] API/security/PRD/UI-UX docs and feature checklist match the behavior.
-- [ ] Nested Knoprix diff reviewed; unrelated parent-repository changes remain
-  untouched; local identity disclosed before checkpoint commit.
+- [x] API/security/PRD/UI-UX docs and feature checklist match the behavior.
+- [x] Nested Knoprix diff reviewed; unrelated parent-repository changes remain
+  untouched and unstaged.
+- [ ] Local identity disclosed; commit is pending boss's direction because
+  configured identity differs from the project-local identity recorded in
+  `docs/changes.md`.

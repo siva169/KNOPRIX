@@ -1,9 +1,11 @@
 # Knoprix API, Data, and Permission Contract
 
-**Status:** Target contract with contacts/sharing and extracted-text chat
-implemented; historical provider-copy cleanup remains. Full-document provider
-uploads and visual chat are retired; remaining deviations are listed below.
-**Date:** 2026-10-20
+**Status:** Contacts/sharing, source-aware general chat, account-synced
+conversation history, and provider-native search are implemented under the
+documented legacy API routes; historical provider-copy cleanup remains.
+Full-document provider uploads and visual chat are retired; remaining
+deviations are listed below.
+**Date:** 2026-10-25
 **Scope:** Extraction, AI, mind-map, contacts, sharing, inbox, and notification
 APIs. This document specifies behavior, not UI layout.
 
@@ -528,8 +530,8 @@ that omit it. Shared-document AI chat is not part of this change.
 All routes below require authentication and scope reads/writes to
 `current_user.id`. API fields use camelCase. Unknown and other-user IDs return
 the same `404` response. CRUD routes and successful source-aware chat message
-persistence are implemented. Frontend integration and provider-native web
-search citation rendering remain pending.
+persistence, inline document citations, and validated web-citation rendering
+are implemented.
 
 #### `GET /api/chat/conversations?search=&limit=20&offset=0`
 
@@ -554,9 +556,11 @@ Search is a case-insensitive substring match on title only. `limit` is 1–50
 
 #### `POST /api/chat/conversations`
 
-Creates an empty conversation. Body: `{"projectId":"uuid-or-null"}` (`projectId`
-may be omitted or null). A provided project must belong to the caller. The
-server assigns `New chat`; returns `201` with the conversation object above.
+Creates an empty conversation. Body: `{"projectId":"uuid-or-null","title":"optional"}`
+(`projectId` and `title` may be omitted or null). A provided project must
+belong to the caller. A supplied title is trimmed and must contain 1–120
+characters; omitted or null titles default to `New chat`. Returns `201` with
+the conversation object above.
 
 #### `GET /api/chat/conversations/{conversationId}`
 

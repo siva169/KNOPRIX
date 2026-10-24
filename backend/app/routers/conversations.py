@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api/chat/conversations", tags=["chat"])
 
 class ConversationCreateBody(BaseModel):
     projectId: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=120)
 
     class Config:
         extra = "forbid"
@@ -91,14 +92,17 @@ def create_conversation(
 ):
     if body.projectId is not None:
         get_owned_project(db, user["id"], body.projectId)
+    title = "New chat" if body.title is None else body.title.strip()
+    if not title:
+        raise HTTPException(422, "Title must not be blank")
 
     conversation_id = str(uuid.uuid4())
     db.execute(
         """
         INSERT INTO conversations (id, user_id, project_id, title)
-        VALUES (?, ?, ?, 'New chat')
+        VALUES (?, ?, ?, ?)
         """,
-        (conversation_id, user["id"], body.projectId),
+        (conversation_id, user["id"], body.projectId, title),
     )
     row = db.execute(
         "SELECT * FROM conversations WHERE id = ? AND user_id = ?",

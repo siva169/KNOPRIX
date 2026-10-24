@@ -87,8 +87,14 @@ def _safe_web_citation(annotation: dict, offset: int, text: str) -> dict | None:
         and not isinstance(end, bool)
         and 0 <= start <= end <= len(text.encode("utf-8"))
     ):
-        citation["startIndex"] = offset + start
-        citation["endIndex"] = offset + end
+        text_bytes = text.encode("utf-8")
+        try:
+            start_text = text_bytes[:start].decode("utf-8")
+            end_text = text_bytes[:end].decode("utf-8")
+        except UnicodeDecodeError:
+            return citation
+        citation["startIndex"] = offset + len(start_text.encode("utf-16-le")) // 2
+        citation["endIndex"] = offset + len(end_text.encode("utf-16-le")) // 2
     return citation
 
 
@@ -166,7 +172,7 @@ def complete_gemini_search_response(
             text = block.get("text")
             if not isinstance(text, str):
                 raise ProviderSearchError("Gemini Search returned invalid text output.")
-            offset = sum(len(part.encode("utf-8")) for part in answer_parts)
+            offset = sum(len(part.encode("utf-16-le")) // 2 for part in answer_parts)
             answer_parts.append(text)
             annotations = block.get("annotations", [])
             if not isinstance(annotations, list):
@@ -185,15 +191,15 @@ def complete_gemini_search_response(
     leading_text = untrimmed_answer[
         : len(untrimmed_answer) - len(untrimmed_answer.lstrip())
     ]
-    leading_bytes = len(leading_text.encode("utf-8"))
-    answer_bytes = len(answer.encode("utf-8"))
+    leading_units = len(leading_text.encode("utf-16-le")) // 2
+    answer_units = len(answer.encode("utf-16-le")) // 2
     for citation in citations:
         if "startIndex" not in citation:
             continue
         start, end = citation["startIndex"], citation["endIndex"]
-        if start >= leading_bytes and end <= leading_bytes + answer_bytes:
-            citation["startIndex"] = start - leading_bytes
-            citation["endIndex"] = end - leading_bytes
+        if start >= leading_units and end <= leading_units + answer_units:
+            citation["startIndex"] = start - leading_units
+            citation["endIndex"] = end - leading_units
         else:
             citation.pop("startIndex")
             citation.pop("endIndex")

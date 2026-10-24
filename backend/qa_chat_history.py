@@ -90,6 +90,24 @@ class ChatHistoryTests(unittest.TestCase):
             "project-a",
         )
 
+    def test_new_conversation_can_start_with_a_trimmed_title(self):
+        result = conversations.create_conversation(
+            conversations.ConversationCreateBody(title="  Explain black holes  "),
+            self.users["user-a"],
+            self.db,
+        )
+        self.assertEqual(
+            result["conversation"]["title"],
+            "Explain black holes",
+        )
+        with self.assertRaises(HTTPException) as blank_title:
+            conversations.create_conversation(
+                conversations.ConversationCreateBody(title="   "),
+                self.users["user-a"],
+                self.db,
+            )
+        self.assertEqual(blank_title.exception.status_code, 422)
+
     def test_foreign_and_unknown_conversations_are_indistinguishable(self):
         conversation_id = self.create()
         another_user_id = self.create(user="user-b")

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, MessageSquare, Layers, Share2, Check, ShieldCheck, ShieldAlert,
-  Send, KeyRound, ExternalLink, RefreshCw, Trash2, ChevronRight, BookOpen,
+  Send, KeyRound, RefreshCw, Trash2, ChevronRight, BookOpen, Clock3, Plus,
   HelpCircle, Lightbulb, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Eye,
   PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
@@ -10,7 +10,9 @@ import { useApp } from '../context/AppContext.jsx';
 import api, { getAccessToken } from '../api';
 import KnowledgeMap from './KnowledgeMap.jsx';
 import ProviderDocumentStatus from './ProviderDocumentStatus.jsx';
-import DocumentContextConsentDialog from './DocumentContextConsentDialog.jsx';
+import ChatAnswer from './ChatAnswer.jsx';
+import ChatContextConsentDialog from './ChatContextConsentDialog.jsx';
+import RecentChatsDialog from './RecentChatsDialog.jsx';
 import useProviderDocumentFiles from '../hooks/useProviderDocumentFiles.js';
 import { isProviderAvailable } from '../services/providerAvailability.js';
 
@@ -23,6 +25,14 @@ const loadKeys = () => {
 // The server serialises documents with `file_name` plus `filename`/`title`
 // aliases, but older cached rows may only carry the raw column name.
 const docLabel = (doc) => doc.title || doc.filename || doc.file_name || doc.fileName || 'Untitled document';
+const supportsLiveSearch = (selectedProviderId, selectedModelId) =>
+  selectedProviderId === 'gemini-free'
+  && ['gemini-2.5-flash', 'gemini-2.5-flash-lite'].includes(selectedModelId);
+const titleFromQuestion = (value) => {
+  const compact = value.replace(/\s+/g, ' ').trim();
+  const characters = Array.from(compact);
+  return characters.length > 120 ? `${characters.slice(0, 119).join('').trimEnd()}…` : compact;
+};
 
 export default function AIWingView({ onNavigateToDocument }) {
   const { activeProject, documents, fetchDocuments, navigateToLocation, notify } = useApp();
@@ -60,7 +70,7 @@ export default function AIWingView({ onNavigateToDocument }) {
     : keys[providerId]
       ? 'Your BYOK key stays in this browser and is sent to Knoprix in a request header for this provider operation.'
       : providerId === 'ollama'
-        ? 'Knoprix sends the extracted text to the selected Ollama model service; the original files are not sent.'
+        ? 'Knoprix sends your question and any confirmed document passages to the selected Ollama model service; original files are not sent.'
         : 'Knoprix uses its server-managed provider key. The key is not returned to this browser.';
   const authorizedDocs = documents.filter((document) => document.ai_granted);
   const {
@@ -79,26 +89,32 @@ export default function AIWingView({ onNavigateToDocument }) {
   });
 
   // Chat State
-  const [chatMode, setChatMode] = useState('retrieval');
   const [messages, setMessages] = useState([
     {
       id: 'welcome',
       role: 'assistant',
-      content: 'Welcome to the AI Wing. Select your authorized documents, choose an AI provider, and ask questions strictly grounded in your sources with verifiable citations.',
+      content: 'Welcome to the AI Wing. Ask about anything. When useful, include authorized document passages from this project or relevant messages from your saved chats.',
       thought: null,
       citations: [],
     }
   ]);
+  const [activeConversation, setActiveConversation] = useState(null);
+  const [showRecentChats, setShowRecentChats] = useState(false);
+  const [includeAuthorizedDocuments, setIncludeAuthorizedDocuments] = useState(true);
   const [question, setQuestion] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [streamingThought, setStreamingThought] = useState('');
-  const [streamingCitations, setStreamingCitations] = useState([]);
   const [streamingProgress, setStreamingProgress] = useState(null);
   const [showThought, setShowThought] = useState(false);
   const [streamError, setStreamError] = useState(null);
-  const [documentContextQuestion, setDocumentContextQuestion] = useState(null);
+  const [contextConsentQuestion, setContextConsentQuestion] = useState(null);
   const messagesEndRef = useRef(null);
+  const conversationProjectMatches = !activeConversation?.projectId
+    || activeConversation.projectId === activeProject?.id;
+  const availableAuthorizedDocs = conversationProjectMatches ? authorizedDocs : [];
+  const contextDocuments = includeAuthorizedDocuments ? availableAuthorizedDocs : [];
+  const liveSearchAvailable = supportsLiveSearch(providerId, model);
 
   // Artifacts State
   const [artifactType, setArtifactType] = useState('flashcards'); // 'flashcards' | 'quiz' | 'analogy'
@@ -224,32 +240,97 @@ export default function AIWingView({ onNavigateToDocument }) {
     }
   };
 
-  // Send Chat with real SSE streaming after mode-specific consent checks.
+  const startNewChat = () => {
+    if (streaming) return;
+    setActiveConversation(null);
+    setMessages([
+      {
+        id: 'welcome',
+        role: 'assistant',
+        content: 'Welcome to the AI Wing. Ask about anything. When useful, include authorized document passages from this project or relevant messages from your saved chats.',
+        citations: [],
+      },
+    ]);
+    setQuestion('');
+    setIncludeAuthorizedDocuments(true);
+    setShowThought(false);
+    setStreamError(null);
+    setActiveTab('chat');
+  };
+
+  const openConversation = async (conversation) => {
+    try {
+      const { data } = await api.get(`/chat/conversations/${conversation.id}`);
+      if (!data?.conversation?.id || !Array.isArray(data.messages)) {
+        throw new Error('Saved chat response did not match the expected format.');
+      }
+      setActiveConversation(data.conversation);
+      setMessages(data.messages.length > 0 ? data.messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        citations: message.citations || [],
+        providerId: message.providerId,
+        modelId: message.modelId,
+      })) : []);
+      setQuestion('');
+      setIncludeAuthorizedDocuments(true);
+      setShowThought(false);
+      setStreamError(null);
+      setActiveTab('chat');
+      return true;
+    } catch (error) {
+      notify(error.response?.data?.detail || error.message || 'Could not open saved chat.', 'error');
+      return false;
+    }
+  };
+
+  // The dialog makes each provider transfer explicit before this stream starts.
   const streamChat = async (q) => {
     if (!q || streaming) return;
     if (!isProviderAvailable(selectedProvider)) {
       notify(selectedProvider?.availabilityNote || 'Select an available AI provider.', 'error');
       return;
     }
-    const grantedDocIds = authorizedDocs.map((document) => document.id);
-    if (grantedDocIds.length === 0) {
-      notify('Please authorize at least one document for AI access first', 'error');
+    if (!hasProviderKey) {
+      setShowKeyInput(true);
+      notify('Add a provider key before sending this question.', 'error');
+      return;
+    }
+    if (contextDocuments.length > 10) {
+      notify('Select no more than 10 authorized documents, or turn off document context.', 'error');
       return;
     }
 
-    const userMsg = { id: `user-${Date.now()}`, role: 'user', content: q };
-    setMessages((prev) => [...prev, userMsg]);
-    setQuestion('');
     setStreaming(true);
     setStreamingContent('');
     setStreamingThought('');
-    setStreamingCitations([]);
     setStreamingProgress(null);
     setStreamError(null);
 
     const customKey = keys[providerId] || '';
 
     try {
+      let conversation = activeConversation;
+      if (!conversation) {
+        const { data } = await api.post('/chat/conversations', {
+          projectId: activeProject?.id || null,
+          title: titleFromQuestion(q),
+        });
+        conversation = data?.conversation;
+        if (!conversation?.id) {
+          throw new Error('Could not create a saved conversation.');
+        }
+        setActiveConversation(conversation);
+      }
+
+      const userMsg = { id: `user-${Date.now()}`, role: 'user', content: q };
+      setMessages((previous) => [
+        ...(activeConversation ? previous : previous.filter((message) => message.id !== 'welcome')),
+        userMsg,
+      ]);
+      setQuestion('');
+
       // The bearer token must come from the shared auth helper. Reading
       // localStorage directly sent no Authorization header at all, so every
       // streamed request was rejected with 401.
@@ -263,12 +344,15 @@ export default function AIWingView({ onNavigateToDocument }) {
           ...(customKey && providerId !== 'nvidia-nim' ? { 'X-Provider-Key': customKey } : {}),
         },
         body: JSON.stringify({
-          documentIds: grantedDocIds,
+          conversationId: conversation.id,
+          ...(contextDocuments.length > 0 && activeProject?.id
+            ? { projectId: activeProject.id }
+            : {}),
+          documentIds: contextDocuments.map((document) => document.id),
           question: q,
           providerId,
           model,
-          mode: chatMode,
-          ...(chatMode === 'document-context' ? { confirmed: true } : {}),
+          ...(contextDocuments.length > 0 ? { confirmed: true } : {}),
         }),
       });
 
@@ -294,6 +378,9 @@ export default function AIWingView({ onNavigateToDocument }) {
       let accumulatedContent = '';
       let accumulatedThought = '';
       let finalCitations = [];
+      let searchAvailable = liveSearchAvailable;
+      let searchUsed = false;
+      let includedChatMessages = 0;
       let streamFailure = null;
 
       // SSE frames look like:
@@ -316,9 +403,7 @@ export default function AIWingView({ onNavigateToDocument }) {
           return;
         }
         if (eventType === 'meta') {
-          if (!payload.hasKey) {
-            accumulatedThought += 'No API key for this provider — showing retrieved passages. ';
-          }
+          searchAvailable = Boolean(payload.searchAvailable);
           return;
         }
         if (eventType === 'thought') {
@@ -331,12 +416,15 @@ export default function AIWingView({ onNavigateToDocument }) {
           setStreamingContent(accumulatedContent);
         } else if (eventType === 'citation') {
           finalCitations.push(payload);
-          setStreamingCitations([...finalCitations]);
         } else if (eventType === 'error') {
           streamFailure = payload.detail || 'Streaming failed';
-        } else if (eventType === 'done' && Array.isArray(payload.citations) && !finalCitations.length) {
-          finalCitations = payload.citations;
-          setStreamingCitations(finalCitations);
+        } else if (eventType === 'done') {
+          if (Array.isArray(payload.citations) && !finalCitations.length) {
+            finalCitations = payload.citations;
+          }
+          searchAvailable = Boolean(payload.searchAvailable ?? searchAvailable);
+          searchUsed = Boolean(payload.searchUsed);
+          includedChatMessages = Number(payload.includedChatMessages) || 0;
         }
       };
 
@@ -351,6 +439,11 @@ export default function AIWingView({ onNavigateToDocument }) {
       if (buffer.trim()) handleFrame(buffer);
 
       if (streamFailure) throw new Error(streamFailure);
+      if (contextDocuments.length > 0 && !conversation.projectId && activeProject?.id) {
+        setActiveConversation((current) => (
+          current ? { ...current, projectId: activeProject.id } : current
+        ));
+      }
 
       const assistantMessage = {
         id: `assistant-${Date.now()}`,
@@ -358,11 +451,12 @@ export default function AIWingView({ onNavigateToDocument }) {
         content: accumulatedContent,
         thought: accumulatedThought || null,
         citations: finalCitations,
+        searchAvailable,
+        searchUsed,
+        includedChatMessages,
       };
       if (!assistantMessage.content) {
-        assistantMessage.content = chatMode === 'document-context'
-          ? 'The provider returned no text for the selected document text.'
-          : 'The provider returned no text for this question. Your authorized passages are cited below.';
+        assistantMessage.content = 'The provider returned no text for this question.';
       }
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
@@ -374,7 +468,7 @@ export default function AIWingView({ onNavigateToDocument }) {
         {
           id: `assistant-err-${Date.now()}`,
           role: 'assistant',
-          content: `Unable to stream a grounded answer: ${message}`,
+          content: `Unable to get an answer: ${message}`,
           citations: [],
           isError: true,
         }
@@ -383,7 +477,6 @@ export default function AIWingView({ onNavigateToDocument }) {
       setStreaming(false);
       setStreamingContent('');
       setStreamingThought('');
-      setStreamingCitations([]);
       setStreamingProgress(null);
     }
   };
@@ -395,31 +488,27 @@ export default function AIWingView({ onNavigateToDocument }) {
       notify(selectedProvider?.availabilityNote || 'Select an available AI provider.', 'error');
       return;
     }
-    if (authorizedDocs.length === 0) {
-      notify('Please authorize at least one document for AI access first', 'error');
+    if (!hasProviderKey) {
+      setShowKeyInput(true);
+      notify('Add a provider key before sending this question.', 'error');
       return;
     }
-    if (chatMode === 'document-context') {
-      if (authorizedDocs.length > 10) {
-        notify('Document text mode supports at most 10 authorized documents at a time.', 'error');
-        return;
-      }
-      if (!hasProviderKey) {
-        setShowKeyInput(true);
-        notify('Add a provider key before sending document text to this model.', 'error');
-        return;
-      }
-      setDocumentContextQuestion(q);
+    if (contextDocuments.length > 10) {
+      notify('Turn off document context to ask without sending more than 10 documents.', 'error');
       return;
     }
-    await streamChat(q);
+    setContextConsentQuestion(q);
   };
 
-  const handleConfirmDocumentContext = async () => {
-    if (!documentContextQuestion || streaming) return;
-    const questionToSend = documentContextQuestion;
-    setDocumentContextQuestion(null);
+  const handleConfirmChatContext = async () => {
+    if (!contextConsentQuestion || streaming) return;
+    const questionToSend = contextConsentQuestion;
+    setContextConsentQuestion(null);
     await streamChat(questionToSend);
+  };
+
+  const handleCloseChatContext = () => {
+    if (!streaming) setContextConsentQuestion(null);
   };
 
   const handleRevokeProviderDocument = async (document) => {
@@ -448,10 +537,6 @@ export default function AIWingView({ onNavigateToDocument }) {
     } catch (error) {
       notify(error.response?.data?.detail || error.message || 'Could not retry provider deletion.', 'error');
     }
-  };
-
-  const handleCloseDocumentContext = () => {
-    if (!streaming) setDocumentContextQuestion(null);
   };
 
   // Generate Study Artifacts
@@ -720,7 +805,7 @@ export default function AIWingView({ onNavigateToDocument }) {
               }`}
             >
               <MessageSquare className="w-3.5 h-3.5" />
-              <span>Grounded Chat</span>
+              <span>AI Chat</span>
             </button>
             <button
               onClick={() => setActiveTab('artifacts')}
@@ -746,71 +831,71 @@ export default function AIWingView({ onNavigateToDocument }) {
             </button>
           </div>
 
-          <span className="text-[11px] text-ivory/40 hidden sm:inline-flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-accent" />
-            Verified Citations Only
-          </span>
         </div>
 
-        {/* Tab 1: Grounded Chat */}
+        {/* Tab 1: General AI Chat */}
         {activeTab === 'chat' && (
           <div className="flex-1 flex flex-col h-full overflow-hidden">
             <section
               className="shrink-0 border-b border-glass-borderDark bg-midnight-panel/70 px-3 py-3 sm:px-5"
-              aria-label="Chat analysis mode"
+              aria-label="Chat context and history"
             >
-              <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div
-                  role="group"
-                  aria-label="Choose how documents are analyzed"
-                  className="inline-flex w-full rounded-xl border border-glass-borderDark bg-midnight-deep p-1 sm:w-auto"
-                >
-                  <button
-                    type="button"
-                    aria-pressed={chatMode === 'retrieval'}
-                    disabled={streaming}
-                    onClick={() => setChatMode('retrieval')}
-                    className={`min-h-10 flex-1 rounded-lg px-3 text-xs font-semibold transition sm:flex-none ${
-                      chatMode === 'retrieval'
-                        ? 'bg-accent/20 text-accent shadow-inner'
-                        : 'text-ivory/60 hover:text-ivory'
-                    }`}
-                  >
-                    Retrieval
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={chatMode === 'document-context'}
-                    disabled={streaming}
-                    onClick={() => setChatMode('document-context')}
-                    className={`min-h-10 flex-1 rounded-lg px-3 text-xs font-semibold transition sm:flex-none ${
-                      chatMode === 'document-context'
-                        ? 'bg-accent/20 text-accent shadow-inner'
-                        : 'text-ivory/60 hover:text-ivory'
-                    }`}
-                  >
-                    Document text
-                  </button>
+              <div className="mx-auto flex max-w-3xl flex-col gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <label className="flex min-h-11 min-w-0 items-center gap-2 text-xs text-ivory/80">
+                    <input
+                      type="checkbox"
+                      checked={includeAuthorizedDocuments && availableAuthorizedDocs.length > 0}
+                      disabled={streaming || availableAuthorizedDocs.length === 0}
+                      onChange={(event) => setIncludeAuthorizedDocuments(event.target.checked)}
+                      className="h-4 w-4 shrink-0 accent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+                    />
+                    <span className="min-w-0">
+                      Include authorized documents
+                      <span className="ml-1 text-ivory/45">({availableAuthorizedDocs.length})</span>
+                    </span>
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowRecentChats(true)}
+                      disabled={streaming}
+                      className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border border-glass-borderDark px-3 text-xs font-semibold text-ivory/80 hover:border-accent/40 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary disabled:opacity-50 sm:flex-none"
+                    >
+                      <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                      Recent chats
+                    </button>
+                    <button
+                      type="button"
+                      onClick={startNewChat}
+                      disabled={streaming}
+                      className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-bold text-midnight-deep hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary disabled:opacity-50 sm:flex-none"
+                    >
+                      <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                      New chat
+                    </button>
+                  </div>
                 </div>
-                {chatMode === 'document-context' && authorizedDocs.length > 0 && (
-                  <p className="text-[11px] text-ivory/60 sm:text-right">
-                    {authorizedDocs.length} document{authorizedDocs.length === 1 ? '' : 's'} ·{' '}
-                    {authorizedDocs.reduce((total, document) => total + (Number(document.page_count) || 1), 0)} pages ·{' '}
-                    {selectedProvider?.name || providerId} / {selectedModel?.label || model}
+                <div className="flex flex-col gap-1 text-[11px] leading-relaxed text-ivory/55 sm:flex-row sm:items-center sm:justify-between">
+                  <p>
+                    {conversationProjectMatches
+                      ? includeAuthorizedDocuments && availableAuthorizedDocs.length > 0
+                        ? 'Only relevant passages from the active project’s authorized documents may be shared after confirmation.'
+                        : 'General chat works without document context. Relevant messages from your saved chats may also be used after confirmation.'
+                      : 'This saved chat belongs to another project; start a new chat to use this project’s documents.'}
+                  </p>
+                  <p className="shrink-0 text-accent/80" role="status">
+                    {liveSearchAvailable
+                      ? 'Live web search available'
+                      : 'Live web search unavailable for this model'}
+                  </p>
+                </div>
+                {includeAuthorizedDocuments && availableAuthorizedDocs.length > 10 && (
+                  <p className="rounded-lg border border-amber-300/25 bg-amber-300/5 px-3 py-2 text-[11px] text-amber-100/85" role="status">
+                    This chat can include up to 10 authorized documents. Turn off document context to ask without them.
                   </p>
                 )}
               </div>
-              {chatMode === 'document-context' && (
-                <div className="mx-auto mt-3 max-w-3xl rounded-lg border border-amber-300/20 bg-amber-300/5 px-3 py-2 text-[11px] leading-relaxed text-amber-100/85" role="status">
-                  {authorizedDocs.length === 0
-                    ? 'Grant Knoprix AI access to documents in the sidebar before sending document text.'
-                    : authorizedDocs.length > 10
-                      ? 'Document text mode supports up to 10 authorized documents at once. Reduce the authorized scope before continuing.'
-                      : !hasProviderKey
-                        ? 'Add a provider key before sending extracted text to this model.'
-                        : 'Only extracted text from the AI-enabled documents is sent to the named provider. Original files, images, charts, and visual layout are not sent.'}
-                </div>
-              )}
               {providerFilesError && (
                 <div className="mx-auto mt-2 flex max-w-3xl items-center justify-between gap-3 text-[11px] text-rose-200" role="alert">
                   <span>Provider file status could not be loaded: {providerFilesError}</span>
@@ -827,6 +912,11 @@ export default function AIWingView({ onNavigateToDocument }) {
 
             {/* Messages Scroll Area */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+              {messages.length === 0 && !streaming && (
+                <p className="mx-auto max-w-3xl rounded-xl border border-dashed border-glass-borderDark px-4 py-8 text-center text-sm text-ivory/55">
+                  This chat is empty. Ask anything to start the conversation.
+                </p>
+              )}
               {messages.map((msg) => (
                 <div
                   key={msg.id}
@@ -856,28 +946,17 @@ export default function AIWingView({ onNavigateToDocument }) {
                       </div>
                     )}
 
-                    <div className={`whitespace-pre-wrap ${msg.isError ? 'text-rose-300' : ''}`}>
-                      {msg.content}
+                    <div className={msg.isError ? 'text-rose-300' : ''}>
+                      <ChatAnswer
+                        content={msg.content}
+                        citations={msg.citations}
+                        onDocumentCitation={handleJumpToCitation}
+                      />
                     </div>
-
-                    {msg.citations && msg.citations.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-glass-borderDark/60 flex flex-wrap gap-2 items-center">
-                        <span className="text-[10px] uppercase font-bold tracking-wider text-accent flex items-center gap-1">
-                          <BookOpen className="w-3 h-3" /> Grounded Citations:
-                        </span>
-                        {msg.citations.map((c, i) => (
-                          <button
-                            key={i}
-                            onClick={() => handleJumpToCitation(c)}
-                            title={`Jump to page ${c.pageNumber || c.page} in Reading Desk`}
-                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-accent/15 border border-accent/30 text-accent text-xs font-mono hover:bg-accent/25 hover:border-accent transition group"
-                          >
-                            <span className="font-semibold">{c.fileName}</span>
-                            <span className="text-[10px] text-ivory/60">p. {c.pageNumber || c.page}</span>
-                            <ExternalLink className="w-3 h-3 opacity-60 group-hover:opacity-100" />
-                          </button>
-                        ))}
-                      </div>
+                    {msg.searchAvailable && (
+                      <p className="mt-2 text-[10px] text-accent/75">
+                        {msg.searchUsed ? 'Live web sources used' : 'Live web search was available but not used'}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -891,9 +970,7 @@ export default function AIWingView({ onNavigateToDocument }) {
                       <div className="mb-2 text-[11px] font-mono text-accent/80 flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-accent animate-ping" />
                         <span>
-                          {chatMode === 'document-context'
-                            ? 'Reading selected extracted text…'
-                            : 'Synthesizing authorized document passages…'}
+                          Getting an answer from your selected AI provider…
                         </span>
                       </div>
                     )}
@@ -909,15 +986,6 @@ export default function AIWingView({ onNavigateToDocument }) {
                     {streamError && (
                       <p className="mt-2 text-[11px] font-mono text-rose-300">{streamError}</p>
                     )}
-                    {streamingCitations.length > 0 && (
-                      <div className="mt-3 pt-2 border-t border-glass-borderDark flex flex-wrap gap-1.5">
-                        {streamingCitations.map((c, i) => (
-                          <span key={i} className="px-2 py-0.5 rounded bg-accent/10 border border-accent/30 text-[11px] text-accent font-mono">
-                            {c.fileName} p.{c.pageNumber}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
@@ -929,21 +997,17 @@ export default function AIWingView({ onNavigateToDocument }) {
               <div className="max-w-3xl mx-auto flex items-center gap-2">
                 <input
                   type="text"
-                  aria-label="Ask a question about your authorized documents"
+                  aria-label="Ask AI anything"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleSendChat(); }}
                   disabled={streaming}
-                  placeholder={authorizedDocs.length === 0
-                    ? 'Authorize documents in the left sidebar to start asking questions…'
-                    : chatMode === 'document-context'
-                      ? 'Ask using all authorized document text…'
-                      : 'Ask questions grounded in your authorized documents…'}
+                  placeholder="Ask AI anything…"
                   className="flex-1 bg-midnight-deep border border-glass-borderDark rounded-xl px-4 py-2.5 text-sm text-ivory placeholder:text-ivory/40 focus:outline-none focus:border-accent transition shadow-inner"
                 />
                 <button
                   onClick={handleSendChat}
-                  disabled={streaming || !question.trim() || authorizedDocs.length === 0}
+                  disabled={streaming || !question.trim()}
                   aria-label="Ask AI"
                   className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-semibold shadow-lg shadow-primary/30 hover:opacity-95 disabled:opacity-40 transition flex items-center gap-1.5"
                 >
@@ -1233,15 +1297,27 @@ export default function AIWingView({ onNavigateToDocument }) {
           </div>
         )}
       </div>
-      <DocumentContextConsentDialog
-        open={documentContextQuestion !== null}
+      <RecentChatsDialog
+        open={showRecentChats}
+        activeConversationId={activeConversation?.id || null}
+        onClose={() => setShowRecentChats(false)}
+        onNewChat={startNewChat}
+        onSelectConversation={openConversation}
+        onConversationDeleted={startNewChat}
+        onNotify={notify}
+      />
+      <ChatContextConsentDialog
+        open={contextConsentQuestion !== null}
         providerName={selectedProvider?.name || providerId}
         modelName={selectedModel?.name || selectedModel?.label || model}
-        documents={authorizedDocs}
+        documents={contextDocuments}
+        question={contextConsentQuestion || ''}
+        savedChatContext
+        searchAvailable={liveSearchAvailable}
         keyHandlingNotice={providerKeyNotice}
         busy={streaming}
-        onConfirm={handleConfirmDocumentContext}
-        onClose={handleCloseDocumentContext}
+        onConfirm={handleConfirmChatContext}
+        onClose={handleCloseChatContext}
       />
     </div>
   );

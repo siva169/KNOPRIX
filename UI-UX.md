@@ -290,17 +290,28 @@ No visual choice is treated as approved until it is selected here.
   from the Reading Desk.
 - Decisions: chat layout, source panel, streaming treatment, regenerate,
   copy, feedback, conversation history.
+- Approved by boss, 2026-10-25: one general chat replaces the Retrieval /
+  Document text selector. It can use only the active project's AI-authorized
+  documents and relevant messages from the signed-in user's saved chats.
+- Approved by boss, 2026-10-25: Recent Chats and New Chat actions stay in the
+  workspace header. The existing dark/gold language is retained.
+- Approved by boss, 2026-10-25: conversation renaming uses a compact dialog;
+  motion is subtle and respects `prefers-reduced-motion`.
 - Reference URLs: _add here_
 
 ### F8. `ChatMessage` — one user or assistant message
 - Used for: conversation transcript.
 - Decisions: markdown, code blocks, citation chips, timestamps, actions.
+- Approved by boss, 2026-10-25: show source citations inline with the answer,
+  not in a separate citation list. Document markers jump to Reading Desk;
+  web markers open only validated HTTPS sources in a new tab.
 - Reference URLs: _add here_
 
 ### F9. `CitationPanel` — supporting pages and excerpts for an AI answer
 - Used for: grounded answer verification.
-- Decisions: inline citation markers versus side panel, click-to-page, excerpt
-  length, unavailable-source state.
+- Approved by boss, 2026-10-25: citations are inline, not in a separate panel;
+  document markers jump to Reading Desk and validated HTTPS web markers open
+  in a new tab.
 - Reference URLs: _add here_
 
 ### F10. `AIResponseState` — loading, success, partial, and failure states
@@ -329,9 +340,9 @@ No visual choice is treated as approved until it is selected here.
 - Required states: loading, empty, no search results, API error with retry,
   and per-action progress/success feedback. Only the signed-in user's history
   is displayed.
-- Still requires boss choice before UI implementation: rename interaction,
-  exact keyboard-dismiss/focus behavior beyond accessible dialog basics, and
-  any motion treatment. These are not implied by the approved layout.
+- Approved by boss, 2026-10-25: rename uses a small edit dialog; transitions
+  are subtle and must respect `prefers-reduced-motion`. The modal supports
+  Escape, focus containment, and focus restoration.
 - References:
   - https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
   - https://developer.apple.com/design/human-interface-guidelines/search-fields
@@ -415,9 +426,8 @@ Boss choice: [selected option / changes requested]
   and retry-delete controls remain for historical remote files; no new upload
   or prepare action is available.
 - AI Wing general chat and Recent Chats: approved 2026-10-25 as recorded in
-  F5, F7, and F13. Remaining conversation-layout and chat-message choices
-  must be confirmed before implementing UI; the backend contract is not gated
-  on those visual decisions.
+  F5–F9 and F13. The approved chat/history UI decisions are implemented;
+  unrelated surfaces remain subject to their own approval gates.
 - First surface: `DashboardOverview` — selected for the first UI/UX review
 - Reference URLs: pending boss input
 - Global foundation: Not selected

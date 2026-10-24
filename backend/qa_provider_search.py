@@ -41,7 +41,7 @@ class GeminiSearchTests(unittest.TestCase):
                     "content": [
                         {
                             "type": "text",
-                            "text": "  π.",
+                            "text": "  😀.",
                             "annotations": [],
                         },
                         {
@@ -93,7 +93,7 @@ class GeminiSearchTests(unittest.TestCase):
         self.assertEqual(payload["tools"], [{"type": "google_search"}])
         self.assertIs(payload["store"], False)
         self.assertEqual(payload["input"], "Question")
-        self.assertEqual(answer, "π.Second answer.")
+        self.assertEqual(answer, "😀.Second answer.")
         self.assertTrue(search_used)
         self.assertEqual(
             citations,

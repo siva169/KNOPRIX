@@ -1,9 +1,10 @@
 # PRD: Knoprix Final Project
 
 **Type:** College project / document knowledge platform  
-**Status:** General AI chat and account-synced history are approved for
-implementation. Retrieval and consented extracted-text chat are the current
-behavior; native-search compatibility remains to be verified per model.
+**Status:** General AI chat and account-synced history are implemented in the
+current worktree. Retrieval is internal context gathering; provider-native
+search is limited to the verified Gemini models documented below. Live
+provider behavior remains unverified.
 **Source baseline:** Current Knoprix mid-review version  
 **Project folder:** `knoprix-final-project/`
 
