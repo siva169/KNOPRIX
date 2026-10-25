@@ -7,7 +7,8 @@
   aligned native Search support, QA fixtures, and current API/product docs.
 - Google documents Gemini 3.8 Flash as supporting Search grounding. Local
   provider, RAG, heap, and browser QA are used; no live Gemini key/request is
-  part of verification.
+  part of verification. Published as `bcb77e9` to `siva169/KNOPRIX` `master`
+  with boss's approval; remote and local heads matched after push.
 
 ## 2026-10-25 — Preserve safe Gemini provider error detail
 
