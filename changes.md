@@ -1,5 +1,16 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-25 — Add Sarvam AI chat provider
+
+- Added Sarvam 105B Conversations to the server-validated provider/model
+  allowlist and routed streaming chat and study-artifact calls to Sarvam's
+  official V1 Chat Completions endpoint using its API subscription-key header.
+- Added optional `SARVAM_API_KEY` server configuration and Sarvam support to
+  the legacy Document Chat flow. BYOK keys are sent in the existing provider
+  request header; the browser flow does not make a duplicate direct call.
+- Documented that Sarvam use may consume credits or incur charges. Added
+  mocked adapter/configuration tests; no live Sarvam request was made.
+
 ## 2026-10-25 — Replace retired Gemini 2.5 chat model
 
 - Google reports Gemini 2.5 Flash is unavailable to new API users. Replaced

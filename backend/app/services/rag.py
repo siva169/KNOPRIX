@@ -37,6 +37,7 @@ _OPENAI_COMPATIBLE_URLS = {
     "zai-glm-free": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
     "openai": "https://api.openai.com/v1/chat/completions",
     "nvidia-nim": "https://integrate.api.nvidia.com/v1/chat/completions",
+    "sarvam": "https://api.sarvam.ai/v1/chat/completions",
 }
 NVIDIA_MODEL_ID = "nvidia/nemotron-3.5-lightning-30b-a3b"
 _NATIVE_PROVIDERS = {"gemini-free", "anthropic", "ollama"}
@@ -573,13 +574,15 @@ def stream_llm_response(
                 ],
                 "stream": True,
             }
+            headers = {"Content-Type": "application/json"}
+            if provider_clean == "sarvam":
+                headers["api-subscription-key"] = api_key
+            else:
+                headers["Authorization"] = f"Bearer {api_key}"
             req = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}",
-                },
+                headers=headers,
                 method="POST",
             )
             stream_timeout = 120 if provider_clean == "nvidia-nim" else 30
@@ -679,10 +682,11 @@ def complete_llm(
                 ],
                 "stream": False,
             }
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}",
-            }
+            headers = {"Content-Type": "application/json"}
+            if provider_clean == "sarvam":
+                headers["api-subscription-key"] = api_key
+            else:
+                headers["Authorization"] = f"Bearer {api_key}"
 
         req = urllib.request.Request(
             url,

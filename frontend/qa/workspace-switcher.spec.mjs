@@ -131,6 +131,15 @@ async function run() {
                 name: 'Gemini 3.8 Flash',
               }],
             },
+            {
+              id: 'sarvam',
+              name: 'Sarvam AI',
+              baseUrl: 'https://api.sarvam.ai/v1',
+              models: [{
+                id: 'sarvam-105b-conversations',
+                name: 'Sarvam 105B Conversations',
+              }],
+            },
           ]
         }),
       });

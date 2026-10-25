@@ -90,6 +90,10 @@ BYOK provider keys are stored in
 browser local storage, which browser extensions can read. Mocked adapter tests
 do not prove a provider key or account can generate a live answer. Gemini keys must
 be restricted to the Gemini API or use Google's authorization-key format.
+Sarvam AI is available as `Sarvam 105B Conversations`; enter a personal
+Sarvam API key in the provider panel, or configure `SARVAM_API_KEY` in the
+backend environment for a shared deployment key. Sarvam usage may consume
+credits or incur charges; check [Sarvam pricing](https://docs.sarvam.ai/api/getting-started/pricing).
 
 ## Verification
 

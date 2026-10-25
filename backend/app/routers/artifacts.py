@@ -55,6 +55,7 @@ _ARTIFACT_MODELS = {
     "nvidia-nim": NVIDIA_MODEL_ID,
     "openai": "gpt-4o-mini",
     "anthropic": "claude-haiku-5-5",
+    "sarvam": "sarvam-105b-conversations",
     "ollama": "llama3",
 }
 

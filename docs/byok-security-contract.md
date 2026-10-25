@@ -118,7 +118,7 @@ controls are implemented in the UI.
   BYOK keys are sent to Knoprix request handlers for backend-routed streaming
   and cleanup of old provider files, not directly from the browser to providers.
 
-## 6. Allowlist policy (FREE only)
+## 6. Provider allowlist policy
 
 - MUST: current backend publishes `GET /api/providers/allowlist`; the v1
   contract publishes `GET /api/v1/providers/allowlist` (name, base URL,
@@ -126,11 +126,14 @@ controls are implemented in the UI.
   the server allowlist.
 - MUST: server re-validates `model` on every chat-related call (client
   enforcement alone is decoration).
-- Initial candidates (VERIFY each at implementation — free tiers move):
-  free-tier endpoints of Gemini, Groq, OpenAI-compatible `:free` models via
-  OpenRouter, Z.AI GLM free tier, and NVIDIA NIM hosted trial endpoints. NVIDIA
-  API terms, model availability, and usage limits can change; do not promise
+- Provider/model availability and pricing must be verified against official
+  provider docs; clearly disclose when usage may consume credits or incur
+  charges. Free tiers, trials, terms, and limits change; do not promise
   unlimited or permanently free access.
+- Sarvam AI is available with `sarvam-105b-conversations` through its V1 Chat
+  Completion endpoint. Users can provide their own key; deployments may
+  optionally configure `SARVAM_API_KEY` as a shared backend key. Sarvam usage
+  may consume account credits or incur charges.
 - NVIDIA uses `NVIDIA_API_KEY` configured privately in the backend environment.
   The browser MUST NOT send a key in headers or body and MUST NOT call NVIDIA
   directly. The allowlist reports only whether the server key exists; the UI
@@ -142,7 +145,7 @@ controls are implemented in the UI.
   quota and billing exposure. NVIDIA terms and limits can change; do not promise
   unlimited or permanently free access.
 - SHOULD: per-day app-side call budget per provider (protects the user's
-  free quota from runaway loops — agents retry, quotas don't).
+  quota from runaway loops — agents retry, quotas don't).
 
 ## 7. Logging / audit policy
 

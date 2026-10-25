@@ -104,6 +104,18 @@ ALLOWLIST = [
         ],
     },
     {
+        "id": "sarvam",
+        "name": "Sarvam AI",
+        "baseUrl": "https://api.sarvam.ai/v1",
+        "freeNote": "Sarvam API key required; usage may consume credits or incur charges.",
+        "models": [
+            {
+                "id": "sarvam-105b-conversations",
+                "label": "Sarvam 105B Conversations",
+            }
+        ],
+    },
+    {
         "id": "ollama",
         "name": "Ollama (Local / Offline)",
         "baseUrl": "http://localhost:11434",

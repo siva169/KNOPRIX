@@ -96,6 +96,44 @@ class ProviderAdapterTests(unittest.TestCase):
 
         self.assertEqual(keys["nvidia-nim"], "server-test-key")
 
+    def test_sarvam_credentials_load_from_backend_environment(self):
+        keys = _load_provider_api_keys({"SARVAM_API_KEY": "server-test-key"})
+
+        self.assertEqual(keys["sarvam"], "server-test-key")
+
+    def test_sarvam_credentials_are_overridden_by_user_key(self):
+        with patch.dict(chat.cfg.PROVIDER_API_KEYS, {"sarvam": "server-test-key"}):
+            self.assertEqual(
+                rag.resolve_api_key("sarvam", "user-test-key"),
+                "user-test-key",
+            )
+
+    def test_sarvam_artifact_generation_resolves_model_and_user_key(self):
+        provider_id, model, api_key = artifacts._resolve_generation(
+            {"providerId": "sarvam"},
+            "user-test-key",
+        )
+
+        self.assertEqual(provider_id, "sarvam")
+        self.assertEqual(model, "sarvam-105b-conversations")
+        self.assertEqual(api_key, "user-test-key")
+
+    def test_sarvam_allowlist_uses_conversation_model_and_reports_no_secret(self):
+        provider = chat._lookup("sarvam")
+
+        self.assertEqual(provider["baseUrl"], "https://api.sarvam.ai/v1")
+        self.assertEqual(
+            [model["id"] for model in provider["models"]],
+            ["sarvam-105b-conversations"],
+        )
+        with patch.dict(chat.cfg.PROVIDER_API_KEYS, {"sarvam": "server-test-key"}):
+            result = chat.providers_allowlist(user=USER)
+        public_provider = next(
+            item for item in result["providers"] if item["id"] == "sarvam"
+        )
+        self.assertTrue(public_provider["hasServerKey"])
+        self.assertNotIn("server-test-key", json.dumps(result))
+
     def test_nvidia_allowlist_reports_only_server_key_presence(self):
         with patch.dict(chat.cfg.PROVIDER_API_KEYS, {"nvidia-nim": "server-test-key"}):
             result = chat.providers_allowlist(user=USER)
@@ -164,6 +202,39 @@ class ProviderAdapterTests(unittest.TestCase):
         self.assertEqual(request.get_header("X-goog-api-key"), "test-google-key")
         self.assertEqual(tokens, ["grounded"])
 
+    def test_sarvam_stream_uses_subscription_key_header(self):
+        response = FakeHTTPResponse(
+            b'data: {"choices":[{"delta":{"content":"Namaste"}}]}\n\n'
+            b"data: [DONE]\n\n"
+        )
+        with patch(
+            "app.services.rag.urllib.request.urlopen",
+            return_value=response,
+        ) as open_url:
+            tokens = list(
+                rag.stream_llm_response(
+                    "sarvam",
+                    "sarvam-105b-conversations",
+                    "test-sarvam-key",
+                    "Be helpful.",
+                    "Say hello.",
+                )
+            )
+
+        request = open_url.call_args.args[0]
+        payload = json.loads(request.data)
+        self.assertEqual(
+            request.full_url,
+            "https://api.sarvam.ai/v1/chat/completions",
+        )
+        self.assertEqual(
+            request.get_header("Api-subscription-key"), "test-sarvam-key"
+        )
+        self.assertIsNone(request.get_header("Authorization"))
+        self.assertEqual(payload["model"], "sarvam-105b-conversations")
+        self.assertTrue(payload["stream"])
+        self.assertEqual(tokens, ["Namaste"])
+
     def test_non_streaming_openai_compatible_calls_send_bearer_key(self):
         endpoints = (
             "https://api.groq.com/openai/v1/chat/completions",
@@ -216,6 +287,36 @@ class ProviderAdapterTests(unittest.TestCase):
         self.assertNotIn("test-google-key", request.full_url)
         self.assertEqual(request.get_header("X-goog-api-key"), "test-google-key")
         self.assertEqual(answer, "grounded")
+
+    def test_sarvam_completion_uses_subscription_key_header(self):
+        response = FakeHTTPResponse(
+            b'{"choices":[{"message":{"content":"Namaste"}}]}'
+        )
+        with patch(
+            "app.services.rag.urllib.request.urlopen",
+            return_value=response,
+        ) as open_url:
+            answer = rag.complete_llm(
+                "sarvam",
+                "sarvam-105b-conversations",
+                "test-sarvam-key",
+                "Be helpful.",
+                "Say hello.",
+            )
+
+        request = open_url.call_args.args[0]
+        payload = json.loads(request.data)
+        self.assertEqual(
+            request.full_url,
+            "https://api.sarvam.ai/v1/chat/completions",
+        )
+        self.assertEqual(
+            request.get_header("Api-subscription-key"), "test-sarvam-key"
+        )
+        self.assertIsNone(request.get_header("Authorization"))
+        self.assertEqual(payload["model"], "sarvam-105b-conversations")
+        self.assertFalse(payload["stream"])
+        self.assertEqual(answer, "Namaste")
 
 
 class BacklogRAGTests(unittest.TestCase):

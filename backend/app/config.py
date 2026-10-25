@@ -28,6 +28,7 @@ _PROVIDER_KEY_ENV = {
     "nvidia-nim": ("NVIDIA_API_KEY",),
     "openai": ("OPENAI_API_KEY",),
     "anthropic": ("ANTHROPIC_API_KEY",),
+    "sarvam": ("SARVAM_API_KEY",),
 }
 
 
