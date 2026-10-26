@@ -1150,9 +1150,9 @@ are recorded in `UI-UX.md` and implemented.
 
 ## Approved Initiative - Region Selection Annotations
 
-**Status:** Implemented and verified locally; checkpoint awaits identity
-confirmation. Boss approved the workflow,
-translucent-gold rectangle, and LibreOffice-to-PDF PPTX preview on 2026-10-27.
+**Status:** Implemented, verified, and committed locally (`ccdb27e`; parent
+checkpoint `cfcc2a7`). Boss approved the workflow, translucent-gold rectangle,
+and LibreOffice-to-PDF PPTX preview on 2026-10-27.
 
 ### Task 1: Extending bookmark/highlight contracts and migrations
 
@@ -1208,8 +1208,7 @@ translucent-gold rectangle, and LibreOffice-to-PDF PPTX preview on 2026-10-27.
   checklist are updated.
 - [x] Verify: backend-focused QA, frontend build, browser workflows at all four
   required widths, and focused diff review passed. No unrelated parent files
-  are staged. Local feature commit remains pending configured-identity
-  confirmation; no remote operation is planned.
+  were included. Commits are local only; no remote operation was performed.
 - Dependencies: Tasks 1-4.
 - Files likely touched: project `changes.md`, PRD/UI-UX/task docs, parent
   `changes.md`, intended Knoprix pointer.

@@ -18,7 +18,8 @@
   (11). PostgreSQL had no integration database available; the added migration
   uses the shared additive DDL path.
 - Configured Knoprix commit identity is `siva169 <tvssphanindra@gmail.com>`;
-  local commit awaits boss confirmation. No push was performed.
+  Knoprix feature commit `ccdb27e` and parent checkpoint `cfcc2a7` are local.
+  No push was performed.
 
 ## 2026-10-27 — Specify region selection annotations (awaiting code approval)
 

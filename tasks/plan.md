@@ -362,9 +362,10 @@ each currently allowlisted model still must be checked before enabling it.
 
 ## Approved Initiative - Region Selection Annotations
 
-**Status:** Implemented and locally verified; local commit awaits configured
-identity confirmation. Boss approved the workflow, gold selection treatment,
-and LibreOffice-to-PDF rendering approach on 2026-10-27.
+**Status:** Implemented, locally verified, and committed as `ccdb27e`.
+The parent pointer/change-log checkpoint is `cfcc2a7`. Boss approved the
+workflow, gold selection treatment, and LibreOffice-to-PDF rendering approach
+on 2026-10-27.
 
 ### Objective and approved behavior
 
@@ -457,9 +458,8 @@ of scope.
   `ALTER TABLE` syntax.
 - No new package or external API is required; no deployment or remote Git
   operation is planned.
-- Before any local commit, disclose the configured identity. Commit only
-  feature files in the Knoprix checkout and the intended parent pointer/log;
-  leave unrelated parent work untouched.
+- Local checkpoints include only the feature files, the intended parent
+  pointer, and the root change log. Unrelated parent work remains untouched.
 
 ### Approved UI decisions
 
