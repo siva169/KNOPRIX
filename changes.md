@@ -1,5 +1,25 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-27 — Implement PDF/PPTX region bookmarks and highlights
+
+- Added validated normalized page geometry and additive database migration
+  columns for region bookmarks/highlights; annotation sharing retains geometry.
+- Added page-local mouse/touch and keyboard region selection, PNG clipboard
+  copy, named region bookmarks, colored region highlights, and restore/remove
+  flows. Existing text and whole-page annotations remain supported.
+- PPTX reader pages now use an authenticated, cached LibreOffice PDF preview in
+  PDF.js; preview failures retain the extracted-text fallback.
+- Updated PRD, UI/UX, implementation plan, task list, and feature-specific
+  33-point checklist. No dependency, external API call, deployment, or remote
+  Git operation was used.
+- Verification passed: frontend build (existing chunk-size advisory), 3 region
+  geometry tests, 85 mocked browser checks, and focused backend suites for
+  bookmarks (7), highlights (6), migrations (3), PPTX preview (1), and sharing
+  (11). PostgreSQL had no integration database available; the added migration
+  uses the shared additive DDL path.
+- Configured Knoprix commit identity is `siva169 <tvssphanindra@gmail.com>`;
+  local commit awaits boss confirmation. No push was performed.
+
 ## 2026-10-27 — Specify region selection annotations (awaiting code approval)
 
 - Recorded the approved PDF/PPTX region-selection scope: image copy, named

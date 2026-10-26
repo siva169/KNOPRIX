@@ -44,6 +44,16 @@ const documents = [
     page_count: 10,
     extracted_text: '',
   },
+  {
+    id: 'document-4',
+    project_id: 'project-1',
+    file_name: 'presentation.pptx',
+    file_type: 'pptx',
+    file_path: 'presentation.pptx',
+    file_size: 128,
+    page_count: 1,
+    extracted_text: '',
+  },
 ];
 const bookmarks = [{
   id: 'legacy-bookmark',
@@ -62,6 +72,7 @@ const bookmarks = [{
 let nextBookmarkId = 1;
 const highlights = [];
 let nextHighlightId = 1;
+let presentationPreviewRequests = 0;
 let contactsRequests = 0;
 let failContactsRequests = true;
 let sourceDocumentShareAccepted = false;
@@ -77,6 +88,31 @@ const page = await browser.newPage({
   viewport: { width: 390, height: 844 },
   deviceScaleFactor: 2,
 });
+await page.addInitScript(() => {
+  class QaClipboardItem {
+    constructor(items) {
+      this.items = items;
+      this.types = Object.keys(items);
+    }
+
+    getType(type) {
+      return Promise.resolve(this.items[type]);
+    }
+  }
+  Object.defineProperty(window, 'ClipboardItem', { configurable: true, value: QaClipboardItem });
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: {
+      async write(items) {
+        if (window.__failClipboardWrite) throw new Error('Clipboard permission denied');
+        window.__copiedClipboardItems = await Promise.all(items.map(async (item) => ({
+          types: item.types,
+          pngSize: (await item.getType('image/png')).size,
+        })));
+      },
+    },
+  });
+});
 const errors = [];
 page.on('pageerror', (error) => errors.push(error.message));
 page.on('console', (message) => {
@@ -91,6 +127,13 @@ await page.route('**/api/**', async (route) => {
   const path = url.pathname;
 
   if (path === '/api/documents/document-3/stream') {
+    return route.fulfill({
+      contentType: 'application/pdf',
+      path: fileURLToPath(new URL('../backend/uploads/1789381445896-6523eb3b-23AID204_Lecture16-18.pdf', import.meta.url)),
+    });
+  }
+  if (path === '/api/documents/document-4/preview.pdf') {
+    presentationPreviewRequests += 1;
     return route.fulfill({
       contentType: 'application/pdf',
       path: fileURLToPath(new URL('../backend/uploads/1789381445896-6523eb3b-23AID204_Lecture16-18.pdf', import.meta.url)),
@@ -148,6 +191,10 @@ await page.route('**/api/**', async (route) => {
       bookmark_type: body.bookmarkType || 'text',
       anchor_start: body.selectionStart ?? null,
       anchor_end: body.selectionEnd ?? null,
+      region_x: body.region?.x ?? null,
+      region_y: body.region?.y ?? null,
+      region_width: body.region?.width ?? null,
+      region_height: body.region?.height ?? null,
       created_at: new Date(Date.now() + nextBookmarkId).toISOString(),
     };
     bookmarks.push(bookmark);
@@ -176,6 +223,11 @@ await page.route('**/api/**', async (route) => {
       match_all: body.matchAll ? 1 : 0,
       anchor_start: body.selectionStart ?? null,
       anchor_end: body.selectionEnd ?? null,
+      highlight_type: body.highlightType || 'text',
+      region_x: body.region?.x ?? null,
+      region_y: body.region?.y ?? null,
+      region_width: body.region?.width ?? null,
+      region_height: body.region?.height ?? null,
     };
     highlights.push(highlight);
     return respond(route, 201, { id: highlight.id });
@@ -346,6 +398,63 @@ async function dragSelectPdfText(text) {
       rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
     };
   });
+}
+
+async function dragSelectRegion(pageNumber = 1, offset = 0, input = 'mouse') {
+  const pageElement = page.locator(`[data-region-page="${pageNumber}"]`);
+  await pageElement.scrollIntoViewIfNeeded();
+  const geometry = await pageElement.evaluate((element, delta) => {
+    const rect = element.getBoundingClientRect();
+    for (
+      let y = Math.max(0, rect.top + 8) - delta;
+      y + delta + 100 <= Math.min(window.innerHeight, rect.bottom);
+      y += 12
+    ) {
+      for (
+        let x = Math.max(0, rect.left + 8) - delta;
+        x + delta + 150 <= Math.min(window.innerWidth, rect.right);
+        x += 12
+      ) {
+        const target = document.elementFromPoint(x + delta + 2, y + delta + 2);
+        if (target?.closest('[data-region-page]') === element) {
+          return { x: x + delta, y: y + delta, width: rect.width, height: rect.height };
+        }
+      }
+    }
+    return null;
+  }, offset);
+  if (!geometry) throw new Error(`No visible, unobstructed region-selection area on page ${pageNumber}`);
+  if (input === 'touch') {
+    const session = await page.context().newCDPSession(page);
+    await session.send('Emulation.setTouchEmulationEnabled', {
+      enabled: true,
+      maxTouchPoints: 1,
+    });
+    try {
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [{ x: geometry.x, y: geometry.y }],
+      });
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x: geometry.x + 138, y: geometry.y + 88 }],
+      });
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchEnd',
+        touchPoints: [],
+      });
+    } finally {
+      await session.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+      await session.detach();
+    }
+    await page.getByRole('button', { name: 'Copy selected region as PNG' }).waitFor();
+    return;
+  }
+  await page.mouse.move(geometry.x, geometry.y);
+  await page.mouse.down();
+  await page.mouse.move(geometry.x + 138, geometry.y + 88, { steps: 6 });
+  await page.mouse.up();
+  await page.getByRole('button', { name: 'Copy selected region as PNG' }).waitFor();
 }
 
 async function selectText(phrase, occurrence) {
@@ -953,8 +1062,163 @@ try {
   check('PDF highlights restore after reopening the document', reopenedPdf);
   await page.screenshot({ path: `${evidenceDir}/overlapping-pdf-highlights.png` });
 
+  await page.getByRole('button', { name: 'Enter region selection mode' }).click();
+  check(
+    'Region Selection mode is keyboard-accessible and mutually exclusive',
+    await page.getByRole('button', { name: 'Exit region selection mode' }).getAttribute('aria-pressed') === 'true' &&
+      await page.getByRole('button', { name: 'Switch to browse mode' }).isVisible(),
+  );
+  for (const width of [390, 425, 768, 1024]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.locator('[data-region-page="1"]').scrollIntoViewIfNeeded();
+    await dragSelectRegion(1, 0);
+    const actionFits = await page.locator('[data-region-actions]').evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.left >= -1 && rect.right <= window.innerWidth + 1 &&
+        document.documentElement.scrollWidth <= window.innerWidth + 1;
+    });
+    check(`[${width}px] region actions fit the viewport without horizontal overflow`, actionFits);
+    await page.screenshot({ path: `${evidenceDir}/region-actions-${width}.png` });
+    await page.getByRole('button', { name: 'Cancel region selection' }).click();
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('[data-region-page="1"]').scrollIntoViewIfNeeded();
+  await dragSelectRegion(1, 0, 'touch');
+  check(
+    'touch drag selects a page region on mobile',
+    await page.locator('[data-region-actions]').isVisible(),
+  );
+  await page.getByRole('button', { name: 'Cancel region selection' }).click();
+  await dragSelectRegion(1, 0);
+  await page.screenshot({ path: `${evidenceDir}/region-selection.png` });
+  await page.getByRole('button', { name: 'Copy selected region as PNG' }).click();
+  await page.getByText('Selected region copied as PNG').waitFor();
+  check(
+    'Copy generates a non-empty PNG and sends it to the clipboard',
+    await page.evaluate(() => window.__copiedClipboardItems?.some((item) =>
+      item.types.includes('image/png') && item.pngSize > 0)),
+  );
+
+  await page.evaluate(() => { window.__failClipboardWrite = true; });
+  await dragSelectRegion(1, 4);
+  await page.getByRole('button', { name: 'Copy selected region as PNG' }).click();
+  await page.getByText('Clipboard permission denied').waitFor();
+  check(
+    'clipboard permission errors are surfaced without discarding the selection',
+    await page.locator('[data-region-actions]').isVisible(),
+  );
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {},
+    });
+  });
+  await page.getByRole('button', { name: 'Copy selected region as PNG' }).click();
+  await page.getByText('PNG clipboard copy is not supported by this browser').waitFor();
+  check(
+    'unsupported PNG clipboard APIs show an explicit error',
+    await page.locator('[data-region-actions]').isVisible(),
+  );
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        async write(items) {
+          if (window.__failClipboardWrite) throw new Error('Clipboard permission denied');
+          window.__copiedClipboardItems = await Promise.all(items.map(async (item) => ({
+            types: item.types,
+            pngSize: (await item.getType('image/png')).size,
+          })));
+        },
+      },
+    });
+  });
+  await page.evaluate(() => { window.__failClipboardWrite = false; });
+  await page.getByRole('button', { name: 'Cancel region selection' }).click();
+
+  await dragSelectRegion(1, 8);
+  await page.getByRole('button', { name: 'Bookmark selected region' }).click();
+  const regionDialog = page.getByRole('dialog', { name: 'Save bookmark' });
+  await regionDialog.waitFor();
+  check(
+    'region bookmarks reuse the optional-name dialog and identify the selection',
+    await regionDialog.getByText(/selected region/).isVisible(),
+  );
+  await regionDialog.getByLabel(/Bookmark name/).fill('Flowchart region');
+  await regionDialog.getByRole('button', { name: 'Save bookmark' }).click();
+  await page.getByText('Named bookmark added to your collection').waitFor();
+  const regionBookmark = bookmarks.find((bookmark) => bookmark.name === 'Flowchart region');
+  check(
+    'region bookmark stores a positive normalized page rectangle',
+    regionBookmark?.bookmark_type === 'region' &&
+      regionBookmark.region_x >= 0 && regionBookmark.region_y >= 0 &&
+      regionBookmark.region_width > 0 && regionBookmark.region_height > 0 &&
+      regionBookmark.region_x + regionBookmark.region_width <= 1 &&
+      regionBookmark.region_y + regionBookmark.region_height <= 1,
+  );
+  await page.getByTitle('Bookmark collection').click();
+  await page.getByRole('textbox', { name: 'Search bookmarks' }).fill('Flowchart region');
+  await page.getByRole('button', { name: /Open bookmark: Flowchart region/ }).click();
+  await page.locator('[data-region-bookmark="true"]').waitFor();
+  check(
+    'opening a saved region bookmark restores its page outline',
+    await page.locator('[data-region-bookmark="true"]').evaluate((outline) => {
+      const pageRect = outline.parentElement.getBoundingClientRect();
+      const rect = outline.getBoundingClientRect();
+      return Math.abs(rect.left - (pageRect.left + pageRect.width * Number.parseFloat(outline.style.left) / 100)) < 2;
+    }),
+  );
+
+  await page.getByRole('button', { name: 'Exit region selection mode' }).click();
+  await page.getByRole('button', { name: 'Enter region selection mode' }).click();
+  await dragSelectRegion(1);
+  await page.getByRole('button', { name: 'Highlight selected region' }).click();
+  await page.getByRole('button', { name: 'Save region highlight in Blue' }).click();
+  await page.getByRole('button', { name: 'Region highlight, Blue, page 1' }).waitFor();
+  const regionHighlight = highlights.find((highlight) => highlight.highlight_type === 'region');
+  check(
+    'region highlight stores page geometry and selected palette color',
+    regionHighlight?.color === 'blue' && regionHighlight.region_x >= 0 &&
+      regionHighlight.region_width > 0 && regionHighlight.region_y >= 0 &&
+      regionHighlight.region_height > 0,
+  );
+  await page.reload({ waitUntil: 'networkidle' });
+  await openSidebarDocument('selection-visual.pdf');
+  await page.getByRole('button', { name: 'Region highlight, Blue, page 1' }).waitFor();
+  check('region highlight is restored after reopening the PDF', true);
+  await page.getByRole('button', { name: 'Region highlight, Blue, page 1' }).click();
+  await page.getByRole('button', { name: 'Remove', exact: true }).click();
+  await page.getByRole('button', { name: 'Region highlight, Blue, page 1' }).waitFor({ state: 'detached' });
+  check(
+    'saved region highlight can be removed through annotation management',
+    !highlights.some((highlight) => highlight.highlight_type === 'region'),
+  );
+
+  await openSidebarDocument('presentation.pptx');
+  await page.locator('.pdf-text-layer span').first().waitFor({ timeout: 20000 });
+  check(
+    'PPTX opens through the PDF.js preview endpoint instead of the shape-reconstruction viewer',
+    presentationPreviewRequests > 0 && await page.locator('[data-region-page="1"]').count() === 1,
+  );
+  await page.getByRole('button', { name: 'Enter region selection mode' }).click();
+  await dragSelectRegion(1, 8);
+  check('PPTX preview supports the same region-selection popup', await page.locator('[data-region-actions]').isVisible());
+  await page.getByRole('button', { name: 'Cancel region selection' }).click();
+  const presentationPage = page.locator('[data-region-page="1"]');
+  await presentationPage.focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  for (let step = 0; step < 8; step += 1) await page.keyboard.press('ArrowRight');
+  for (let step = 0; step < 8; step += 1) await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  check('keyboard arrows and Enter can select a page region', await page.locator('[data-region-actions]').isVisible());
+  await page.getByRole('button', { name: 'Cancel region selection' }).click();
+  await page.getByRole('button', { name: 'Exit region selection mode' }).click();
+
   const sourceBookmarkCount = bookmarks.filter((bookmark) => bookmark.document_id === 'document-1').length;
   const sourceHighlightCount = highlights.filter((highlight) => highlight.document_id === 'document-1').length;
+  const sidebar = page.locator('aside').first();
+  if (!await sidebar.isVisible()) await page.getByTitle('Toggle folders').click();
   const savedItemsButton = page.getByRole('button', {
     name: `Show saved items for source.txt: ${sourceBookmarkCount} bookmarks and ${sourceHighlightCount} highlights`,
   });
@@ -1028,6 +1292,7 @@ try {
   check('no browser runtime errors', errors.length === 0, errors.slice(0, 2).join(' | '));
 } catch (error) {
   flowError = error.stack || String(error);
+  console.error('Browser runtime errors:', errors.join(' | ') || 'none');
   console.error(error.stack);
   check('bookmark browser flow completes', false, String(error).split('\n')[0]);
   await page.screenshot({ path: `${evidenceDir}/failure.png` }).catch(() => {});

@@ -2,7 +2,7 @@ import React from 'react';
 import {
   ZoomIn, ZoomOut, ChevronLeft, ChevronRight, BookOpen, Layers, Printer,
   Bookmark, BookmarkCheck, Eraser, MessageSquare, Maximize2, Minimize2,
-  MousePointer2, Type, Highlighter, Underline, Strikethrough, StickyNote,
+  MousePointer2, Square, Type, Highlighter, Underline, Strikethrough, StickyNote,
   MessageSquareText, Settings2, MoreHorizontal, PanelLeft, ScanText
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
@@ -23,6 +23,7 @@ export default function PDFToolbar({
   focusMode = false, onToggleFocusMode, browseMode, setBrowseMode,
   annotationTool, setAnnotationTool, thumbnailsOpen, onToggleThumbnails,
   matchAllMode = false, setMatchAllMode, readOnly = false,
+  regionSelectionMode = false, onToggleRegionSelection,
 }) {
   const { currentPage, setCurrentPage, zoomLevel, setZoomLevel, activeDocument } = useApp();
   const [annotationMenuOpen, setAnnotationMenuOpen] = React.useState(false);
@@ -101,7 +102,10 @@ export default function PDFToolbar({
 
       <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         {!readOnly && <button
-          onClick={() => setBrowseMode(!browseMode)}
+          onClick={() => {
+            if (regionSelectionMode) onToggleRegionSelection?.(false);
+            setBrowseMode(!browseMode);
+          }}
           className={`p-1.5 rounded-xl border transition flex items-center gap-1.5 font-semibold ${
             browseMode
               ? 'bg-midnight-panel text-ivory/70 border-glass-borderDark hover:bg-white/10'
@@ -116,6 +120,25 @@ export default function PDFToolbar({
           {browseMode ? <MousePointer2 className="w-3.5 h-3.5" /> : <ScanText className="w-3.5 h-3.5" />}
           <span className="hidden xl:inline text-[10px]">{browseMode ? 'Browse' : 'Text Selection'}</span>
         </button>}
+        {!readOnly && onToggleRegionSelection && (
+          <button
+            type="button"
+            onClick={() => onToggleRegionSelection(!regionSelectionMode)}
+            className={`p-1.5 rounded-xl border transition flex items-center gap-1.5 font-semibold ${
+              regionSelectionMode
+                ? 'bg-amber-400/20 text-amber-200 border-amber-300/60'
+                : 'bg-midnight-panel text-ivory/70 border-glass-borderDark hover:bg-white/10'
+            }`}
+            title={regionSelectionMode
+              ? 'Region Selection is active. Drag on a page to select an area.'
+              : 'Select a region of this page or slide'}
+            aria-label={regionSelectionMode ? 'Exit region selection mode' : 'Enter region selection mode'}
+            aria-pressed={regionSelectionMode}
+          >
+            <Square className="w-3.5 h-3.5" />
+            <span className="hidden xl:inline text-[10px]">Region Selection</span>
+          </button>
+        )}
         {!readOnly && <div className="relative">
           <button
             onClick={() => setAnnotationMenuOpen((open) => !open)}

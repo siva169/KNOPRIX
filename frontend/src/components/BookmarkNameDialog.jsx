@@ -81,7 +81,13 @@ export default function BookmarkNameDialog({
                 Save bookmark
               </h2>
               <p className="text-[11px] text-ivory/55">
-                Page {draft.pageNumber} · {draft.bookmarkType === 'page' ? 'whole page' : 'selected text'}
+                Page {draft.pageNumber} · {
+                  draft.bookmarkType === 'page'
+                    ? 'whole page'
+                    : draft.bookmarkType === 'region'
+                      ? 'selected region'
+                      : 'selected text'
+                }
               </p>
             </div>
           </div>

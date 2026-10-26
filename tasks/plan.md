@@ -362,12 +362,17 @@ each currently allowlisted model still must be checked before enabling it.
 
 ## Approved Initiative - Region Selection Annotations
 
+**Status:** Implemented and locally verified; local commit awaits configured
+identity confirmation. Boss approved the workflow, gold selection treatment,
+and LibreOffice-to-PDF rendering approach on 2026-10-27.
+
 ### Objective and approved behavior
 
-Add region selection to the owned PDF and PPT/PPTX reader. A toolbar toggle
-activates one-page/slide mouse or touch dragging. The rectangle is represented
-as normalized page-local `x`, `y`, `width`, and `height` values, so it remains
-aligned across zoom and viewport changes. The popup offers:
+Add region selection to the owned PDF and PPTX reader. A toolbar toggle
+activates one-page/slide mouse, touch, or keyboard selection. The translucent
+gold rectangle is represented as normalized page-local `x`, `y`, `width`, and
+`height` values, so it remains aligned across zoom and viewport changes. The
+popup offers:
 
 - **Copy:** copy the selected area as a PNG image to the clipboard; surface
   browser permission or support failures.
@@ -377,9 +382,9 @@ aligned across zoom and viewport changes. The popup offers:
 - **Highlight:** persist an independent region highlight using the existing
   six-color palette and annotation management/removal flow.
 
-Text and whole-page bookmark/highlight behavior remains unchanged. Read-only
-shared views cannot create or modify annotations. Cross-page selection, OCR,
-external image services, and unapproved dependencies are out of scope.
+Text and whole-page bookmark/highlight behavior remains unchanged. Read-only shared views cannot create or modify annotations. Cross-page
+selection, OCR, external image services, and unapproved dependencies are out
+of scope.
 
 ### Architecture and data contract
 
@@ -407,26 +412,27 @@ external image services, and unapproved dependencies are out of scope.
   `highlightType: "text"`. Both create routes keep their existing `{"id": ...}`
   response. Region coordinates must satisfy `0 <= x,y < 1`, positive width and
   height, `x + width <= 1`, and `y + height <= 1`.
-- Reuse `BrowserPDFViewer.jsx` for reader state/actions, `PDFToolbar.jsx` for
-  the mode control, and `SlideViewer.jsx` for slide page hit-testing and
-  rendering. Extend `AppContext.jsx` and `BookmarksDrawer.jsx` to carry region
-  location requests and restore the outline after rendering.
+- Reuse `BrowserPDFViewer.jsx` for reader state/actions and `PDFToolbar.jsx`
+  for the mode control. Render PPTX through a cached LibreOffice PDF preview
+  in PDF.js so slide selection and copied pixels share the same coordinate
+  system. Extend `AppContext.jsx` and `BookmarksDrawer.jsx` to carry region
+  location requests and restore the outline.
 - Reuse `BookmarkNameDialog.jsx`, the highlight palette in `highlights.js`,
   existing notification/error patterns, and existing annotation management.
 - Keep the selected rectangle transient until Copy, Bookmark, or Highlight is
   chosen. Escape/cancel clears an unfinished drag. Coordinate conversion clips
   to the page boundary and uses the rendered page box, not the viewport.
 
-### Delivery tasks
+### Delivery tasks — complete
 
-1. **Backend contract and migration** - add failing tests first, then support
+1. **Backend contract and migration** - support
    region bookmark/highlight records and validate their geometry. Verify
    legacy-row preservation and both database dialects.
 2. **Reader selection and clipboard copy** - add the mutually-exclusive reader
-   toggle, page-local pointer/touch drag, normalized rectangle overlay, and
-   Copy action for PDF and slides. First prove a package-free PPTX image-copy
-   path; if it is unreliable, stop and request approval before adding a
-   dependency or narrowing supported behavior.
+   toggle, page-local mouse/touch drag, keyboard selection, normalized gold
+   rectangle overlay, and PNG Copy action for PDF and PPTX. PPTX uses the
+   existing LibreOffice installation to create a bounded, cached PDF preview;
+   failures remain visible and preserve extracted-text fallback.
 3. **Region bookmarks** - save through the existing named-bookmark flow and
    restore the page/slide rectangle when opened from the collection.
 4. **Region highlights** - save a colored rectangle independently from
@@ -438,22 +444,26 @@ external image services, and unapproved dependencies are out of scope.
 
 ### Verification and boundaries
 
-- Backend: `python qa_bookmarks.py`, `python qa_highlights.py`, and focused
-  database migration tests from `backend/`.
-- Frontend: `npm run build` and `node qa-bookmarks.mjs` from `frontend/`, with
-  regression coverage for PDF/PPTX drag geometry, clipboard result, color
-  persistence, bookmark restore, removal, read-only behavior, and 390/425/768/
-  1024px layouts.
-- No application code is authorized until this contract and plan are reviewed.
-- If slide image-copy fidelity needs an uninstalled package, ask before
-  installing it. No external API, deployment, or remote Git operation is
-  planned.
+- Backend: focused bookmark/highlight/migration tests and social share
+  geometry coverage from `backend/`.
+- Frontend: `npm run build`, geometry unit tests, and `node qa-bookmarks.mjs`
+  from `frontend/`, covering PDF/PPTX selection, PNG clipboard data, color
+  persistence, bookmark restore/removal, keyboard/touch access, and responsive
+  layouts. Result: build passed with the existing large-chunk advisory;
+  3 geometry tests and 85 browser checks passed.
+- Backend focused QA passed: bookmarks (7), highlights (6), migrations (3),
+  PPTX preview conversion (1), and social sharing (11). PostgreSQL was not
+  available for an integration run; its compatibility uses shared additive
+  `ALTER TABLE` syntax.
+- No new package or external API is required; no deployment or remote Git
+  operation is planned.
 - Before any local commit, disclose the configured identity. Commit only
   feature files in the Knoprix checkout and the intended parent pointer/log;
   leave unrelated parent work untouched.
 
-### Open UI decision
+### Approved UI decisions
 
-- Boss must choose the rectangle outline/fill appearance before UI code is
-  written. The action placement and mode toggle are approved as recorded in
-  `UI-UX.md`.
+- Region Selection sits beside Text Selection and is mutually exclusive.
+- Selection fill/outline are translucent gold.
+- PPTX uses LibreOffice-to-PDF rendering in PDF.js; output can differ from
+  Microsoft PowerPoint.

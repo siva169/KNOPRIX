@@ -30,6 +30,11 @@ from ..services.document_io import (
     object_key,
     resolve_document_path,
 )
+from ..services.presentation_preview import (
+    preview_cache_path,
+    render_presentation_preview,
+    remove_presentation_preview,
+)
 from ..services.indexer import rebuild_project_indices
 from ..services.ingestion import create_ingestion_job, process_document_ingestion
 from ..services.pdf_parser import extract_document, extract_pptx_slides
@@ -449,6 +454,49 @@ def get_slides(document_id: str, user=Depends(get_current_user), db=Depends(get_
     return {"slides": data["slides"], "widthPt": data["widthPt"], "heightPt": data["heightPt"]}
 
 
+@router.get("/documents/{document_id}/preview.pdf")
+def get_presentation_preview(
+    document_id: str,
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+):
+    doc, _read_only = _get_readable_document(db, user["id"], document_id)
+    if (doc["file_type"] or "").lower() != "pptx":
+        raise HTTPException(404, "Not a PPTX document")
+
+    preview_path = preview_cache_path(document_id)
+    if not preview_path.is_file() or not preview_path.stat().st_size:
+        source_path, temporary = materialize_document(doc)
+        try:
+            if not source_path.exists():
+                raise HTTPException(404, "File missing on disk")
+            try:
+                preview_path = render_presentation_preview(source_path, document_id)
+            except FileNotFoundError as error:
+                raise HTTPException(503, "PowerPoint preview renderer is unavailable") from error
+            except TimeoutError as error:
+                raise HTTPException(504, "PowerPoint preview took too long to render") from error
+            except ValueError as error:
+                raise HTTPException(413, "Rendered presentation exceeds the preview size limit") from error
+            except RuntimeError as error:
+                logger.exception("Could not render PPTX preview")
+                raise HTTPException(422, "Could not render this presentation") from error
+        finally:
+            if temporary:
+                source_path.unlink(missing_ok=True)
+
+    filename = f"{Path(str(doc['file_name'])).stem}.pdf"
+    return FileResponse(
+        preview_path,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{quote(filename, safe='')}",
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/documents/{document_id}/pages")
 def get_pages(document_id: str, user=Depends(get_current_user), db=Depends(get_db)):
     _get_readable_document(db, user["id"], document_id)
@@ -500,6 +548,7 @@ def delete_document(document_id: str, user=Depends(get_current_user), db=Depends
         for row in rows:
             revoke_resource_shares(db, user["id"], resource_type, row["id"])
     revoke_resource_shares(db, user["id"], "document", document_id)
+    remove_presentation_preview(document_id)
     file_path = str(doc["file_path"])
     object_key_value = object_key(file_path)
     if storage.enabled() and object_key_value:

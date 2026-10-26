@@ -143,7 +143,7 @@ export function AppProvider({ children }) {
     );
   }, []);
 
-  const navigateToLocation = useCallback((documentId, pageNumber, snippet, anchor = null) => {
+  const navigateToLocation = useCallback((documentId, pageNumber, snippet, anchor = null, region = null) => {
     const doc = documents.find((d) => d.id === documentId);
     if (doc) setActiveDocument(doc);
     const requestedPage = Math.max(1, Number(pageNumber) || 1);
@@ -158,6 +158,7 @@ export function AppProvider({ children }) {
       anchorStart: anchor?.start ?? null,
       anchorEnd: anchor?.end ?? null,
       snippet: snippet || '',
+      region,
     });
     if (snippet) {
       setHighlightSnippet(snippet.slice(0, 40));

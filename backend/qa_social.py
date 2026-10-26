@@ -28,6 +28,7 @@ class SocialFeatureTests(unittest.TestCase):
         database._create_auth_session_schema(self.db)
         database._create_contacts_sharing_schema(self.db)
         database._create_production_backlog_schema(self.db)
+        database._add_region_annotation_columns(self.db)
         for user_id, email in (
             ("user-a", "a@example.com"),
             ("user-b", "b@example.com"),
@@ -344,8 +345,20 @@ class SocialFeatureTests(unittest.TestCase):
         )
         self.assertEqual(
             set(detail["document"]),
-            {"id", "file_name", "file_type", "file_size", "page_count", "extracted_text"},
+            {
+                "id",
+                "file_name",
+                "file_type",
+                "file_size",
+                "page_count",
+                "extracted_text",
+                "title",
+                "filename",
+                "fileName",
+                "ai_granted",
+            },
         )
+        self.assertFalse(detail["document"]["ai_granted"])
 
     def test_annotation_share_omits_internal_owner_and_project_ids(self):
         self.accept_contact(
@@ -355,16 +368,17 @@ class SocialFeatureTests(unittest.TestCase):
         self.db.execute(
             """INSERT INTO bookmarks
                (id, user_id, project_id, document_id, page_number, name,
-                highlighted_text, notes, anchor_start, anchor_end)
+                highlighted_text, notes, bookmark_type, region_x, region_y,
+                region_width, region_height)
                VALUES ('bookmark-a', 'user-a', 'project-a', 'document-a', 1,
-                       'Key point', 'important sentence', 'Review this', 2, 19)"""
+                       'Key point', '', 'Review this', 'region', 0.1, 0.2, 0.3, 0.25)"""
         )
         self.db.execute(
             """INSERT INTO highlights
                (id, user_id, project_id, document_id, page_number, text, color,
-                anchor_start, anchor_end)
+                highlight_type, region_x, region_y, region_width, region_height)
                VALUES ('highlight-a', 'user-a', 'project-a', 'document-a', 1,
-                       'important sentence', 'yellow', 2, 20)"""
+                       '', 'yellow', 'region', 0.2, 0.3, 0.4, 0.2)"""
         )
 
         for resource_type, resource_id, expected_fields in (
@@ -372,12 +386,14 @@ class SocialFeatureTests(unittest.TestCase):
                 "bookmark",
                 "bookmark-a",
                 {"name", "highlighted_text", "notes", "document_id", "page_number",
-                 "anchor_start", "anchor_end"},
+                 "bookmark_type", "region_x", "region_y", "region_width",
+                 "region_height"},
             ),
             (
                 "highlight",
                 "highlight-a",
-                {"text", "color", "document_id", "page_number", "anchor_start", "anchor_end"},
+                {"text", "color", "highlight_type", "document_id", "page_number",
+                 "region_x", "region_y", "region_width", "region_height"},
             ),
         ):
             with self.subTest(resource_type=resource_type):
@@ -397,8 +413,11 @@ class SocialFeatureTests(unittest.TestCase):
 
                 self.assertTrue(expected_fields.issubset(shared["resource"]))
                 if resource_type == "highlight":
-                    self.assertEqual(shared["resource"]["anchor_start"], 2)
-                    self.assertEqual(shared["resource"]["anchor_end"], 20)
+                    self.assertEqual(shared["resource"]["highlight_type"], "region")
+                    self.assertEqual(shared["resource"]["region_x"], 0.2)
+                else:
+                    self.assertEqual(shared["resource"]["bookmark_type"], "region")
+                    self.assertEqual(shared["resource"]["region_x"], 0.1)
                 self.assertNotIn("user_id", shared["resource"])
                 self.assertNotIn("project_id", shared["resource"])
                 with self.assertRaises(HTTPException) as no_document_access:

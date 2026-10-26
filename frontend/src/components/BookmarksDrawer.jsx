@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Bookmark, Trash2, Layers, ArrowDownToLine, ArrowUpFromLine, FileText, BookmarkCheck, Search, LoaderCircle, RotateCw, Pencil, Check } from 'lucide-react';
+import { X, Bookmark, Trash2, Layers, ArrowDownToLine, ArrowUpFromLine, FileText, BookmarkCheck, Search, LoaderCircle, RotateCw, Pencil, Check, ScanText } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import api from '../api';
 
@@ -92,6 +92,12 @@ export default function BookmarksDrawer({ onClose }) {
       bookmark.page_number,
       bookmark.highlighted_text || '',
       { start: bookmark.anchor_start, end: bookmark.anchor_end },
+      bookmark.bookmark_type === 'region' ? {
+        x: bookmark.region_x,
+        y: bookmark.region_y,
+        width: bookmark.region_width,
+        height: bookmark.region_height,
+      } : null,
     );
     onClose();
   };
@@ -317,6 +323,10 @@ export default function BookmarksDrawer({ onClose }) {
                           <span className="flex items-center gap-0.5 rounded bg-accent/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-accent">
                             <BookmarkCheck className="h-2.5 w-2.5" /> Page
                           </span>
+                        ) : bm.bookmark_type === 'region' ? (
+                          <span className="flex items-center gap-0.5 rounded bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-200">
+                            <ScanText className="h-2.5 w-2.5" /> Region
+                          </span>
                         ) : (
                           <span className="flex items-center gap-0.5 rounded bg-secondary/10 px-1.5 py-0.5 text-[9px] font-bold uppercase text-secondary">
                             <FileText className="h-2.5 w-2.5" /> Text
@@ -331,6 +341,10 @@ export default function BookmarksDrawer({ onClose }) {
                     ) : bm.bookmark_type === 'page' ? (
                       <span className="mt-2 block text-xs italic leading-relaxed text-ivory/70">
                         Bookmark of page {bm.page_number}
+                      </span>
+                    ) : bm.bookmark_type === 'region' ? (
+                      <span className="mt-2 block text-xs italic leading-relaxed text-ivory/70">
+                        Selected region on page {bm.page_number}
                       </span>
                     ) : null}
                     {bm.highlighted_text && (

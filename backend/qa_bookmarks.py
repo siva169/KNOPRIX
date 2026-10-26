@@ -5,6 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from pydantic import ValidationError
+
 from app import database
 from app.routers.bookmarks import (
     BookmarkBody,
@@ -30,6 +32,7 @@ class BookmarkApiTests(unittest.TestCase):
         self.database_url_patch.start()
         self.addCleanup(self.database_url_patch.stop)
         database._create_contacts_sharing_schema(self.db)
+        database._add_region_annotation_columns(self.db)
         self.db.execute(
             "INSERT INTO users (id, email, password_hash, full_name, knoprix_id) "
             "VALUES (?, ?, ?, ?, ?)",
@@ -157,6 +160,45 @@ class BookmarkApiTests(unittest.TestCase):
 
         self.assertEqual([b["id"] for b in results], [matching["id"]])
 
+    def test_region_bookmark_persists_normalized_geometry(self):
+        region = {"x": 0.1, "y": 0.2, "width": 0.3, "height": 0.4}
+        created = self.create(
+            bookmarkType="region",
+            highlightedText="",
+            region=region,
+        )
+
+        bookmark = list_bookmarks(
+            PROJECT_ID, user=USER, db=self.db, q=""
+        )["bookmarks"][0]
+
+        self.assertEqual(bookmark["id"], created["id"])
+        self.assertEqual(bookmark["bookmark_type"], "region")
+        self.assertEqual(
+            tuple(bookmark[key] for key in (
+                "region_x", "region_y", "region_width", "region_height"
+            )),
+            (0.1, 0.2, 0.3, 0.4),
+        )
+
+    def test_region_bookmark_requires_complete_in_bounds_geometry(self):
+        common = {
+            "projectId": PROJECT_ID,
+            "documentId": DOCUMENT_ID,
+            "pageNumber": 1,
+            "bookmarkType": "region",
+            "highlightedText": "",
+        }
+        for region in (
+            None,
+            {"x": 0.1, "y": 0.2, "width": 0.3},
+            {"x": 0.9, "y": 0.2, "width": 0.3, "height": 0.2},
+            {"x": 0.1, "y": 0.2, "width": 0, "height": 0.2},
+            {"x": float("nan"), "y": 0.2, "width": 0.3, "height": 0.2},
+        ):
+            with self.subTest(region=region), self.assertRaises(ValidationError):
+                BookmarkBody(**common, region=region)
+
 
 class BookmarkMigrationTests(unittest.TestCase):
     def test_init_db_adds_bookmark_fields_without_losing_existing_rows(self):
@@ -203,7 +245,10 @@ class BookmarkMigrationTests(unittest.TestCase):
             ).fetchone()
             conn.close()
 
-        self.assertTrue({"name", "anchor_start", "anchor_end"}.issubset(columns))
+        self.assertTrue({
+            "name", "anchor_start", "anchor_end", "region_x", "region_y",
+            "region_width", "region_height",
+        }.issubset(columns))
         self.assertEqual(row, (4, "Keep me", ""))
 
 

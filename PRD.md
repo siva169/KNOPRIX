@@ -119,9 +119,14 @@ your documents.
 
 ### Reading Desk - region selection annotations
 
-- In an owned PDF or PPT/PPTX reader, Region Selection mode captures one
-  page/slide rectangle per mouse or touch drag. It is separate from text
-  selection and is unavailable in read-only shared views.
+- In an owned PDF or PPTX reader, Region Selection mode captures one page/slide
+  rectangle per mouse or touch drag, with keyboard arrow/Enter support. It is
+  separate from text selection and is unavailable in read-only shared views.
+- PPTX pages use a cached LibreOffice-to-PDF preview in PDF.js so diagrams,
+  images, and slide layout are rendered by a document renderer rather than the
+  partial shape-reconstruction viewer. Conversion failures show a visible
+  extracted-text fallback; LibreOffice output may differ from PowerPoint.
+- The transient selection uses a translucent-gold fill with a gold outline.
 - The rectangle is stored as normalized page-local `x`, `y`, `width`, and
   `height` values in the range 0..1, with positive width/height and
   `x + width <= 1`, `y + height <= 1`. The API rejects non-finite,
@@ -347,6 +352,9 @@ The project follows the complete checklist at:
 `checklists/033-vibecoding-complete-33-checklist.md`. The AI Wing feature
 evaluation is recorded in that project-local checklist; it does not claim
 whole-project completion.
+
+The Reading Desk region-selection slice has its own 33-point applicability
+evaluation at `checklists/region-selection-annotations-33-checklist.md`.
 
 Progress is intentionally `0/33` until each item is evaluated against the new
 interface and either implemented or marked `N/A` with a reason.

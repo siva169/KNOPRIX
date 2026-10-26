@@ -52,6 +52,7 @@ class DatabaseMigrationTests(unittest.TestCase):
                 (6, "precise-highlight-anchors"),
                 (7, "provider-specific-document-files"),
                 (8, "account-scoped-chat-history"),
+                (9, "region-annotations"),
             ],
         )
         self.assertTrue({
@@ -78,6 +79,24 @@ class DatabaseMigrationTests(unittest.TestCase):
             "messages",
         } <= tables)
         with closing(self.connect()) as conn:
+            self.assertTrue(
+                {
+                    "bookmark_type",
+                    "region_x",
+                    "region_y",
+                    "region_width",
+                    "region_height",
+                }.issubset(database._table_columns(conn, "bookmarks"))
+            )
+            self.assertTrue(
+                {
+                    "highlight_type",
+                    "region_x",
+                    "region_y",
+                    "region_width",
+                    "region_height",
+                }.issubset(database._table_columns(conn, "highlights"))
+            )
             self.assertTrue(
                 {
                     "user_id",
@@ -222,18 +241,21 @@ class DatabaseMigrationTests(unittest.TestCase):
             self.assertEqual(
                 tuple(
                     upgraded.execute(
-                        "SELECT id, highlighted_text, name, anchor_start FROM bookmarks"
+                        "SELECT id, highlighted_text, name, anchor_start, bookmark_type, "
+                        "region_x, region_y, region_width, region_height FROM bookmarks"
                     ).fetchone()
                 ),
-                ("bookmark-1", "passage", "", None),
+                ("bookmark-1", "passage", "", None, "text", None, None, None, None),
             )
             self.assertEqual(
                 tuple(
                     upgraded.execute(
-                        "SELECT id, text, match_all, anchor_start, anchor_end FROM highlights"
+                        "SELECT id, text, match_all, anchor_start, anchor_end, "
+                        "highlight_type, region_x, region_y, region_width, region_height "
+                        "FROM highlights"
                     ).fetchone()
                 ),
-                ("highlight-1", "passage", 0, None, None),
+                ("highlight-1", "passage", 0, None, None, "text", None, None, None, None),
             )
             self.assertEqual(
                 tuple(

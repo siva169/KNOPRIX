@@ -4,8 +4,9 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from ..annotation_geometry import RegionGeometry
 from ..database import get_db
 from ..dsa.bookmark_collection import BookmarkCollection
 from ..security import get_current_user, get_owned_document, get_owned_project
@@ -22,10 +23,22 @@ class BookmarkBody(BaseModel):
     highlightedText: str = Field(default="", max_length=2000)
     notes: str = Field(default="", max_length=1000)
     colorTag: str = Field(default="yellow", max_length=30)
-    bookmarkType: str = Field(default="text", pattern="^(text|page)$")
+    bookmarkType: str = Field(default="text", pattern="^(text|page|region)$")
     tags: list[str] = Field(default_factory=list)
     selectionStart: int | None = Field(default=None, ge=0)
     selectionEnd: int | None = Field(default=None, ge=0)
+    region: RegionGeometry | None = None
+
+    @model_validator(mode="after")
+    def validate_region_type(self):
+        if self.bookmarkType == "region":
+            if self.region is None:
+                raise ValueError("region geometry is required for region bookmarks")
+            if self.highlightedText.strip() or self.selectionStart is not None or self.selectionEnd is not None:
+                raise ValueError("region bookmarks cannot include text selection data")
+        elif self.region is not None:
+            raise ValueError("region geometry is only valid for region bookmarks")
+        return self
 
 
 class BookmarkUpdateBody(BaseModel):
@@ -101,14 +114,19 @@ def create_bookmark(body: BookmarkBody, user=Depends(get_current_user), db=Depen
         """
         INSERT INTO bookmarks (id, user_id, project_id, document_id, page_number,
                                highlighted_text, notes, color_tag, bookmark_type,
-                               tags_json, created_at, name, anchor_start, anchor_end)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               tags_json, created_at, name, anchor_start, anchor_end,
+                               region_x, region_y, region_width, region_height)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (bookmark_id, user["id"], body.projectId, body.documentId,
          body.pageNumber, body.highlightedText.strip(), body.notes.strip(),
          body.colorTag, body.bookmarkType, json.dumps(body.tags),
          datetime.now(timezone.utc).isoformat(timespec="microseconds"),
-         body.name.strip(), body.selectionStart, body.selectionEnd),
+         body.name.strip(), body.selectionStart, body.selectionEnd,
+         body.region.x if body.region else None,
+         body.region.y if body.region else None,
+         body.region.width if body.region else None,
+         body.region.height if body.region else None),
     )
     return {"id": bookmark_id}
 

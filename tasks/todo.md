@@ -1150,16 +1150,18 @@ are recorded in `UI-UX.md` and implemented.
 
 ## Approved Initiative - Region Selection Annotations
 
-**Status:** Specification draft only. Application-code work is gated on boss
-review of this contract and the remaining rectangle-style decision.
+**Status:** Implemented and verified locally; checkpoint awaits identity
+confirmation. Boss approved the workflow,
+translucent-gold rectangle, and LibreOffice-to-PDF PPTX preview on 2026-10-27.
 
 ### Task 1: Extending bookmark/highlight contracts and migrations
 
-- [ ] Acceptance: region bookmark/highlight records preserve a complete
+- [x] Acceptance: region bookmark/highlight records preserve a complete
   normalized page rectangle; legacy text/page records remain unchanged;
   malformed geometry and unauthorized writes are rejected.
-- [ ] Verify: focused bookmark, highlight, and database migration tests,
-  including legacy-row preservation.
+- [x] Verify: bookmark (7), highlight (6), and migration (3) focused QA passed,
+  including legacy-row preservation. SQLite was run; PostgreSQL compatibility
+  follows the shared additive `ALTER TABLE` DDL but had no live integration DB.
 - Dependencies: none.
 - Files likely touched: `backend/app/database.py`,
   `backend/app/routers/bookmarks.py`, `backend/app/routers/highlights.py`,
@@ -1167,45 +1169,47 @@ review of this contract and the remaining rectangle-style decision.
 
 ### Task 2: Adding page-local selection and image copy
 
-- [ ] Acceptance: Region Selection mode is separate from text selection;
-  mouse/touch drag draws one page/slide rectangle; Copy writes a PNG or
-  presents an explicit error. PDF and PPT/PPTX geometry remains aligned under
-  zoom and resize.
-- [ ] Verify: browser tests at 390/425/768/1024px; verify slide-image copying
-  without a new dependency before implementation proceeds.
+- [x] Acceptance: Region Selection mode is separate from text selection;
+  mouse/touch drag and keyboard selection draw one page/slide rectangle; Copy
+  writes a PNG or presents an explicit error. PDF and PPTX geometry remains
+  aligned under zoom and resize.
+- [x] Verify: browser QA passed at 390/425/768/1024px; PPTX preview and PNG copy
+  use existing LibreOffice/PDF.js and browser APIs without new dependencies.
 - Dependencies: Task 1 API/data contract.
 - Files likely touched: `frontend/src/components/PDFToolbar.jsx`,
   `BrowserPDFViewer.jsx`, `SlideViewer.jsx`, and focused browser QA.
 
 ### Task 3: Saving and restoring region bookmarks
 
-- [ ] Acceptance: Bookmark opens the existing naming flow; saved region
+- [x] Acceptance: Bookmark opens the existing naming flow; saved region
   metadata is returned by the collection; opening it navigates to the correct
   document/page and outlines the same normalized rectangle after render.
-- [ ] Verify: backend bookmark regression plus browser save/reopen/reload flow.
+- [x] Verify: backend bookmark QA and browser save/restore outline flow passed.
 - Dependencies: Tasks 1 and 2.
 - Files likely touched: `frontend/src/context/AppContext.jsx`,
   `frontend/src/components/BookmarksDrawer.jsx`, reader components, focused QA.
 
 ### Task 4: Persisting region highlights
 
-- [ ] Acceptance: Highlight saves independently with an existing palette color,
+- [x] Acceptance: Highlight saves independently with an existing palette color,
   survives reload, appears in the existing annotation management flow, and can
   be removed without changing bookmarks.
-- [ ] Verify: backend highlight/migration tests and browser save/reload/remove
-  flow; legacy text highlights remain unchanged.
+- [x] Verify: backend highlight/migration QA and browser save/reload/remove
+  flow passed; existing text-highlight regression flows also passed.
 - Dependencies: Tasks 1 and 2.
 - Files likely touched: highlight API/schema, `BrowserPDFViewer.jsx`,
   `SlideViewer.jsx`, existing annotation list/state, focused QA.
 
 ### Task 5: Completing verification and local checkpoint
 
-- [ ] Acceptance: focused tests and production build pass; interaction and
-  accessibility review is complete; the approved rectangle appearance is
-  recorded; project/parent change logs and the 33-item checklist applicability
-  are updated.
-- [ ] Verify: backend-focused QA, frontend build, browser workflows at all four
-  required widths, diff review, and no unrelated files staged.
+- [x] Acceptance: focused tests and production build pass; interaction and
+  keyboard/accessibility review is complete; the approved rectangle
+  appearance is recorded; project change log and feature-scoped 33-item
+  checklist are updated.
+- [x] Verify: backend-focused QA, frontend build, browser workflows at all four
+  required widths, and focused diff review passed. No unrelated parent files
+  are staged. Local feature commit remains pending configured-identity
+  confirmation; no remote operation is planned.
 - Dependencies: Tasks 1-4.
 - Files likely touched: project `changes.md`, PRD/UI-UX/task docs, parent
   `changes.md`, intended Knoprix pointer.

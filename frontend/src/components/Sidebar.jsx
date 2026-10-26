@@ -55,12 +55,12 @@ export default function Sidebar({
     if (expandedSavedDocument) void loadSavedHighlights(expandedSavedDocument.id);
   }, [expandedSavedDocumentId, expandedSavedDocument?.highlight_count, loadSavedHighlights]);
 
-  const openSavedLocation = (documentId, pageNumber, snippet, anchorStart, anchorEnd) => {
+  const openSavedLocation = (documentId, pageNumber, snippet, anchorStart, anchorEnd, region = null) => {
     setExpandedSavedDocumentId(null);
     navigateToLocation(documentId, pageNumber, snippet, {
       start: anchorStart,
       end: anchorEnd,
-    });
+    }, region);
     onClose?.();
   };
 
@@ -127,7 +127,8 @@ export default function Sidebar({
         {expanded && (
           <div id={savedItemsId} className="ml-4 border-l border-glass-borderDark pl-1">
             {documentBookmarks.map((bookmark) => {
-              const label = bookmark.name || bookmark.highlighted_text || `Page ${bookmark.page_number}`;
+              const label = bookmark.name || bookmark.highlighted_text ||
+                (bookmark.bookmark_type === 'region' ? 'Selected region' : `Page ${bookmark.page_number}`);
               return (
                 <button
                   key={bookmark.id}
@@ -138,6 +139,12 @@ export default function Sidebar({
                     bookmark.highlighted_text || '',
                     bookmark.anchor_start,
                     bookmark.anchor_end,
+                    bookmark.bookmark_type === 'region' ? {
+                      x: bookmark.region_x,
+                      y: bookmark.region_y,
+                      width: bookmark.region_width,
+                      height: bookmark.region_height,
+                    } : null,
                   )}
                   aria-label={`Open bookmark: ${label} in ${doc.file_name}, page ${bookmark.page_number}`}
                   className="min-h-11 w-full flex items-center gap-2 rounded-lg px-2 text-left text-[11px] text-ivory/70 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
@@ -173,12 +180,20 @@ export default function Sidebar({
                   highlight.text,
                   highlight.anchor_start,
                   highlight.anchor_end,
+                  highlight.highlight_type === 'region' ? {
+                    x: highlight.region_x,
+                    y: highlight.region_y,
+                    width: highlight.region_width,
+                    height: highlight.region_height,
+                  } : null,
                 )}
-                aria-label={`Open highlight: ${highlight.text} in ${doc.file_name}, page ${highlight.page_number}`}
+                aria-label={`Open ${highlight.highlight_type === 'region' ? 'region ' : ''}highlight: ${highlight.text || 'Selected region'} in ${doc.file_name}, page ${highlight.page_number}`}
                 className="min-h-11 w-full flex items-center gap-2 rounded-lg px-2 text-left text-[11px] text-ivory/70 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
               >
-                <FileText className="size-3.5 shrink-0 text-accent" />
-                <span className="min-w-0 flex-1 truncate">{highlight.text}</span>
+                {highlight.highlight_type === 'region'
+                  ? <Bookmark className="size-3.5 shrink-0 text-secondary" />
+                  : <FileText className="size-3.5 shrink-0 text-accent" />}
+                <span className="min-w-0 flex-1 truncate">{highlight.text || 'Selected region'}</span>
                 <span className="shrink-0 text-[9px] text-ivory/40">p. {highlight.page_number}</span>
               </button>
             ))}

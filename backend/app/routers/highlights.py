@@ -12,8 +12,9 @@ never touch the bookmark collection.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from ..annotation_geometry import RegionGeometry
 from ..database import get_db
 from ..security import get_current_user, get_owned_document, get_owned_project
 from .social import revoke_resource_shares
@@ -28,11 +29,26 @@ class HighlightBody(BaseModel):
     projectId: str
     documentId: str
     pageNumber: int = Field(ge=1)
-    text: str = Field(min_length=1, max_length=2000)
+    text: str = Field(default="", max_length=2000)
     color: str = Field(default="yellow", max_length=20)
     matchAll: bool = Field(default=False)  # paint every occurrence, not just the first
     selectionStart: int | None = Field(default=None, ge=0)
     selectionEnd: int | None = Field(default=None, ge=0)
+    highlightType: str = Field(default="text", pattern="^(text|region)$")
+    region: RegionGeometry | None = None
+
+    @model_validator(mode="after")
+    def validate_region_type(self):
+        if self.highlightType == "region":
+            if self.region is None:
+                raise ValueError("region geometry is required for region highlights")
+            if self.text.strip() or self.matchAll or self.selectionStart is not None or self.selectionEnd is not None:
+                raise ValueError("region highlights cannot include text selection data")
+        elif self.region is not None:
+            raise ValueError("region geometry is only valid for region highlights")
+        elif not self.text.strip():
+            raise ValueError("text highlights require selected text")
+        return self
 
 
 class HighlightColorBody(BaseModel):
@@ -71,12 +87,17 @@ def create_highlight(body: HighlightBody, user=Depends(get_current_user), db=Dep
     db.execute(
         """
         INSERT INTO highlights (id, user_id, project_id, document_id, page_number,
-                                text, color, match_all, anchor_start, anchor_end)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                text, color, match_all, anchor_start, anchor_end,
+                                highlight_type, region_x, region_y, region_width, region_height)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (highlight_id, user["id"], body.projectId, body.documentId,
          body.pageNumber, body.text.strip(), body.color, 1 if body.matchAll else 0,
-         body.selectionStart, body.selectionEnd),
+         body.selectionStart, body.selectionEnd, body.highlightType,
+         body.region.x if body.region else None,
+         body.region.y if body.region else None,
+         body.region.width if body.region else None,
+         body.region.height if body.region else None),
     )
     return {"id": highlight_id}
 

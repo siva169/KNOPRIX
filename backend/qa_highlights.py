@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app import database
 from app.routers.highlights import (
@@ -31,6 +32,7 @@ class HighlightApiTests(unittest.TestCase):
         self.addCleanup(self.database_url_patch.stop)
         database._create_contacts_sharing_schema(self.db)
         database._add_precise_highlight_anchors(self.db)
+        database._add_region_annotation_columns(self.db)
         self.db.execute(
             "INSERT INTO users (id, email, password_hash, full_name, knoprix_id) "
             "VALUES (?, ?, ?, ?, ?)",
@@ -127,6 +129,50 @@ class HighlightApiTests(unittest.TestCase):
             update_highlight_color(
                 created["id"], HighlightColorBody(color="green"), {"id": "other-user"}, self.db
             )
+
+    def test_region_highlight_persists_independently_of_text(self):
+        created = create_highlight(
+            HighlightBody(
+                projectId=PROJECT_ID,
+                documentId=DOCUMENT_ID,
+                pageNumber=2,
+                highlightType="region",
+                region={"x": 0.15, "y": 0.25, "width": 0.4, "height": 0.5},
+                color="purple",
+            ),
+            USER,
+            self.db,
+        )
+
+        saved = list_highlights(DOCUMENT_ID, USER, self.db)["highlights"][0]
+
+        self.assertEqual(saved["id"], created["id"])
+        self.assertEqual(saved["highlight_type"], "region")
+        self.assertEqual(saved["text"], "")
+        self.assertEqual(saved["color"], "purple")
+        self.assertEqual(
+            tuple(saved[key] for key in (
+                "region_x", "region_y", "region_width", "region_height"
+            )),
+            (0.15, 0.25, 0.4, 0.5),
+        )
+
+    def test_region_highlight_rejects_missing_or_out_of_bounds_geometry(self):
+        common = {
+            "projectId": PROJECT_ID,
+            "documentId": DOCUMENT_ID,
+            "pageNumber": 1,
+            "highlightType": "region",
+        }
+        for region in (
+            None,
+            {"x": 0.1, "y": 0.2, "width": 0.3},
+            {"x": 0.8, "y": 0.9, "width": 0.3, "height": 0.2},
+            {"x": 0.1, "y": 0.2, "width": -0.1, "height": 0.2},
+            {"x": 0.1, "y": float("inf"), "width": 0.3, "height": 0.2},
+        ):
+            with self.subTest(region=region), self.assertRaises(ValidationError):
+                HighlightBody(**common, region=region)
 
 
 if __name__ == "__main__":

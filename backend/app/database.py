@@ -621,6 +621,35 @@ def _add_precise_highlight_anchors(conn) -> None:
         conn.execute("ALTER TABLE highlights ADD COLUMN anchor_end INTEGER")
 
 
+def _add_region_annotation_columns(conn) -> None:
+    """Add page-relative regions without changing existing annotations."""
+    for table, columns in (
+        (
+            "bookmarks",
+            {
+                "region_x": "REAL",
+                "region_y": "REAL",
+                "region_width": "REAL",
+                "region_height": "REAL",
+            },
+        ),
+        (
+            "highlights",
+            {
+                "highlight_type": "TEXT NOT NULL DEFAULT 'text'",
+                "region_x": "REAL",
+                "region_y": "REAL",
+                "region_width": "REAL",
+                "region_height": "REAL",
+            },
+        ),
+    ):
+        existing = _table_columns(conn, table)
+        for column, definition in columns.items():
+            if column not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
 def _create_provider_document_files_schema(conn) -> None:
     for statement in (
         """CREATE TABLE IF NOT EXISTS provider_document_files (
@@ -697,6 +726,7 @@ MIGRATIONS = (
     (6, "precise-highlight-anchors", _add_precise_highlight_anchors),
     (7, "provider-specific-document-files", _create_provider_document_files_schema),
     (8, "account-scoped-chat-history", _create_chat_history_schema),
+    (9, "region-annotations", _add_region_annotation_columns),
 )
 
 

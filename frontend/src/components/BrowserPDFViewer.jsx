@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Bookmark, Copy, BookmarkCheck, Sparkles, Highlighter, Eraser, Volume2, Square } from 'lucide-react';
+import { FileText, Bookmark, Copy, BookmarkCheck, Sparkles, Highlighter, Eraser, Volume2, Square, X } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import PDFToolbar from './PDFToolbar.jsx';
 import SlideViewer from './SlideViewer.jsx';
@@ -16,6 +16,7 @@ import {
   getSelectionOffsets,
 } from '../bookmarkAnchors';
 import { splitHighlightSegments } from '../highlightSegments.js';
+import { regionCropBounds, regionFromDrag } from '../regionGeometry.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 const HIGHLIGHT_ALL_KEY = 'knoprix_highlight_all_matches';
@@ -90,6 +91,12 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   const [annotationTool, setAnnotationTool] = useState('yellow');
   const [thumbnailsOpen, setThumbnailsOpen] = useState(false);
   const [selection, setSelection] = useState(null); // {text, x, y, page}
+  const [regionSelectionMode, setRegionSelectionMode] = useState(false);
+  const [regionSelection, setRegionSelection] = useState(null);
+  const [regionDrag, setRegionDrag] = useState(null);
+  const [regionHighlightColorsOpen, setRegionHighlightColorsOpen] = useState(false);
+  const [regionHighlightSaving, setRegionHighlightSaving] = useState(false);
+  const [keyboardRegion, setKeyboardRegion] = useState(null);
   const [bookmarkDraft, setBookmarkDraft] = useState(null);
   const [bookmarkSaving, setBookmarkSaving] = useState(false);
   const [savedPages, setSavedPages] = useState(new Set());
@@ -129,6 +136,10 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
 
   const pageCanvasRefs = useRef({});
   const pageTextLayerRefs = useRef({});
+  const regionDragRef = useRef(null);
+  const keyboardRegionRef = useRef(null);
+  const regionActionsRef = useRef(null);
+  const regionPageFocusRef = useRef(null);
   const containerRef = useRef(null);
   const viewerRootRef = useRef(null);
 
@@ -205,8 +216,15 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         (data.highlights || []).map((h) => ({
           id: h.id,
           pageNumber: h.page_number,
-          text: h.text,
+          text: h.text || '',
           color: h.color,
+          highlightType: h.highlight_type || 'text',
+          region: h.highlight_type === 'region' ? {
+            x: h.region_x,
+            y: h.region_y,
+            width: h.region_width,
+            height: h.region_height,
+          } : null,
           matchAll: !!h.match_all,
           anchorStart: h.anchor_start,
           anchorEnd: h.anchor_end,
@@ -225,6 +243,16 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     refreshHighlights();
   }, [activeDocument, refreshHighlights]);
 
+  useEffect(() => {
+    setRegionSelectionMode(false);
+    setRegionSelection(null);
+    setRegionDrag(null);
+    setKeyboardRegion(null);
+    setRegionHighlightColorsOpen(false);
+    regionDragRef.current = null;
+    keyboardRegionRef.current = null;
+  }, [activeDocument?.id]);
+
   // ── Load PDF ───────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!activeDocument) {
@@ -235,10 +263,12 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       return;
     }
     const fileType = (activeDocument.file_type || '').toLowerCase();
-    if (fileType !== 'pdf') {
+    const isPresentation = fileType === 'pptx';
+    if (fileType !== 'pdf' && !isPresentation) {
       setPdfDoc(null);
       setPdfDocumentId(null);
       setError(null);
+      setLoading(false);
       // Reset the page count so the toolbar never shows the previous
       // document's "of N" (slides re-set it via onSlidesLoaded after parsing).
       setNumPages(activeDocument.page_count || 1);
@@ -254,7 +284,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       .then((token) => {
         if (cancelled) return null;
         return pdfjsLib.getDocument({
-          url: `${API_BASE}/documents/${activeDocument.id}/stream`,
+          url: `${API_BASE}/documents/${activeDocument.id}/${isPresentation ? 'preview.pdf' : 'stream'}`,
           httpHeaders: token ? { Authorization: `Bearer ${token}` } : {},
         }).promise;
       })
@@ -373,8 +403,8 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     ) return undefined;
 
     const fileType = (activeDocument.file_type || '').toLowerCase();
-    if (fileType === 'pptx' || fileType === 'ppt') return undefined;
-    if (fileType === 'pdf' && (
+    const usesPdfRenderer = fileType === 'pdf' || fileType === 'pptx';
+    if (usesPdfRenderer && (
       !pdfDoc || pdfDocumentId !== activeDocument.id
     )) return undefined;
 
@@ -385,12 +415,12 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
 
     const locate = () => {
       if (cancelled) return;
-      const root = fileType === 'pdf'
+      const root = usesPdfRenderer
         ? pageTextLayerRefs.current[locationRequest.pageNumber]
         : containerRef.current?.querySelector(`[data-page="${locationRequest.pageNumber}"]`)
           || containerRef.current;
 
-      if (!root || (fileType === 'pdf' && !root.textContent)) {
+      if (!root || (usesPdfRenderer && !root.textContent)) {
         attempts += 1;
         if (attempts < 100) timeout = setTimeout(locate, 50);
         else appliedLocationRef.current = locationRequest.id;
@@ -473,7 +503,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
 
   // ── Selection → action popover ─────────────────────────────────────────────
   const handleMouseUp = (e) => {
-    if (readOnly) return;
+    if (readOnly || regionSelectionMode) return;
     if (browseMode) {
       if ((window.getSelection()?.toString() || '').trim()) {
         notify('Text selection is off. Choose Text Selection to highlight.', 'info');
@@ -579,7 +609,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     };
     document.addEventListener('selectionchange', captureSelectionChange);
     return () => document.removeEventListener('selectionchange', captureSelectionChange);
-  }, [browseMode, handleMouseUp, readOnly]);
+  }, [browseMode, handleMouseUp, readOnly, regionSelectionMode]);
 
   const saveBookmark = (sel) => {
     if (readOnly || !activeProject || !activeDocument) return;
@@ -591,6 +621,73 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       selectionStart: sel.selectionStart,
       selectionEnd: sel.selectionEnd,
     });
+  };
+
+  const saveRegionBookmark = () => {
+    if (readOnly || !activeProject || !activeDocument || !regionSelection) return;
+    setBookmarkDraft({
+      id: ++bookmarkDraftSequence.current,
+      pageNumber: regionSelection.pageNumber,
+      highlightedText: '',
+      bookmarkType: 'region',
+      region: regionSelection.region,
+    });
+    setRegionSelection(null);
+    setRegionHighlightColorsOpen(false);
+  };
+
+  const saveRegionHighlight = async (color) => {
+    if (readOnly || !activeProject || !activeDocument || !regionSelection) return;
+    const { pageNumber, region } = regionSelection;
+    const duplicate = highlightsRef.current.some((highlight) =>
+      highlight.highlightType === 'region' &&
+      highlight.pageNumber === pageNumber &&
+      highlight.color === color &&
+      JSON.stringify(highlight.region) === JSON.stringify(region),
+    );
+    if (duplicate) {
+      setRegionSelection(null);
+      setRegionHighlightColorsOpen(false);
+      requestAnimationFrame(() => regionPageFocusRef.current?.focus());
+      notify('This region is already highlighted with that color', 'info');
+      return;
+    }
+    setRegionHighlightSaving(true);
+    try {
+      const { data } = await api.post('/highlights', {
+        projectId: activeProject.id,
+        documentId: activeDocument.id,
+        pageNumber,
+        text: '',
+        color,
+        matchAll: false,
+        highlightType: 'region',
+        region,
+      });
+      const savedHighlight = {
+        id: data.id,
+        pageNumber,
+        text: '',
+        color,
+        highlightType: 'region',
+        region,
+        matchAll: false,
+        anchorStart: null,
+        anchorEnd: null,
+      };
+      highlightsRef.current = [...highlightsRef.current, savedHighlight];
+      setHighlights((current) => [...current, savedHighlight]);
+      adjustDocumentHighlightCount(activeDocument.id, 1);
+      setRecentHighlightId(data.id);
+      notify('Region highlighted — saved for this document', 'success');
+      setRegionSelection(null);
+      setRegionHighlightColorsOpen(false);
+      requestAnimationFrame(() => regionPageFocusRef.current?.focus());
+    } catch {
+      notify('Could not save region highlight', 'error');
+    } finally {
+      setRegionHighlightSaving(false);
+    }
   };
 
   const saveBookmarkDraft = async (name) => {
@@ -609,6 +706,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         tags: bookmarkDraft.bookmarkType === 'text' ? ['selected'] : [],
         selectionStart: bookmarkDraft.selectionStart,
         selectionEnd: bookmarkDraft.selectionEnd,
+        region: bookmarkDraft.region,
       });
       adjustDocumentBookmarkCount(activeDocument.id, 1);
       notify(
@@ -619,6 +717,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       );
       setBookmarkDraft(null);
       setSelection(null);
+      setRegionSelection(null);
       if (bookmarkDraft.bookmarkType === 'page') void refreshSavedPages();
       void fetchBookmarks(activeProject.id).catch(() => {
         notify('Bookmark saved, but the collection could not be refreshed', 'error');
@@ -637,6 +736,211 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     notify('Copied to clipboard', 'success');
     setSelection(null);
   };
+
+  const closeRegionActions = () => {
+    setRegionSelection(null);
+    setRegionHighlightColorsOpen(false);
+    requestAnimationFrame(() => regionPageFocusRef.current?.focus());
+  };
+
+  useEffect(() => {
+    if (regionSelection) regionActionsRef.current?.focus();
+  }, [regionSelection]);
+
+  const toggleRegionSelectionMode = (enabled) => {
+    setRegionSelectionMode(enabled);
+    setSelection(null);
+    setRegionSelection(null);
+    setRegionDrag(null);
+    regionDragRef.current = null;
+    keyboardRegionRef.current = null;
+    setKeyboardRegion(null);
+    if (enabled) setBrowseMode(false);
+    window.getSelection()?.removeAllRanges();
+  };
+
+  const placeRegionActions = (pageNumber, region, pageElement) => {
+    regionPageFocusRef.current = pageElement;
+    const bounds = pageElement.getBoundingClientRect();
+    const top = bounds.top + region.y * bounds.height;
+    const bottom = top + region.height * bounds.height;
+    const half = 160;
+    const popupHeight = 112;
+    const placement = top > popupHeight + 12 ? 'above' : 'below';
+    setRegionSelection({
+      pageNumber,
+      region,
+      x: Math.min(Math.max(bounds.left + region.x * bounds.width + region.width * bounds.width / 2, half + 8), window.innerWidth - half - 8),
+      y: placement === 'above'
+        ? top - 8
+        : Math.min(bottom + 8, window.innerHeight - popupHeight - 8),
+      placement,
+    });
+    setRegionHighlightColorsOpen(false);
+    setSelection(null);
+  };
+
+  const copyRegion = async (selectionToCopy) => {
+    try {
+      const source = pageCanvasRefs.current[selectionToCopy.pageNumber];
+      if (!source?.width || !source?.height) throw new Error('Page image is not ready');
+      if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+        throw new Error('PNG clipboard copy is not supported by this browser');
+      }
+      const bounds = regionCropBounds(
+        selectionToCopy.region,
+        source.width,
+        source.height,
+      );
+      const cropped = document.createElement('canvas');
+      cropped.width = bounds.width;
+      cropped.height = bounds.height;
+      const context = cropped.getContext('2d');
+      if (!context) throw new Error('Could not prepare the selected image');
+      context.drawImage(
+        source,
+        bounds.x,
+        bounds.y,
+        bounds.width,
+        bounds.height,
+        0,
+        0,
+        bounds.width,
+        bounds.height,
+      );
+      const image = await new Promise((resolve, reject) => {
+        cropped.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Could not create the selected image'));
+        }, 'image/png');
+      });
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': image })]);
+      notify('Selected region copied as PNG', 'success');
+      setRegionSelection(null);
+      requestAnimationFrame(() => regionPageFocusRef.current?.focus());
+    } catch (error) {
+      notify(error.message || 'Could not copy the selected region', 'error');
+    }
+  };
+
+  const handleRegionPointerDown = (event) => {
+    if (!regionSelectionMode || readOnly || event.button !== 0 || event.isPrimary === false) return;
+    if (event.target.closest?.('button, a, input, textarea, select, [role="button"]')) return;
+    const page = event.target.closest?.('[data-region-page]');
+    if (!page) return;
+    event.preventDefault();
+    const bounds = page.getBoundingClientRect();
+    regionDragRef.current = {
+      pageNumber: Number(page.dataset.regionPage),
+      bounds,
+      start: { x: event.clientX, y: event.clientY },
+      pointerId: event.pointerId,
+    };
+    setRegionSelection(null);
+    setRegionDrag({ pageNumber: Number(page.dataset.regionPage), region: null });
+    keyboardRegionRef.current = null;
+    setKeyboardRegion(null);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleRegionPointerMove = (event) => {
+    const drag = regionDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const region = regionFromDrag(drag.bounds, drag.start, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+    setRegionDrag({ pageNumber: drag.pageNumber, region });
+  };
+
+  const handleRegionPointerUp = (event) => {
+    const drag = regionDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const region = regionFromDrag(drag.bounds, drag.start, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+    regionDragRef.current = null;
+    setRegionDrag(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (!region) return;
+    const page = containerRef.current?.querySelector(
+      `[data-region-page="${drag.pageNumber}"]`,
+    );
+    if (page) placeRegionActions(drag.pageNumber, region, page);
+  };
+
+  const handleRegionPointerCancel = (event) => {
+    if (regionDragRef.current?.pointerId !== event.pointerId) return;
+    regionDragRef.current = null;
+    setRegionDrag(null);
+  };
+
+  const updateKeyboardRegion = (next) => {
+    keyboardRegionRef.current = next;
+    setKeyboardRegion(next);
+  };
+
+  const handleRegionKeyDown = (event, pageNumber) => {
+    if (!regionSelectionMode || readOnly) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      updateKeyboardRegion(null);
+      setRegionSelection(null);
+      return;
+    }
+    const existing = keyboardRegionRef.current;
+    const regionState = existing?.pageNumber === pageNumber
+      ? existing
+      : { pageNumber, cursor: { x: 0.5, y: 0.5 }, anchor: null };
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+      event.preventDefault();
+      const step = event.shiftKey ? 0.05 : 0.01;
+      const cursor = {
+        x: Math.min(1, Math.max(0, regionState.cursor.x + (
+          event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0
+        ))),
+        y: Math.min(1, Math.max(0, regionState.cursor.y + (
+          event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0
+        ))),
+      };
+      updateKeyboardRegion({ ...regionState, cursor });
+      return;
+    }
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    if (!regionState.anchor) {
+      updateKeyboardRegion({ ...regionState, anchor: regionState.cursor });
+      return;
+    }
+    const page = event.currentTarget;
+    const bounds = page.getBoundingClientRect();
+    const region = regionFromDrag(
+      bounds,
+      { x: bounds.left + regionState.anchor.x * bounds.width, y: bounds.top + regionState.anchor.y * bounds.height },
+      { x: bounds.left + regionState.cursor.x * bounds.width, y: bounds.top + regionState.cursor.y * bounds.height },
+    );
+    updateKeyboardRegion(null);
+    if (region) placeRegionActions(pageNumber, region, page);
+  };
+
+  useEffect(() => {
+    if (!regionSelection && !keyboardRegion && !regionDrag) return undefined;
+    const closeRegionSelection = (event) => {
+      if (event.key !== 'Escape' || bookmarkDraft) return;
+      setRegionSelection(null);
+      setRegionDrag(null);
+      regionDragRef.current = null;
+      keyboardRegionRef.current = null;
+      setKeyboardRegion(null);
+      setRegionHighlightColorsOpen(false);
+      requestAnimationFrame(() => regionPageFocusRef.current?.focus());
+    };
+    document.addEventListener('keydown', closeRegionSelection, true);
+    return () => document.removeEventListener('keydown', closeRegionSelection, true);
+  }, [bookmarkDraft, keyboardRegion, regionDrag, regionSelection]);
 
   // ── Read aloud (browser speech — offline, no key) ──────────────────────────
   const [speaking, setSpeaking] = useState(false);
@@ -765,6 +1069,9 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
               matchAll: removed.matchAll,
               selectionStart: removed.anchorStart,
               selectionEnd: removed.anchorEnd,
+              ...(removed.highlightType === 'region'
+                ? { highlightType: 'region', region: removed.region }
+                : {}),
             });
             highlightsRef.current = [...highlightsRef.current, { ...removed, id: data.id }];
             setHighlights((h) => [...h, { ...removed, id: data.id }]);
@@ -834,7 +1141,9 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   // keeps successive and overlapping annotations independent across rerenders.
   const applyPageHighlights = (textLayer, pageNum, hlList) => {
     if (!textLayer) return;
-    const pageHighlights = hlList.filter((h) => h.pageNumber === pageNum);
+    const pageHighlights = hlList.filter(
+      (h) => h.pageNumber === pageNum && h.highlightType !== 'region',
+    );
     if (!pageHighlights.length) return;
     textLayer.querySelectorAll('mark.kn-hl').forEach((mark) => {
       mark.replaceWith(...Array.from(mark.childNodes));
@@ -992,7 +1301,9 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   };
 
   const lineMarks = (line, lineIndex) => {
-    const ph = highlights.filter((h) => h.pageNumber === 1);
+    const ph = highlights.filter(
+      (h) => h.pageNumber === 1 && h.highlightType !== 'region',
+    );
     if (!ph.length) return null;
     const low = line.toLowerCase();
     const ranges = [];
@@ -1078,7 +1389,9 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
 
   const fileType = (activeDocument.file_type || '').toLowerCase();
   const isPdf = fileType === 'pdf';
-  const isSlideshow = fileType === 'pptx' || fileType === 'ppt';
+  const isPresentationPdf = fileType === 'pptx';
+  const usesPdfRenderer = isPdf || isPresentationPdf;
+  const isSlideshow = fileType === 'ppt';
   const displayText = activeDocument.extracted_text || '';
   const viewerLines = displayText.split('\n');
 
@@ -1125,7 +1438,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     </div>
   );
 
-  // ── PPTX slide viewer (renders like PowerPoint) ────────────────────────────
+  // ── Legacy PowerPoint viewer ────────────────────────────────────────────────
   const renderSlidesViewer = () => (
     <SlideViewer
       documentId={activeDocument.id}
@@ -1140,10 +1453,104 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     />
   );
 
+  const renderRegionAnnotations = (pageNumber) => {
+    const regionHighlights = highlights.filter(
+      (highlight) => highlight.highlightType === 'region' &&
+        highlight.pageNumber === pageNumber && highlight.region,
+    );
+    const dragRegion = regionDrag?.pageNumber === pageNumber
+      ? regionDrag.region
+      : null;
+    const keyboardState = keyboardRegion?.pageNumber === pageNumber
+      ? keyboardRegion
+      : null;
+    const keyboardPreview = keyboardState?.anchor
+      ? {
+        x: Math.min(keyboardState.anchor.x, keyboardState.cursor.x),
+        y: Math.min(keyboardState.anchor.y, keyboardState.cursor.y),
+        width: Math.abs(keyboardState.cursor.x - keyboardState.anchor.x),
+        height: Math.abs(keyboardState.cursor.y - keyboardState.anchor.y),
+      }
+      : null;
+    const bookmarkRegion = locationRequest?.documentId === activeDocument.id &&
+      locationRequest.pageNumber === pageNumber
+      ? locationRequest.region
+      : null;
+    const boxStyle = (region) => ({
+      left: `${region.x * 100}%`,
+      top: `${region.y * 100}%`,
+      width: `${region.width * 100}%`,
+      height: `${region.height * 100}%`,
+    });
+
+    return (
+      <div className="absolute inset-0 z-20 pointer-events-none" aria-label={`Regions on page ${pageNumber}`}>
+        {regionHighlights.map((highlight) => (
+          <button
+            key={highlight.id}
+            type="button"
+            disabled={readOnly || regionSelectionMode}
+            aria-label={`Region highlight, ${colorById(highlight.color).name}, page ${pageNumber}`}
+            title={`Region highlight — ${colorById(highlight.color).name}`}
+            tabIndex={regionSelectionMode ? -1 : 0}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (eraseMode) removeHighlight(highlight.id);
+              else {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setMarkMenu({ id: highlight.id, x: rect.left + rect.width / 2, y: rect.top - 8 });
+                setMarkColorMenuOpen(false);
+              }
+            }}
+            className="pointer-events-auto absolute rounded-sm border-2 border-dashed transition hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+            style={{
+              ...boxStyle(highlight.region),
+              borderColor: colorById(highlight.color).swatch,
+              backgroundColor: colorById(highlight.color).bg,
+              pointerEvents: regionSelectionMode || readOnly ? 'none' : 'auto',
+            }}
+          />
+        ))}
+        {bookmarkRegion && (
+          <div
+            data-region-bookmark="true"
+            aria-label="Bookmarked region"
+            className="absolute rounded-sm border-2 border-dashed border-amber-400"
+            style={boxStyle(bookmarkRegion)}
+          />
+        )}
+        {dragRegion && (
+          <div
+            data-region-preview="true"
+            aria-hidden="true"
+            className="absolute rounded-sm border-2 border-amber-400 bg-amber-300/25"
+            style={boxStyle(dragRegion)}
+          />
+        )}
+        {keyboardState && (
+          keyboardPreview ? (
+            <div
+              aria-hidden="true"
+              className="absolute rounded-sm border-2 border-amber-400 bg-amber-300/25"
+              style={boxStyle(keyboardPreview)}
+            />
+          ) : (
+            <span
+              aria-hidden="true"
+              className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-amber-400 bg-amber-300/50"
+              style={{ left: `${keyboardState.cursor.x * 100}%`, top: `${keyboardState.cursor.y * 100}%` }}
+            />
+          )
+        )}
+      </div>
+    );
+  };
+
   // ── PDF canvas viewer ──────────────────────────────────────────────────────
   const renderPDFViewer = () => (
     <div className="flex-1 flex min-h-0 bg-midnight/60">
-      {thumbnailsOpen && isPdf && pdfDoc && (
+      {thumbnailsOpen && usesPdfRenderer && pdfDoc && (
         <ThumbnailRail
           pdfDoc={pdfDoc}
           numPages={numPages}
@@ -1151,7 +1558,22 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
           onSelectPage={setCurrentPage}
         />
       )}
-      <div ref={containerRef} onMouseUp={handleMouseUp} onTouchEnd={handleMouseUp} onClick={handleMarkClick} className="flex-1 overflow-auto p-2 sm:p-6 relative">
+      <div
+        ref={containerRef}
+        onMouseUp={handleMouseUp}
+        onTouchEnd={handleMouseUp}
+        onClick={handleMarkClick}
+        onPointerDown={handleRegionPointerDown}
+        onPointerMove={handleRegionPointerMove}
+        onPointerUp={handleRegionPointerUp}
+        onPointerCancel={handleRegionPointerCancel}
+        className={`flex-1 overflow-auto p-2 sm:p-6 relative ${regionSelectionMode ? 'cursor-crosshair' : ''}`}
+      >
+      {regionSelectionMode && (
+        <p id="region-selection-help" role="status" className="sticky top-2 z-30 mx-auto mb-3 w-fit max-w-full rounded-lg border border-amber-400/40 bg-midnight-panel/95 px-3 py-2 text-center text-xs text-ivory shadow-lg">
+          Drag to select. Keyboard: focus a page, use arrows to position each corner, Enter to set it, Shift+arrows to move faster, Escape to cancel.
+        </p>
+      )}
       {highlightSnippet && (
         <motion.div
           initial={{ opacity: 0, y: -8 }}
@@ -1165,7 +1587,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       {error === 'pdf_load_failed' && (
         <div className="max-w-4xl mx-auto mb-4 p-3 rounded-xl bg-white/[0.035] border border-glass-borderDark text-ivory/65 text-xs flex items-center gap-2">
           <FileText className="w-4 h-4 text-secondary shrink-0" />
-          <span><strong className="text-ivory/85">Text-first preview.</strong> The original PDF binary is not available on this workspace, so your extracted content remains readable here.</span>
+          <span><strong className="text-ivory/85">{isPresentationPdf ? 'Presentation preview unavailable.' : 'Text-first preview.'}</strong> {isPresentationPdf ? 'This PPTX could not be converted to a PDF preview. Its extracted text remains readable below.' : 'The original PDF binary is not available on this workspace, so your extracted content remains readable here.'}</span>
         </div>
       )}
 
@@ -1186,7 +1608,13 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
               key={pageNum}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="relative shadow-2xl rounded-xl overflow-visible border border-white/10 bg-white"
+              data-region-page={pageNum}
+              tabIndex={regionSelectionMode ? 0 : undefined}
+              role={regionSelectionMode ? 'group' : undefined}
+              aria-label={regionSelectionMode ? `Page ${pageNum}, region selection area` : undefined}
+              aria-describedby={regionSelectionMode ? 'region-selection-help' : undefined}
+              onKeyDown={(event) => handleRegionKeyDown(event, pageNum)}
+              className={`relative shadow-2xl rounded-xl overflow-visible border border-white/10 bg-white ${regionSelectionMode ? 'touch-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400' : ''}`}
             >
               <div className="absolute top-2 right-3 z-10 text-[10px] font-mono text-slate-500 bg-white/85 px-2 py-0.5 rounded">
                 Page {pageNum} / {numPages}
@@ -1199,6 +1627,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
                   page it was actually made on (continuous scroll otherwise
                   records currentPage, which can be wrong). */}
               <div ref={(el) => { pageTextLayerRefs.current[pageNum] = el; }} data-page={pageNum} className="pdf-text-layer" />
+              {renderRegionAnnotations(pageNum)}
             </motion.div>
           ))}
         </div>
@@ -1233,6 +1662,8 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         matchAllMode={matchAllMode}
         setMatchAllMode={setMatchAllMode}
         readOnly={readOnly}
+        regionSelectionMode={regionSelectionMode}
+        onToggleRegionSelection={usesPdfRenderer ? toggleRegionSelectionMode : undefined}
         currentPageSaved={savedPages.has(currentPage)}
         onBookmarkPage={() => bookmarkPage(currentPage)}
         eraseMode={eraseMode}
@@ -1247,9 +1678,80 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
           Read-only shared resource — changes to the owner’s original are disabled.
         </div>
       )}
-      {isPdf ? renderPDFViewer() : isSlideshow ? renderSlidesViewer() : renderTextViewer()}
+      {usesPdfRenderer ? renderPDFViewer() : isSlideshow ? renderSlidesViewer() : renderTextViewer()}
 
       {/* Selection → action popover (shared across PDF / text / slides) */}
+      <AnimatePresence>
+        {regionSelection && !readOnly && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+            onPointerDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.preventDefault()}
+            style={{ top: regionSelection.y, left: regionSelection.x }}
+            className={`fixed z-50 -translate-x-1/2 ${regionSelection.placement === 'above' ? '-translate-y-full' : ''} glass-panel flex max-w-[94vw] flex-col gap-1 rounded-xl border border-amber-400/50 px-1.5 py-1 shadow-2xl`}
+            data-region-actions="true"
+            aria-label={`Selected region on page ${regionSelection.pageNumber}`}
+          >
+            <div className="flex items-center gap-1">
+              <button
+                  ref={regionActionsRef}
+                  type="button"
+                  onClick={() => copyRegion(regionSelection)}
+                className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 text-xs font-medium text-ivory transition hover:bg-primary/20 hover:text-secondary"
+                aria-label="Copy selected region as PNG"
+              >
+                <Copy className="h-3.5 w-3.5" /><span>Copy</span>
+              </button>
+              <button
+                type="button"
+                onClick={saveRegionBookmark}
+                disabled={bookmarkSaving}
+                className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 text-xs font-medium text-ivory transition hover:bg-primary/20 hover:text-secondary disabled:opacity-50"
+                aria-label="Bookmark selected region"
+              >
+                <Bookmark className="h-3.5 w-3.5 text-secondary" /><span>Bookmark</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRegionHighlightColorsOpen((open) => !open)}
+                aria-expanded={regionHighlightColorsOpen}
+                className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 text-xs font-medium text-ivory transition hover:bg-primary/20 hover:text-secondary"
+                aria-label="Highlight selected region"
+              >
+                <Highlighter className="h-3.5 w-3.5 text-secondary" /><span>Highlight</span>
+              </button>
+              <button
+                type="button"
+                onClick={closeRegionActions}
+                className="grid min-h-11 min-w-11 place-items-center rounded-lg text-ivory/60 transition hover:bg-white/10 hover:text-ivory"
+                aria-label="Cancel region selection"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            {regionHighlightColorsOpen && (
+              <div className="flex items-center justify-center gap-2 border-t border-white/10 px-2 py-2">
+                {HIGHLIGHT_COLORS.map((color) => (
+                  <button
+                    key={color.id}
+                    type="button"
+                    onClick={() => saveRegionHighlight(color.id)}
+                    disabled={regionHighlightSaving}
+                    title={`Save region highlight in ${color.name}`}
+                    aria-label={`Save region highlight in ${color.name}`}
+                    className="h-8 w-8 rounded-full border border-white/25 transition hover:scale-110 hover:border-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:cursor-wait disabled:opacity-50"
+                    style={{ background: color.swatch }}
+                  />
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {selection && !readOnly && (
           <motion.div
@@ -1357,7 +1859,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
                       style={{ background: colorById(hl?.color).swatch }}
                     />
                     <span className="text-ivory/80 max-w-[150px] truncate font-medium text-xs">
-                      {hl?.text}
+                      {hl?.text || `Selected region on page ${hl?.pageNumber || ''}`}
                     </span>
                     {hl?.matchAll && (
                       <span className="px-1.5 py-0.5 rounded bg-secondary/20 text-secondary text-[9px] font-bold tracking-wider">

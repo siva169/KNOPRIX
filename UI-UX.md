@@ -163,17 +163,22 @@ No visual choice is treated as approved until it is selected here.
 - Approved region-selection behavior (2026-10-27): PDF and PPT/PPTX pages
   support one-page/slide mouse or touch rectangle selection while Region
   Selection mode is active. The rectangle is page-relative so zoom and viewport
-  changes do not move saved annotations.
-- Pending boss choice before UI implementation: selection rectangle outline
-  and fill treatment (reuse active-selection blue, or another chosen style).
+  changes do not move saved annotations. Keyboard users can focus a page,
+  adjust the region with arrow keys, use Enter to set its corners, and Escape
+  to cancel.
+- Approved appearance (2026-10-27): translucent-gold fill and gold outline.
+- Approved PPTX rendering (2026-10-27): convert through the installed
+  LibreOffice Impress service to a cached PDF and display it through PDF.js;
+  show a text fallback if conversion fails. Output is not guaranteed to be
+  pixel-identical to Microsoft PowerPoint.
 - Reference URLs: _add here_
 
 ### D3. `ReaderToolbar` — document actions and view controls
 - Used for: page navigation, zoom, fullscreen, download, search.
 - Decisions: icon-only versus labeled controls, grouping, overflow menu.
 - Approved: add a Region Selection toggle beside Text Selection. It is
-  mutually exclusive with text selection and only captures pointer/touch drags
-  when active.
+  mutually exclusive with text selection and captures pointer/touch drags only
+  when active; keyboard page selection is also supported.
 - Reference URLs:
   - https://m3.material.io/foundations/interaction/states/overview
   - https://developer.apple.com/design/human-interface-guidelines/menus

@@ -290,6 +290,14 @@ export default function ContactsPage({
               resource.page_number,
               resource.text || resource.highlighted_text || '',
               { start: resource.anchor_start, end: resource.anchor_end },
+              resource.bookmark_type === 'region' || resource.highlight_type === 'region'
+                ? {
+                  x: resource.region_x,
+                  y: resource.region_y,
+                  width: resource.region_width,
+                  height: resource.region_height,
+                }
+                : null,
             );
             onClose();
           } catch (documentError) {
