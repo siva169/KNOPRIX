@@ -467,3 +467,18 @@ of scope.
 - Selection fill/outline are translucent gold.
 - PPTX uses LibreOffice-to-PDF rendering in PDF.js; output can differ from
   Microsoft PowerPoint.
+
+## Feature Slice: Drill-down Bookmark Organizer (2026-10-27)
+
+### Scope and goals
+- Replace flat bookmark drawer with a 2-level drill-down organizer.
+- Level 1: Document list showing all project documents with bookmark counts (even 0 bookmarks). Search filters documents.
+- Level 2: Bookmarks within selected document, with "← Back" button, document title, search filter, newest-first ordering, inline edit, delete, and jump.
+- Clicking any bookmark navigates to the document and page/anchor/region, then closes the drawer.
+- Preserve O(1) DSA BookmarkCollection parity and reactivity.
+
+### Plan
+1. **Frontend drill-down state**: Add `selectedDocumentId` state to `BookmarksDrawer.jsx`.
+2. **Level 1 (Documents view)**: Render list of all documents with file icons, names, and bookmark count badges. Implement search filtering for documents.
+3. **Level 2 (Document bookmarks view)**: Render selected document header, back button, document-specific search, newest-first bookmarks with edit/delete, and jump action.
+4. **Verification**: Verify responsive behavior (390px, 425px, 768px, 1024px), empty states, keyboard/touch access, and run `npm run build` + backend tests.

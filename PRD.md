@@ -117,6 +117,19 @@ your documents.
   page/text anchor without loading every document's highlights at startup.
 - Any backend behavior change is proposed and approved separately.
 
+### Reading Desk - Drill-down Bookmark Organizer
+
+- Triggered from the bottom-left sidebar "Bookmarks" button, opening the right-side slide-over panel.
+- Drill-down navigation:
+  - Level 1 (Documents view): lists all user documents in the active project with their bookmark counts (including 0 counts).
+  - Search in Level 1 filters documents by name.
+  - Clicking any document slides into Level 2 (Document Bookmarks view).
+  - Level 2 shows a "← Back to Documents" navigation button, the document name, its bookmark count, and an inner search bar.
+  - Lists all bookmarks (page, text, region) belonging to that document, newest first.
+  - Inline editing of bookmark name/notes and linked highlights, as well as deletion, are preserved.
+  - Clicking a bookmark navigates directly to that document, page, text anchor, or region in the reader, closing the drawer.
+- Responsive behavior: 100% full-width on mobile viewports (<640px), 384px on desktop, WCAG-compliant touch targets (min 44px).
+
 ### Reading Desk - region selection annotations
 
 - In an owned PDF or PPTX reader, Region Selection mode captures one page/slide

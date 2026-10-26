@@ -210,28 +210,19 @@ No visual choice is treated as approved until it is selected here.
   location and a region label; opening one returns to and outlines that area.
 - Reference URLs: _add here_
 
-### D8. `BookmarkCollectionDrawer` — newest-first saved page list
-- Used for: bookmark creation, newest removal, arbitrary bookmark deletion.
-- Decisions: drawer location, newest marker, row actions, confirmation,
-  empty state, mobile bottom sheet.
-- Approved improvement: retain the current right-side slide-in, dark/gold
-  styling, and full-width behavior on narrow screens.
-- Approved improvement: both selected-text and whole-page bookmark actions
-  open one compact dialog with an optional name and a single Save action.
-- Approved improvement: search filters live by bookmark name, selected text,
-  and notes; named cards show the name first and the saved passage below it.
-- Approved improvement: opening a text bookmark closes the drawer, opens its
-  document/page, scrolls to its stored passage anchor, and briefly emphasizes
-  the matched text. Older bookmarks without anchors fall back to their quote.
-- Approved region behavior (2026-10-27): the selection popup offers Copy,
-  Bookmark, and Highlight. Bookmark uses the existing optional-name dialog and
-  saves the normalized page/slide rectangle; opening it returns to that
-  location and outlines the region. Copy targets a PNG image on the clipboard.
-- States: preserve the existing empty state; add loading, no-match, and
-  retryable search-error states; keep save errors visible through app notices.
-- Responsive behavior: preserve the current drawer sizing and adapt controls
-  to the viewport; keep touch targets usable on phones.
-- Selected by boss, 2026-10-03.
+### D8. `BookmarkCollectionDrawer` — Drill-down Bookmark Organizer
+- Used for: project-wide and per-document bookmark review, drill-down organization, newest removal, arbitrary bookmark deletion, and precise jumps.
+- Decisions: drawer location, drill-down hierarchy, document selection, search, row actions, confirmation, empty state, mobile sheet.
+- Approved behavior (2026-10-27):
+  - Bottom-left sidebar button triggers the right-side slide-over panel with dark/gold styling.
+  - Drill-down view: Level 1 lists all documents in the active project with bookmark counts (even 0 bookmarks).
+  - Clicking any document slides into Level 2: the list of bookmarks belonging to that document, with a "← Back to Documents" button.
+  - Level 1 search filters documents by title; Level 2 search filters bookmarks inside the selected document by name, passage, or notes.
+  - Clicking a bookmark opens its document and page, scrolls to anchor or outlines region, and closes the drawer.
+  - Preserves inline edit of name/notes/linked highlights, deletion, and "Remove newest" (scoped to the document or newest overall).
+- States: empty documents list, 0-bookmark document state, searching, loading, error retry.
+- Responsive behavior: full width on narrow mobile viewports (<640px), 384px drawer on desktop, 44px minimum touch targets.
+- Approved by boss, 2026-10-27.
 - Reference URLs:
   - https://developer.apple.com/design/human-interface-guidelines/search-fields
   - https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/

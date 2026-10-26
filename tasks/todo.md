@@ -5,6 +5,24 @@ current academic prototype toward a trustworthy consumer product. It separates
 verified current capabilities from future work. A checkbox means the work has
 been implemented and verified; planning or partial wiring does not count.
 
+- [x] Slice: Drill-down Bookmark Organizer
+  - Acceptance: Clicking the bottom-left bookmark icon opens a right-side panel
+    with a 2-level drill-down organizer. Level 1 lists all user documents in the
+    active project with bookmark count badges (including 0 count) and document search.
+    Clicking a document drills down into Level 2, showing that document's bookmarks,
+    a "← Back to Documents" button, document title, and bookmark search.
+    Clicking a bookmark opens the document and jumps to the exact page/anchor/region,
+    then closes the drawer. Inline edit and delete capabilities are preserved.
+  - Verify: frontend production build, 4 unit tests (grouping, document filter,
+    bookmark filter, empty states), 7 backend bookmark tests, responsive minimum
+    touch targets (44px), and keyboard accessibility.
+  - Files: `frontend/src/components/BookmarksDrawer.jsx`, `frontend/src/components/Sidebar.jsx`,
+    `frontend/src/components/CommandPalette.jsx`, `frontend/src/bookmarkOrganizerHelper.js`,
+    `frontend/src/bookmarkOrganizer.test.js`.
+  - UI/UX: approved in `UI-UX.md` D8 on 2026-10-27.
+  - Done 2026-10-27: all frontend unit tests, backend QA suites, and Vite production
+    build pass.
+
 - [x] Slice: show per-document saved-item counts and exact jumps
   - Acceptance: the source index shows the current user's bookmark and
     highlight counts, expands each document's saved items on demand, and opens

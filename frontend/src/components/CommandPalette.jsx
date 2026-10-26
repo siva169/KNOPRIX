@@ -23,7 +23,7 @@ export default function CommandPalette({ open, onClose, onUpload, onStats, onBoo
       }));
     const actions = [
       { id: 'upload', label: 'Upload a document', detail: 'Add a file to this project', icon: UploadCloud, run: onUpload },
-      { id: 'bookmarks', label: 'Open bookmarks', detail: 'Review saved pages and passages', icon: Bookmark, run: onBookmarks },
+      { id: 'bookmarks', label: 'Open Bookmark Organizer', detail: 'Browse documents and jump to saved bookmarks', icon: Bookmark, run: onBookmarks },
       { id: 'stats', label: 'Open index visualizer', detail: 'Inspect the project data structures', icon: BarChart3, run: onStats },
     ];
     return needle ? documentItems : [...actions, ...documentItems];

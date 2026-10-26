@@ -1,5 +1,21 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-27 — Implement Drill-down Bookmark Organizer
+
+- Replaced the flat bookmark drawer with a 2-level drill-down Bookmark Organizer
+  opened via the bottom-left sidebar bookmark button.
+- Level 1 displays all project documents with real-time bookmark counts (including 0-count
+  items) and live document search.
+- Level 2 displays bookmarks for the selected document with a "← Back to Documents"
+  header, document title, scoped bookmark search, newest-first ordering, inline edit/delete,
+  and instant jumping to the document/page/anchor/region.
+- Added modular helper functions in `frontend/src/bookmarkOrganizerHelper.js` with 100%
+  unit test coverage in `frontend/src/bookmarkOrganizer.test.js`.
+- Updated PRD, UI-UX decisions (D8), delivery plan, task list, sidebar label, and command palette.
+- Verification passed: 4/4 bookmark organizer unit tests, 3/3 region geometry tests,
+  7/7 backend bookmark QA tests, and production Vite frontend build.
+- Configured Knoprix commit identity is `siva169 <tvssphanindra@gmail.com>`.
+
 ## 2026-10-27 — Implement PDF/PPTX region bookmarks and highlights
 
 - Added validated normalized page geometry and additive database migration

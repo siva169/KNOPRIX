@@ -438,9 +438,9 @@ export default function Sidebar({
       </div>
 
       <div className={`p-3 md:p-4 border-t border-glass-borderDark space-y-1.5 ${collapsed ? 'lg:px-2' : ''}`}>
-        <button onClick={onBookmarks} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-ivory/70 hover:bg-white/5 hover:text-ivory transition">
+        <button onClick={onBookmarks} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-ivory/70 hover:bg-white/5 hover:text-ivory transition" title="Open Bookmark Organizer" aria-label="Open Bookmark Organizer">
           <Bookmark className="w-4 h-4 text-secondary shrink-0" />
-          <span className={collapsed ? 'lg:hidden' : ''}>Bookmarks Drawer</span>
+          <span className={collapsed ? 'lg:hidden' : ''}>Bookmark Organizer</span>
         </button>
         <button onClick={onContacts} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-ivory/70 hover:bg-white/5 hover:text-ivory transition">
           <UsersRound className="w-4 h-4 text-secondary shrink-0" />
