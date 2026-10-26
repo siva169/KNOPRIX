@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
-import { ArrowUpRight, FileText, FolderOpen, Search, Share2, Sparkles, UploadCloud } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowUpRight, FileText, FolderOpen, Search, Share2, Sparkles, UploadCloud, Pencil, Trash2, AlertTriangle, LoaderCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 
 function formatDate(value) {
@@ -27,11 +27,47 @@ export default function DashboardOverview({ loading = false, onUpload, onOpenMap
     selectProject,
     documents,
     openDocument,
+    updateDocument,
+    deleteDocument,
+    notify,
     getReadingProgress,
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState('all');
+  const [editingDoc, setEditingDoc] = useState(null);
+  const [editingDocName, setEditingDocName] = useState('');
+  const [deletingDoc, setDeletingDoc] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
+
+  const handleSaveDocRename = async (e) => {
+    e.preventDefault();
+    if (!editingDoc || !editingDocName.trim()) return;
+    setActionBusy(true);
+    try {
+      await updateDocument(editingDoc.id, editingDocName.trim());
+      notify?.(`Document renamed to "${editingDocName.trim()}"`, 'success');
+      setEditingDoc(null);
+    } catch (err) {
+      notify?.(err.response?.data?.detail || 'Failed to rename document', 'error');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleConfirmDocDelete = async () => {
+    if (!deletingDoc) return;
+    setActionBusy(true);
+    try {
+      await deleteDocument(deletingDoc.id);
+      notify?.(`Document "${deletingDoc.file_name}" deleted`, 'info');
+      setDeletingDoc(null);
+    } catch (err) {
+      notify?.(err.response?.data?.detail || 'Failed to delete document', 'error');
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   const totalDocuments = projects.reduce((sum, project) => sum + (project.file_count || 0), 0);
 
@@ -246,30 +282,71 @@ export default function DashboardOverview({ loading = false, onUpload, onOpenMap
               {activeProject && filteredDocuments.length > 0 ? (
                 <div className="divide-y divide-glass-borderDark">
                   {filteredDocuments.map((document, index) => (
-                    <motion.button
+                    <motion.div
                       key={document.id}
-                      type="button"
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.03, duration: 0.2 }}
-                      onClick={() => openDocument(document)}
-                      className="group flex w-full items-center gap-4 py-4 text-left transition hover:px-2"
+                      className="group flex w-full items-center justify-between gap-4 py-4 text-left transition hover:px-2"
                     >
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-secondary">
-                        <FileText className="h-4 w-4" aria-hidden="true" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-ivory">{document.file_name}</span>
-                        <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.12em] text-ivory/40">
-                          {document.file_type || 'document'} · {formatDate(document.created_at)}
+                      <button
+                        type="button"
+                        onClick={() => openDocument(document)}
+                        className="flex flex-1 min-w-0 items-center gap-4 text-left"
+                      >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-secondary">
+                          <FileText className="h-4 w-4" aria-hidden="true" />
                         </span>
-                      </span>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-secondary">
-                        <Sparkles className="h-3 w-3" aria-hidden="true" />
-                        {getReadingProgress(document.id) ? 'Resume' : 'Ready'}
-                      </span>
-                      <ArrowUpRight className="h-4 w-4 shrink-0 text-ivory/30 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-accent" aria-hidden="true" />
-                    </motion.button>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-ivory group-hover:text-accent transition-colors">{document.file_name}</span>
+                          <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.12em] text-ivory/40">
+                            {document.file_type || 'document'} · {formatDate(document.created_at)}
+                          </span>
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] text-secondary">
+                          <Sparkles className="h-3 w-3" aria-hidden="true" />
+                          {getReadingProgress(document.id) ? 'Resume' : 'Ready'}
+                        </span>
+                      </button>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingDoc(document);
+                              setEditingDocName(document.file_name);
+                            }}
+                            className="p-2 rounded-lg text-ivory/50 hover:text-accent hover:bg-white/10"
+                            title={`Rename ${document.file_name}`}
+                            aria-label={`Rename ${document.file_name}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingDoc(document);
+                            }}
+                            className="p-2 rounded-lg text-ivory/50 hover:text-rose-300 hover:bg-rose-500/10"
+                            title={`Delete ${document.file_name}`}
+                            aria-label={`Delete ${document.file_name}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => openDocument(document)}
+                          className="p-2 text-ivory/30 group-hover:text-accent"
+                          aria-label={`Open ${document.file_name}`}
+                        >
+                          <ArrowUpRight className="h-4 w-4 shrink-0 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </motion.div>
                   ))}
                 </div>
               ) : (
@@ -319,6 +396,79 @@ export default function DashboardOverview({ loading = false, onUpload, onOpenMap
           </div>
         )}
       </div>
+
+      {/* Document Rename Modal */}
+      <AnimatePresence>
+        {editingDoc && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-glass-borderDark bg-midnight-panel p-5 text-ivory shadow-2xl">
+              <h3 className="text-sm font-semibold">Rename Document</h3>
+              <form onSubmit={handleSaveDocRename} className="mt-3 space-y-3">
+                <input
+                  autoFocus
+                  value={editingDocName}
+                  onChange={(e) => setEditingDocName(e.target.value)}
+                  className="w-full bg-midnight-deep border border-glass-borderDark rounded-xl px-3 py-2 text-xs text-ivory focus:outline-none focus:border-accent"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingDoc(null)}
+                    disabled={actionBusy}
+                    className="px-3 py-1.5 rounded-xl border border-glass-borderDark text-xs text-ivory/60 hover:bg-white/5"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionBusy || !editingDocName.trim()}
+                    className="px-3 py-1.5 rounded-xl bg-accent text-midnight-deep text-xs font-bold hover:brightness-110 flex items-center gap-1.5"
+                  >
+                    {actionBusy && <LoaderCircle className="w-3.5 h-3.5 animate-spin" />}
+                    <span>{actionBusy ? 'Saving…' : 'Save'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Document Delete Modal */}
+      <AnimatePresence>
+        {deletingDoc && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-rose-500/30 bg-midnight-panel p-5 text-ivory shadow-2xl space-y-3">
+              <div className="flex items-center gap-2 text-rose-400">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <h3 className="text-sm font-semibold">Delete Document</h3>
+              </div>
+              <p className="text-xs text-ivory/70 leading-relaxed">
+                Delete <span className="font-semibold text-ivory">"{deletingDoc.file_name}"</span>? The file and its annotations will be removed permanently.
+              </p>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeletingDoc(null)}
+                  disabled={actionBusy}
+                  className="px-3 py-1.5 rounded-xl border border-glass-borderDark text-xs text-ivory/60 hover:bg-white/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDocDelete}
+                  disabled={actionBusy}
+                  className="px-3 py-1.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-500 flex items-center gap-1.5"
+                >
+                  {actionBusy && <LoaderCircle className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{actionBusy ? 'Deleting…' : 'Delete Document'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }

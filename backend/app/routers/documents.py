@@ -14,6 +14,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel, Field
 from docx.opc.exceptions import PackageNotFoundError as DocxPackageNotFoundError
 from lxml.etree import XMLSyntaxError
 from pptx.exc import PackageNotFoundError as PptxPackageNotFoundError
@@ -535,6 +536,34 @@ def stream_document(document_id: str, user=Depends(get_current_user), db=Depends
         media_type=media_type,
         headers=headers,
     )
+
+
+class DocumentUpdateBody(BaseModel):
+    fileName: str = Field(min_length=1, max_length=255)
+
+
+@router.patch("/documents/{document_id}")
+def update_document(
+    document_id: str,
+    body: DocumentUpdateBody,
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+):
+    doc = get_owned_document(db, user["id"], document_id)
+    new_name = body.fileName.strip()
+    if not new_name:
+        raise HTTPException(422, "File name must not be blank")
+    db.execute(
+        "UPDATE documents SET file_name = ? WHERE id = ?",
+        (new_name, document_id),
+    )
+    rebuild_project_indices(db, doc["project_id"])
+    row = db.execute("SELECT * FROM documents WHERE id = ?", (document_id,)).fetchone()
+    grant = db.execute(
+        "SELECT id FROM ai_document_grants WHERE user_id = ? AND document_id = ?",
+        (user["id"], document_id),
+    ).fetchone()
+    return {"document": _serialize_document_row(row, grant is not None)}
 
 
 @router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)

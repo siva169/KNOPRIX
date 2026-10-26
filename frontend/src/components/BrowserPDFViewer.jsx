@@ -110,6 +110,10 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   const [eraseMode, setEraseMode] = useState(false);
   const [markMenu, setMarkMenu] = useState(null); // {id, x, y}
   const [markColorMenuOpen, setMarkColorMenuOpen] = useState(false);
+  const [imageUrl, setImageUrl] = useState(null);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [showOcrText, setShowOcrText] = useState(false);
   const highlightsRef = useRef([]);
   const restoredDocumentRef = useRef(null);
   const locationRequestRef = useRef(locationRequest);
@@ -310,6 +314,39 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       cancelled = true;
     };
   }, [activeDocument]);
+
+  const fileTypeLower = (activeDocument?.file_type || '').toLowerCase();
+  const isImageFile = ['png', 'jpg', 'jpeg', 'webp', 'svg'].includes(fileTypeLower);
+
+  useEffect(() => {
+    if (!activeDocument?.id || !isImageFile) {
+      if (imageUrl) {
+        URL.revokeObjectURL(imageUrl);
+        setImageUrl(null);
+      }
+      return undefined;
+    }
+    let cancelled = false;
+    setImageLoading(true);
+    setImageError(false);
+
+    api.get(`/documents/${activeDocument.id}/stream`, { responseType: 'blob' })
+      .then((res) => {
+        if (cancelled) return;
+        const url = URL.createObjectURL(res.data);
+        setImageUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setImageError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setImageLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDocument?.id, isImageFile]);
 
   // ── Render pages ───────────────────────────────────────────────────────────
   const renderPage = useCallback(
@@ -1438,6 +1475,66 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     </div>
   );
 
+  // ── Image viewer (PNG / JPG / JPEG / WEBP / SVG) ──────────────────────────
+  const renderImageViewer = () => (
+    <div className="flex-1 overflow-auto p-4 sm:p-8 bg-midnight/60 relative flex flex-col items-center">
+      <div className="w-full max-w-4xl mx-auto rounded-2xl border border-glass-borderDark bg-midnight-panel shadow-2xl p-4 sm:p-6 mb-4">
+        <div className="flex items-center justify-between border-b border-glass-borderDark pb-3 mb-4 text-xs text-ivory/60 font-mono">
+          <span className="uppercase px-2 py-0.5 rounded bg-secondary/15 text-secondary font-bold text-[10px]">
+            {activeDocument.file_type || 'IMG'}
+          </span>
+          <span className="font-semibold text-ivory truncate max-w-sm">{activeDocument.file_name}</span>
+          <span className="flex items-center gap-3">
+            <span>Image Preview</span>
+            {renderPageBookmarkButton(1)}
+          </span>
+        </div>
+
+        <div className="flex flex-col items-center justify-center min-h-[300px] overflow-auto py-4">
+          {imageLoading && (
+            <div className="flex flex-col items-center justify-center gap-2 text-ivory/60 text-xs py-10">
+              <span className="w-6 h-6 border-2 border-secondary border-t-transparent rounded-full animate-spin" />
+              <span>Loading media preview…</span>
+            </div>
+          )}
+          {imageError && (
+            <div className="text-center p-6 text-rose-300 text-xs">
+              <p>Failed to load image preview.</p>
+            </div>
+          )}
+          {imageUrl && !imageLoading && (
+            <div
+              className="transition-transform duration-150 flex items-center justify-center max-w-full"
+              style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
+            >
+              <img
+                src={imageUrl}
+                alt={activeDocument.file_name}
+                className="rounded-xl shadow-2xl max-w-full max-h-[75vh] object-contain border border-glass-borderDark"
+              />
+            </div>
+          )}
+        </div>
+
+        {displayText.trim() && (
+          <div className="mt-6 border-t border-glass-borderDark pt-4">
+            <button
+              onClick={() => setShowOcrText(!showOcrText)}
+              className="text-xs font-semibold text-accent hover:underline flex items-center gap-2"
+            >
+              <span>{showOcrText ? 'Hide Extracted Text' : 'View Extracted OCR Text'}</span>
+            </button>
+            {showOcrText && (
+              <div className="mt-3 p-4 rounded-xl bg-midnight-deep border border-glass-borderDark text-xs text-ivory/80 whitespace-pre-wrap leading-relaxed max-h-60 overflow-y-auto">
+                {displayText}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   // ── Legacy PowerPoint viewer ────────────────────────────────────────────────
   const renderSlidesViewer = () => (
     <SlideViewer
@@ -1678,7 +1775,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
           Read-only shared resource — changes to the owner’s original are disabled.
         </div>
       )}
-      {usesPdfRenderer ? renderPDFViewer() : isSlideshow ? renderSlidesViewer() : renderTextViewer()}
+      {usesPdfRenderer ? renderPDFViewer() : isSlideshow ? renderSlidesViewer() : isImageFile ? renderImageViewer() : renderTextViewer()}
 
       {/* Selection → action popover (shared across PDF / text / slides) */}
       <AnimatePresence>

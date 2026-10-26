@@ -1,5 +1,17 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-27 — Core CRUD, Media Viewer, AI Wing & Workspace System Upgrade
+
+- Diagnosed and resolved missing CRUD operations, media viewer flaws, AI Wing deficiencies, and workspace controls (100% repository-internal code):
+  1. **Document CRUD & File Portability**: Added `PATCH /api/documents/{document_id}` for filename renaming with index cache rebuilding. Added Document Rename and Delete modals in `Sidebar.jsx` and `DashboardOverview.jsx`. Added original file "Download" button in `PDFToolbar.jsx`.
+  2. **Project CRUD & Cascading File Purge**: Added Project Rename and Delete modals with custom confirmation in `Sidebar.jsx`. Upgraded backend `DELETE /api/projects/{id}` to clean up physical uploaded files on disk/storage and revoke social shares.
+  3. **Multi-Format Media Viewer**: Integrated responsive image renderer (`png`, `jpg`, `jpeg`, `webp`, `svg`) in `BrowserPDFViewer.jsx` with zoom controls, smooth centering, and collapsible extracted OCR text.
+  4. **AI Wing Enhancements**: Added `AbortController` stop generating button; auto-expanding `<textarea>` (supporting `Enter` to send, `Shift+Enter` for newline); one-click response Copy button with visual feedback; response Regenerate button; bulk "Authorize All / Revoke All" document permission toggle; Retake Quiz button; Shuffle Flashcards button.
+  5. **Recent Chats Panel**: Added full-text message content search (`conversations.py`); "This Project" vs "All Projects" filter toggle; chronological grouping (*Today*, *Yesterday*, *Previous 7 Days*, *Older*); in-app delete confirmation modal.
+  6. **Account & GDPR Governance**: Added `AccountModal.jsx` connected to avatar in `Navbar.jsx`; provides user details, GDPR ZIP export (`POST /api/account/export`), and confirmed permanent account erasure (`DELETE /api/account`).
+- Verification passed: 10/10 backend unit tests (`qa_crud_operations.py`, `qa_bookmarks.py`), 12/12 frontend unit tests (`recentChatsHelper.test.js`, etc.), Vite production build passes with 0 errors.
+- Configured Knoprix commit identity is `siva169 <tvssphanindra@gmail.com>`.
+
 ## 2026-10-27 — Implement Drill-down Bookmark Organizer
 
 - Replaced the flat bookmark drawer with a 2-level drill-down Bookmark Organizer

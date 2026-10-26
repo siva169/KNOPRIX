@@ -7,6 +7,7 @@ import {
 import { useApp } from '../context/AppContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import api from '../api';
+import AccountModal from './AccountModal.jsx';
 
 export default function Navbar({
   onUpload,
@@ -25,6 +26,7 @@ export default function Navbar({
   const [suggestions, setSuggestions] = useState([]);
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
   const boxRef = useRef(null);
 
   useEffect(() => {
@@ -298,9 +300,15 @@ export default function Navbar({
           {theme === 'dark' ? <Sun className="w-4 h-4 text-secondary" /> : <Moon className="w-4 h-4 text-accent" />}
         </button>
         <div className="flex items-center gap-1 sm:gap-2 pl-1 sm:pl-2 border-l border-glass-borderDark">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-[10px] font-bold text-white">
+          <button
+            type="button"
+            onClick={() => setAccountModalOpen(true)}
+            title="Account & GDPR Privacy settings"
+            aria-label="Account and GDPR Privacy settings"
+            className="w-7 h-7 rounded-full bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-[10px] font-bold text-white hover:ring-2 hover:ring-secondary transition cursor-pointer"
+          >
             {initials}
-          </div>
+          </button>
           <button
             onClick={logout}
             title="Log out"
@@ -310,6 +318,12 @@ export default function Navbar({
           </button>
         </div>
       </div>
+
+      <AccountModal
+        open={accountModalOpen}
+        onClose={() => setAccountModalOpen(false)}
+        onNotify={notify}
+      />
     </header>
   );
 }

@@ -56,28 +56,45 @@ def _owned_conversation(db, user_id: str, conversation_id: str):
 @router.get("")
 def list_conversations(
     search: str = "",
+    projectId: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=50),
     offset: int = Query(default=0, ge=0),
     user=Depends(get_current_user),
     db=Depends(get_db),
 ):
     user_id = user["id"]
-    search_pattern = (
-        "%" + search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        if search.strip()
-        else None
-    )
-    search_clause = " AND LOWER(title) LIKE LOWER(?) ESCAPE '\\'" if search_pattern else ""
-    params = (user_id, search_pattern) if search_pattern else (user_id,)
-    total = db.execute(
-        "SELECT COUNT(*) AS total FROM conversations WHERE user_id = ?" + search_clause,
-        params,
-    ).fetchone()["total"]
-    rows = db.execute(
-        "SELECT * FROM conversations WHERE user_id = ?" + search_clause
-        + " ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?",
-        (*params, limit, offset),
-    ).fetchall()
+    conditions = ["c.user_id = ?"]
+    params = [user_id]
+
+    if projectId:
+        conditions.append("c.project_id = ?")
+        params.append(projectId)
+
+    if search.strip():
+        search_pattern = "%" + search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        conditions.append("""(
+            LOWER(c.title) LIKE LOWER(?) ESCAPE '\\'
+            OR EXISTS (
+                SELECT 1 FROM messages m
+                WHERE m.conversation_id = c.id
+                  AND LOWER(m.content) LIKE LOWER(?) ESCAPE '\\'
+            )
+        )""")
+        params.extend([search_pattern, search_pattern])
+
+    where_clause = " WHERE " + " AND ".join(conditions)
+
+    count_sql = f"SELECT COUNT(*) AS total FROM conversations c {where_clause}"
+    total = db.execute(count_sql, tuple(params)).fetchone()["total"]
+
+    list_sql = f"""
+        SELECT c.* FROM conversations c
+        {where_clause}
+        ORDER BY c.updated_at DESC, c.id DESC
+        LIMIT ? OFFSET ?
+    """
+    rows = db.execute(list_sql, (*params, limit, offset)).fetchall()
+
     return {
         "conversations": [_conversation_payload(row) for row in rows],
         "pagination": {"limit": limit, "offset": offset, "total": total},

@@ -44,6 +44,26 @@ export function AppProvider({ children }) {
     setProjects(data.projects);
   }, []);
 
+  const updateProject = useCallback(async (projectId, name) => {
+    const { data } = await api.put(`/projects/${projectId}`, { name });
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, name: data.project.name } : p)));
+    if (activeProject?.id === projectId) {
+      setActiveProject((prev) => (prev ? { ...prev, name: data.project.name } : prev));
+    }
+    return data.project;
+  }, [activeProject]);
+
+  const deleteProject = useCallback(async (projectId) => {
+    await api.delete(`/projects/${projectId}`);
+    setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    if (activeProject?.id === projectId) {
+      setActiveProject(null);
+      setActiveDocument(null);
+      setDocuments([]);
+      setBookmarks([]);
+    }
+  }, [activeProject]);
+
   const resetWorkspace = useCallback(() => {
     projectRequestSequence.current += 1;
     selectedProjectId.current = null;
@@ -87,6 +107,27 @@ export function AppProvider({ children }) {
       projectId === selectedProjectId.current
     ) setDocuments(data.documents);
   }, []);
+
+  const updateDocument = useCallback(async (documentId, fileName) => {
+    const { data } = await api.patch(`/documents/${documentId}`, { fileName });
+    setDocuments((prev) => prev.map((d) => (d.id === documentId ? { ...d, ...data.document } : d)));
+    if (activeDocument?.id === documentId) {
+      setActiveDocument((prev) => (prev ? { ...prev, ...data.document } : prev));
+    }
+    return data.document;
+  }, [activeDocument]);
+
+  const deleteDocument = useCallback(async (documentId) => {
+    await api.delete(`/documents/${documentId}`);
+    setDocuments((prev) => prev.filter((d) => d.id !== documentId));
+    setBookmarks((prev) => prev.filter((b) => b.document_id !== documentId));
+    if (activeDocument?.id === documentId) {
+      setActiveDocument(null);
+    }
+    setProjects((prev) => prev.map((p) => (
+      p.id === activeProject?.id ? { ...p, file_count: Math.max(0, (p.file_count || 1) - 1) } : p
+    )));
+  }, [activeDocument, activeProject]);
 
   const adjustDocumentHighlightCount = useCallback((documentId, amount) => {
     setDocuments((current) => current.map((doc) => (
@@ -170,7 +211,8 @@ export function AppProvider({ children }) {
     <AppContext.Provider
       value={{
         projects, activeProject, selectProject, fetchProjects, resetWorkspace,
-        documents, fetchDocuments,
+        updateProject, deleteProject,
+        documents, fetchDocuments, updateDocument, deleteDocument,
         adjustDocumentHighlightCount,
         adjustDocumentBookmarkCount,
         activeDocument, openDocument, navigateToLocation,

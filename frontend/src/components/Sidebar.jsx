@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Folder, FolderOpen, Plus, FileText, ChevronRight, ChevronDown,
   Bookmark, BarChart3, UploadCloud, X, Check, Clock3, LibraryBig,
-  Network, ArrowUpRight, PanelLeftClose, PanelLeftOpen, UsersRound
+  Network, ArrowUpRight, PanelLeftClose, PanelLeftOpen, UsersRound,
+  Pencil, Trash2, AlertTriangle, LoaderCircle
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import api from '../api';
@@ -13,7 +14,8 @@ export default function Sidebar({
   collapsed = false, onToggleCollapse,
 }) {
   const {
-    projects, activeProject, selectProject, fetchProjects, documents, openDocument,
+    projects, activeProject, selectProject, fetchProjects, updateProject, deleteProject,
+    documents, openDocument, updateDocument, deleteDocument,
     activeDocument, notify, getReadingProgress, bookmarks, navigateToLocation,
   } = useApp();
   const [creating, setCreating] = useState(false);
@@ -22,6 +24,73 @@ export default function Sidebar({
   const [savedHighlightsByDocument, setSavedHighlightsByDocument] = useState({});
   const [highlightLoadStatusByDocument, setHighlightLoadStatusByDocument] = useState({});
   const highlightRequestSequence = useRef({});
+
+  // CRUD dialog states
+  const [editingProject, setEditingProject] = useState(null);
+  const [editingProjectName, setEditingProjectName] = useState('');
+  const [deletingProject, setDeletingProject] = useState(null);
+  const [editingDoc, setEditingDoc] = useState(null);
+  const [editingDocName, setEditingDocName] = useState('');
+  const [deletingDoc, setDeletingDoc] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
+
+  const handleSaveProjectRename = async (e) => {
+    e.preventDefault();
+    if (!editingProject || !editingProjectName.trim()) return;
+    setActionBusy(true);
+    try {
+      await updateProject(editingProject.id, editingProjectName.trim());
+      notify(`Project renamed to "${editingProjectName.trim()}"`, 'success');
+      setEditingProject(null);
+    } catch (err) {
+      notify(err.response?.data?.detail || 'Failed to rename project', 'error');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleConfirmProjectDelete = async () => {
+    if (!deletingProject) return;
+    setActionBusy(true);
+    try {
+      await deleteProject(deletingProject.id);
+      notify(`Project "${deletingProject.name}" deleted`, 'info');
+      setDeletingProject(null);
+    } catch (err) {
+      notify(err.response?.data?.detail || 'Failed to delete project', 'error');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleSaveDocRename = async (e) => {
+    e.preventDefault();
+    if (!editingDoc || !editingDocName.trim()) return;
+    setActionBusy(true);
+    try {
+      await updateDocument(editingDoc.id, editingDocName.trim());
+      notify(`Document renamed to "${editingDocName.trim()}"`, 'success');
+      setEditingDoc(null);
+    } catch (err) {
+      notify(err.response?.data?.detail || 'Failed to rename document', 'error');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleConfirmDocDelete = async () => {
+    if (!deletingDoc) return;
+    setActionBusy(true);
+    try {
+      await deleteDocument(deletingDoc.id);
+      notify(`Document "${deletingDoc.file_name}" deleted`, 'info');
+      setDeletingDoc(null);
+    } catch (err) {
+      notify(err.response?.data?.detail || 'Failed to delete document', 'error');
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   const pdfDocs = documents.filter((d) => d.file_type === 'pdf');
   const otherDocs = documents.filter((d) => d.file_type !== 'pdf');
@@ -92,7 +161,7 @@ export default function Sidebar({
 
     return (
       <div key={doc.id}>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 group">
           <button
             type="button"
             onClick={() => {
@@ -110,6 +179,33 @@ export default function Sidebar({
             <FileText className="w-3.5 h-3.5 text-accent shrink-0" />
             <span className="truncate">{doc.file_name}</span>
           </button>
+          <div className="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingDoc(doc);
+                setEditingDocName(doc.file_name);
+              }}
+              aria-label={`Rename ${doc.file_name}`}
+              title="Rename document"
+              className="p-1 rounded text-ivory/50 hover:text-accent hover:bg-white/10"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeletingDoc(doc);
+              }}
+              aria-label={`Delete ${doc.file_name}`}
+              title="Delete document"
+              className="p-1 rounded text-ivory/50 hover:text-rose-300 hover:bg-rose-500/10"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => setExpandedSavedDocumentId(expanded ? null : doc.id)}
@@ -305,19 +401,51 @@ export default function Sidebar({
             {projects.map((proj) => {
               const active = activeProject?.id === proj.id;
               return (
-                <button
+                <div
                   key={proj.id}
-                  onClick={() => selectProject(proj.id)}
-                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs transition ${
+                  className={`group w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs transition ${
                     active ? 'bg-primary/20 text-secondary' : 'text-ivory/65 hover:bg-white/5 hover:text-ivory'
                   }`}
                 >
-                  <span className="flex items-center gap-2 min-w-0">
-                    <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-secondary shadow-[0_0_8px_rgba(242,211,138,0.8)]' : 'bg-ivory/25'}`} />
+                  <button
+                    type="button"
+                    onClick={() => selectProject(proj.id)}
+                    className="flex items-center gap-2 min-w-0 flex-1 text-left"
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-secondary shadow-[0_0_8px_rgba(242,211,138,0.8)]' : 'bg-ivory/25'}`} />
                     <span className="truncate">{proj.name}</span>
-                  </span>
-                  <span className="text-[10px] text-ivory/40">{proj.file_count}</span>
-                </button>
+                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingProject(proj);
+                          setEditingProjectName(proj.name);
+                        }}
+                        className="p-1 rounded text-ivory/40 hover:text-accent hover:bg-white/10"
+                        title={`Rename ${proj.name}`}
+                        aria-label={`Rename ${proj.name}`}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeletingProject(proj);
+                        }}
+                        className="p-1 rounded text-ivory/40 hover:text-rose-300 hover:bg-rose-500/10"
+                        title={`Delete ${proj.name}`}
+                        aria-label={`Delete ${proj.name}`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <span className="text-[10px] text-ivory/40 font-mono">{proj.file_count}</span>
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -394,24 +522,55 @@ export default function Sidebar({
             {projects.map((proj) => {
               const active = activeProject?.id === proj.id;
               return (
-                <motion.button
+                <div
                   key={proj.id}
-                  whileHover={{ x: 2 }}
-                  onClick={() => selectProject(proj.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition ${
+                  className={`group w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition ${
                     active
                       ? 'bg-gradient-to-r from-primary/25 to-accent/15 text-secondary border border-primary/40 shadow-lg shadow-primary/10'
                       : 'text-ivory/70 hover:bg-white/5'
                   }`}
                 >
-                  <span className="flex items-center gap-2 truncate">
-                    {active ? <FolderOpen className="w-4 h-4 text-secondary" /> : <Folder className="w-4 h-4 text-secondary/70" />}
+                  <button
+                    type="button"
+                    onClick={() => selectProject(proj.id)}
+                    className="flex items-center gap-2 truncate min-w-0 flex-1 text-left"
+                  >
+                    {active ? <FolderOpen className="w-4 h-4 text-secondary shrink-0" /> : <Folder className="w-4 h-4 text-secondary/70 shrink-0" />}
                     <span className="truncate">{proj.name}</span>
-                  </span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-ivory/60 font-mono">
-                    {proj.file_count}
-                  </span>
-                </motion.button>
+                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingProject(proj);
+                          setEditingProjectName(proj.name);
+                        }}
+                        className="p-1 rounded text-ivory/40 hover:text-accent hover:bg-white/10"
+                        title={`Rename ${proj.name}`}
+                        aria-label={`Rename ${proj.name}`}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeletingProject(proj);
+                        }}
+                        className="p-1 rounded text-ivory/40 hover:text-rose-300 hover:bg-rose-500/10"
+                        title={`Delete ${proj.name}`}
+                        aria-label={`Delete ${proj.name}`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/10 text-ivory/60 font-mono">
+                      {proj.file_count}
+                    </span>
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -456,6 +615,152 @@ export default function Sidebar({
         </button>
       </div>
       </aside>
+
+      {/* Project Rename Modal */}
+      <AnimatePresence>
+        {editingProject && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-glass-borderDark bg-midnight-panel p-5 text-ivory shadow-2xl">
+              <h3 className="text-sm font-semibold">Rename Project</h3>
+              <form onSubmit={handleSaveProjectRename} className="mt-3 space-y-3">
+                <input
+                  autoFocus
+                  value={editingProjectName}
+                  onChange={(e) => setEditingProjectName(e.target.value)}
+                  className="w-full bg-midnight-deep border border-glass-borderDark rounded-xl px-3 py-2 text-xs text-ivory focus:outline-none focus:border-secondary"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingProject(null)}
+                    disabled={actionBusy}
+                    className="px-3 py-1.5 rounded-xl border border-glass-borderDark text-xs text-ivory/60 hover:bg-white/5"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionBusy || !editingProjectName.trim()}
+                    className="px-3 py-1.5 rounded-xl bg-secondary text-midnight-deep text-xs font-bold hover:brightness-110 flex items-center gap-1.5"
+                  >
+                    {actionBusy && <LoaderCircle className="w-3.5 h-3.5 animate-spin" />}
+                    <span>{actionBusy ? 'Saving…' : 'Save'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Project Delete Modal */}
+      <AnimatePresence>
+        {deletingProject && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-rose-500/30 bg-midnight-panel p-5 text-ivory shadow-2xl space-y-3">
+              <div className="flex items-center gap-2 text-rose-400">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <h3 className="text-sm font-semibold">Delete Project</h3>
+              </div>
+              <p className="text-xs text-ivory/70 leading-relaxed">
+                Delete <span className="font-semibold text-ivory">"{deletingProject.name}"</span>? All associated files, bookmarks, and index data will be purged.
+              </p>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeletingProject(null)}
+                  disabled={actionBusy}
+                  className="px-3 py-1.5 rounded-xl border border-glass-borderDark text-xs text-ivory/60 hover:bg-white/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmProjectDelete}
+                  disabled={actionBusy}
+                  className="px-3 py-1.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-500 flex items-center gap-1.5"
+                >
+                  {actionBusy && <LoaderCircle className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{actionBusy ? 'Deleting…' : 'Delete Project'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Document Rename Modal */}
+      <AnimatePresence>
+        {editingDoc && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-glass-borderDark bg-midnight-panel p-5 text-ivory shadow-2xl">
+              <h3 className="text-sm font-semibold">Rename Document</h3>
+              <form onSubmit={handleSaveDocRename} className="mt-3 space-y-3">
+                <input
+                  autoFocus
+                  value={editingDocName}
+                  onChange={(e) => setEditingDocName(e.target.value)}
+                  className="w-full bg-midnight-deep border border-glass-borderDark rounded-xl px-3 py-2 text-xs text-ivory focus:outline-none focus:border-accent"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingDoc(null)}
+                    disabled={actionBusy}
+                    className="px-3 py-1.5 rounded-xl border border-glass-borderDark text-xs text-ivory/60 hover:bg-white/5"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={actionBusy || !editingDocName.trim()}
+                    className="px-3 py-1.5 rounded-xl bg-accent text-midnight-deep text-xs font-bold hover:brightness-110 flex items-center gap-1.5"
+                  >
+                    {actionBusy && <LoaderCircle className="w-3.5 h-3.5 animate-spin" />}
+                    <span>{actionBusy ? 'Saving…' : 'Save'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Document Delete Modal */}
+      <AnimatePresence>
+        {deletingDoc && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-rose-500/30 bg-midnight-panel p-5 text-ivory shadow-2xl space-y-3">
+              <div className="flex items-center gap-2 text-rose-400">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <h3 className="text-sm font-semibold">Delete Document</h3>
+              </div>
+              <p className="text-xs text-ivory/70 leading-relaxed">
+                Delete <span className="font-semibold text-ivory">"{deletingDoc.file_name}"</span>? The file and its annotations will be removed.
+              </p>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeletingDoc(null)}
+                  disabled={actionBusy}
+                  className="px-3 py-1.5 rounded-xl border border-glass-borderDark text-xs text-ivory/60 hover:bg-white/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDocDelete}
+                  disabled={actionBusy}
+                  className="px-3 py-1.5 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-500 flex items-center gap-1.5"
+                >
+                  {actionBusy && <LoaderCircle className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{actionBusy ? 'Deleting…' : 'Delete Document'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

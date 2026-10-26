@@ -376,3 +376,12 @@ For the approved reader slice, the source checklists remain:
 
 - `../checklists/016-vibecoding-polish-checklist.md`
 - `../checklists/017-vibecoding-fix-checklist.md`
+
+## 12. Core CRUD, Media & Workspace System Upgrade (Oct 2026)
+
+- **Document CRUD & File Portability**: Implemented `PATCH /api/documents/{id}` for filename renaming with project index invalidation; added UI rename and delete confirmation modals in `Sidebar.jsx` and `DashboardOverview.jsx`; added original file download in `PDFToolbar.jsx`.
+- **Project CRUD & Cascading File Purge**: Added UI rename and delete modals for projects; enhanced backend `DELETE /api/projects/{id}` to clean up physical document files on disk/S3 and revoke social shares.
+- **Multi-Format Media Viewer**: Integrated responsive, zoomable image rendering (`png`, `jpg`, `jpeg`, `webp`, `svg`) with zoom controls and collapsible OCR extracted text in `BrowserPDFViewer.jsx`.
+- **AI Wing Controls**: Added `AbortController` stop button for streaming; auto-expanding `<textarea>` (supporting `Enter` to send, `Shift+Enter` for newline); one-click response copy button; response regenerate button; bulk "Authorize All / Revoke All" document toggle; Quiz retake button; Flashcards shuffle button.
+- **Recent Chats Panel**: Added full-text message content search; "This Project" vs "All Projects" filter toggle; chronological grouping (*Today*, *Yesterday*, *Previous 7 Days*, *Older*); custom in-app delete confirmation modal.
+- **Account & GDPR Governance**: Added `AccountModal.jsx` triggered from user avatar; downloads GDPR ZIP data export (`POST /api/account/export`); executes confirmed cascading account deletion (`DELETE /api/account`).

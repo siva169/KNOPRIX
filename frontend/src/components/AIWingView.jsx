@@ -4,7 +4,7 @@ import {
   Sparkles, MessageSquare, Layers, Share2, Check, ShieldCheck, ShieldAlert,
   Send, KeyRound, RefreshCw, Trash2, ChevronRight, BookOpen, Clock3, Plus,
   HelpCircle, Lightbulb, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Eye,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, Copy, RotateCcw, Shuffle, Square
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import api, { getAccessToken } from '../api';
@@ -109,6 +109,9 @@ export default function AIWingView({ onNavigateToDocument }) {
   const [showThought, setShowThought] = useState(false);
   const [streamError, setStreamError] = useState(null);
   const [contextConsentQuestion, setContextConsentQuestion] = useState(null);
+  const [copiedMessageId, setCopiedMessageId] = useState(null);
+  const [bulkGranting, setBulkGranting] = useState(false);
+  const streamAbortRef = useRef(null);
   const messagesEndRef = useRef(null);
   const conversationProjectMatches = !activeConversation?.projectId
     || activeConversation.projectId === activeProject?.id;
@@ -336,8 +339,12 @@ export default function AIWingView({ onNavigateToDocument }) {
       // streamed request was rejected with 401.
       const token = await getAccessToken();
       const base = api.defaults.baseURL || '/api';
+      const controller = new AbortController();
+      streamAbortRef.current = controller;
+
       const response = await fetch(`${base}/chat/stream`, {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -460,6 +467,10 @@ export default function AIWingView({ onNavigateToDocument }) {
       }
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
+      if (err.name === 'AbortError') {
+        notify('Response generation stopped', 'info');
+        return;
+      }
       const message = err.message || 'Unknown streaming error';
       setStreamError(message);
       notify(`Streaming error: ${message}`, 'error');
@@ -474,6 +485,7 @@ export default function AIWingView({ onNavigateToDocument }) {
         }
       ]);
     } finally {
+      streamAbortRef.current = null;
       setStreaming(false);
       setStreamingContent('');
       setStreamingThought('');
@@ -509,6 +521,62 @@ export default function AIWingView({ onNavigateToDocument }) {
 
   const handleCloseChatContext = () => {
     if (!streaming) setContextConsentQuestion(null);
+  };
+
+  const stopGenerating = () => {
+    if (streamAbortRef.current) {
+      streamAbortRef.current.abort();
+    }
+  };
+
+  const copyMessageContent = async (msgId, text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedMessageId(msgId);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+      notify('Copied to clipboard', 'success');
+    } catch {
+      notify('Could not copy text', 'error');
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (streaming) return;
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    if (lastUser?.content) {
+      await streamChat(lastUser.content);
+    }
+  };
+
+  const handleBulkGrantToggle = async () => {
+    if (bulkGranting || !documents.length) return;
+    const allGranted = documents.every((d) => d.ai_granted);
+    const targetStatus = !allGranted;
+    setBulkGranting(true);
+    try {
+      await Promise.all(
+        documents
+          .filter((d) => !!d.ai_granted !== targetStatus)
+          .map((d) => api.post(`/documents/${d.id}/grant`, { granted: targetStatus }))
+      );
+      notify(targetStatus ? 'All documents granted AI access' : 'All document AI accesses revoked', 'info');
+      if (activeProject?.id) {
+        await fetchDocuments(activeProject.id);
+      }
+    } catch (err) {
+      notify('Could not update all document authorizations', 'error');
+    } finally {
+      setBulkGranting(false);
+    }
+  };
+
+  const handleShuffleFlashcards = () => {
+    if (!currentArtifact?.cards?.length) return;
+    const shuffled = [...currentArtifact.cards].sort(() => Math.random() - 0.5);
+    setCurrentArtifact((prev) => ({ ...prev, cards: shuffled }));
+    setActiveCardIndex(0);
+    setCardFlipped(false);
+    notify('Flashcards shuffled', 'info');
   };
 
   const handleRevokeProviderDocument = async (document) => {
@@ -633,6 +701,21 @@ export default function AIWingView({ onNavigateToDocument }) {
           id="ai-wing-sidebar-documents"
           className={`flex-1 overflow-y-auto p-3 space-y-2 ${sidebarCollapsed ? 'hidden' : ''}`}
         >
+          {documents.length > 0 && (
+            <div className="flex items-center justify-between pb-1.5 px-1 border-b border-glass-borderDark">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-ivory/50">
+                Docs ({documents.length})
+              </span>
+              <button
+                type="button"
+                onClick={handleBulkGrantToggle}
+                disabled={bulkGranting}
+                className="text-[10px] font-semibold text-accent hover:underline disabled:opacity-50"
+              >
+                {bulkGranting ? 'Updating…' : authorizedDocs.length === documents.length ? 'Revoke All' : 'Authorize All'}
+              </button>
+            </div>
+          )}
           {documents.length === 0 ? (
             <div className="text-center py-8 px-4 text-xs text-ivory/50">
               No documents in this project. Upload documents to empower the AI Wing.
@@ -953,10 +1036,46 @@ export default function AIWingView({ onNavigateToDocument }) {
                         onDocumentCitation={handleJumpToCitation}
                       />
                     </div>
-                    {msg.searchAvailable && (
-                      <p className="mt-2 text-[10px] text-accent/75">
-                        {msg.searchUsed ? 'Live web sources used' : 'Live web search was available but not used'}
-                      </p>
+                    {msg.role === 'assistant' && (
+                      <div className="mt-3 flex items-center justify-between border-t border-glass-borderDark/50 pt-2 text-[11px] text-ivory/50">
+                        <div className="flex items-center gap-2">
+                          {msg.searchAvailable && (
+                            <span className="text-[10px] text-accent/75">
+                              {msg.searchUsed ? 'Live web sources used' : 'Live search available'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => copyMessageContent(msg.id, msg.content)}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-white/10 hover:text-ivory transition text-[10px]"
+                            title="Copy response to clipboard"
+                          >
+                            {copiedMessageId === msg.id ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-400" />
+                                <span className="text-emerald-400">Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleRegenerate}
+                            disabled={streaming}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-white/10 hover:text-secondary transition text-[10px] disabled:opacity-40"
+                            title="Regenerate answer"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Regenerate</span>
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -994,26 +1113,50 @@ export default function AIWingView({ onNavigateToDocument }) {
 
             {/* Chat Input Bar */}
             <div className="p-3 sm:p-4 border-t border-glass-borderDark bg-midnight-panel/80">
-              <div className="max-w-3xl mx-auto flex items-center gap-2">
-                <input
-                  type="text"
-                  aria-label="Ask AI anything"
-                  value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSendChat(); }}
-                  disabled={streaming}
-                  placeholder="Ask AI anything…"
-                  className="flex-1 bg-midnight-deep border border-glass-borderDark rounded-xl px-4 py-2.5 text-sm text-ivory placeholder:text-ivory/40 focus:outline-none focus:border-accent transition shadow-inner"
-                />
-                <button
-                  onClick={handleSendChat}
-                  disabled={streaming || !question.trim()}
-                  aria-label="Ask AI"
-                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-semibold shadow-lg shadow-primary/30 hover:opacity-95 disabled:opacity-40 transition flex items-center gap-1.5"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Ask AI</span>
-                </button>
+              <div className="max-w-3xl mx-auto flex items-end gap-2">
+                <div className="flex-1 bg-midnight-deep border border-glass-borderDark rounded-xl px-3 py-2 text-sm text-ivory shadow-inner focus-within:border-accent transition">
+                  <textarea
+                    rows={1}
+                    aria-label="Ask AI anything"
+                    value={question}
+                    onChange={(e) => {
+                      setQuestion(e.target.value);
+                      e.target.style.height = 'auto';
+                      e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendChat();
+                      }
+                    }}
+                    disabled={streaming}
+                    placeholder="Ask AI anything… (Enter to send, Shift+Enter for newline)"
+                    className="w-full bg-transparent resize-none text-sm text-ivory placeholder:text-ivory/40 focus:outline-none max-h-32 overflow-y-auto leading-relaxed block"
+                  />
+                </div>
+                {streaming ? (
+                  <button
+                    type="button"
+                    onClick={stopGenerating}
+                    aria-label="Stop generating response"
+                    className="px-4 py-2.5 rounded-xl bg-rose-500/20 border border-rose-500/50 text-rose-300 hover:bg-rose-500/30 text-xs font-semibold shadow-lg transition flex items-center gap-1.5 shrink-0"
+                  >
+                    <Square className="w-3.5 h-3.5 fill-current" />
+                    <span>Stop</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSendChat}
+                    disabled={streaming || !question.trim()}
+                    aria-label="Ask AI"
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary to-accent text-white text-xs font-semibold shadow-lg shadow-primary/30 hover:opacity-95 disabled:opacity-40 transition flex items-center gap-1.5 shrink-0"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Ask AI</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1161,6 +1304,8 @@ export default function AIWingView({ onNavigateToDocument }) {
                           }}
                           disabled={activeCardIndex === 0}
                           className="p-2 rounded-xl bg-white/5 border border-glass-borderDark disabled:opacity-30 hover:bg-white/10"
+                          title="Previous card"
+                          aria-label="Previous card"
                         >
                           <ArrowLeft className="w-4 h-4" />
                         </button>
@@ -1175,8 +1320,19 @@ export default function AIWingView({ onNavigateToDocument }) {
                           }}
                           disabled={activeCardIndex === currentArtifact.cards.length - 1}
                           className="p-2 rounded-xl bg-white/5 border border-glass-borderDark disabled:opacity-30 hover:bg-white/10"
+                          title="Next card"
+                          aria-label="Next card"
                         >
                           <ArrowRight className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleShuffleFlashcards}
+                          className="p-2 rounded-xl bg-white/5 border border-glass-borderDark hover:bg-white/10 text-ivory/80 transition ml-2"
+                          title="Shuffle flashcards"
+                          aria-label="Shuffle flashcards"
+                        >
+                          <Shuffle className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -1185,6 +1341,20 @@ export default function AIWingView({ onNavigateToDocument }) {
                   {/* Quiz View */}
                   {currentArtifact.artifactType === 'quiz' && currentArtifact.questions && (
                     <div className="space-y-4">
+                      <div className="flex items-center justify-between px-1 pb-1">
+                        <span className="text-xs text-ivory/60 font-mono">
+                          {Object.keys(quizAnswers).length} of {currentArtifact.questions.length} answered
+                        </span>
+                        {Object.keys(quizAnswers).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setQuizAnswers({})}
+                            className="px-2.5 py-1 rounded-lg bg-secondary/15 text-secondary border border-secondary/30 text-[11px] font-semibold hover:bg-secondary/25 transition flex items-center gap-1.5"
+                          >
+                            <RotateCcw className="w-3 h-3" /> Retake Quiz
+                          </button>
+                        )}
+                      </div>
                       {currentArtifact.questions.map((q, qIndex) => {
                         const selected = quizAnswers[q.id];
                         const isSubmitted = selected !== undefined;
@@ -1300,6 +1470,7 @@ export default function AIWingView({ onNavigateToDocument }) {
       <RecentChatsDialog
         open={showRecentChats}
         activeConversationId={activeConversation?.id || null}
+        activeProjectId={activeProject?.id || null}
         onClose={() => setShowRecentChats(false)}
         onNewChat={startNewChat}
         onSelectConversation={openConversation}

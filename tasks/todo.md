@@ -5,6 +5,17 @@ current academic prototype toward a trustworthy consumer product. It separates
 verified current capabilities from future work. A checkbox means the work has
 been implemented and verified; planning or partial wiring does not count.
 
+- [x] Slice: Core CRUD, Media Viewer, AI Wing & Workspace Fixes
+  - Acceptance: Complete repository-internal fixes for missing operations and faulty features:
+    1. Document CRUD: Added `PATCH /api/documents/{id}` for document rename; added UI rename & delete modals with confirmed cascading removal in `Sidebar.jsx` and `DashboardOverview.jsx`; added Download button in `PDFToolbar.jsx`.
+    2. Project CRUD: Added UI rename & delete modals in `Sidebar.jsx`; enhanced `DELETE /api/projects/{id}` to purge physical files from disk/S3 and revoke social shares.
+    3. Multi-Format Media Viewer: Integrated dedicated image renderer (`png`, `jpg`, `jpeg`, `webp`, `svg`) in `BrowserPDFViewer.jsx` with zoom controls, smooth centering, and collapsible extracted OCR text.
+    4. AI Wing Controls: Integrated `AbortController` stop generating button; auto-expanding `<textarea>` supporting Enter to send and Shift+Enter for newline; response Copy button; answer Regenerate button; bulk Authorize All / Revoke All toggle for project documents; Retake Quiz button; Shuffle Flashcards button.
+    5. Recent Chats Panel: Upgraded backend to search message content; added "This Project" vs "All Projects" filter toggle; chronological date grouping (*Today*, *Yesterday*, *Previous 7 Days*, *Older*); in-app delete confirmation modal.
+    6. Account & GDPR Governance: Built `AccountModal.jsx` connected to avatar in `Navbar.jsx`; provides profile info, GDPR ZIP data export (`POST /api/account/export`), and confirmed permanent account erasure (`DELETE /api/account`).
+  - Verify: 10 backend tests pass (`qa_crud_operations.py`, `qa_bookmarks.py`), 12 frontend unit tests pass, Vite production build succeeds with 0 errors.
+  - Done 2026-10-27.
+
 - [x] Slice: Drill-down Bookmark Organizer
   - Acceptance: Clicking the bottom-left bookmark icon opens a right-side panel
     with a 2-level drill-down organizer. Level 1 lists all user documents in the

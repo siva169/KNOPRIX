@@ -3,9 +3,10 @@ import {
   ZoomIn, ZoomOut, ChevronLeft, ChevronRight, BookOpen, Layers, Printer,
   Bookmark, BookmarkCheck, Eraser, MessageSquare, Maximize2, Minimize2,
   MousePointer2, Square, Type, Highlighter, Underline, Strikethrough, StickyNote,
-  MessageSquareText, Settings2, MoreHorizontal, PanelLeft, ScanText
+  MessageSquareText, Settings2, MoreHorizontal, PanelLeft, ScanText, Download
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
+import api from '../api';
 
 const ANNOTATION_TOOLS = [
   { id: 'yellow', label: 'Yellow Highlighter', shortcut: '1', icon: Highlighter, color: '#fde047' },
@@ -28,6 +29,28 @@ export default function PDFToolbar({
   const { currentPage, setCurrentPage, zoomLevel, setZoomLevel, activeDocument } = useApp();
   const [annotationMenuOpen, setAnnotationMenuOpen] = React.useState(false);
   const [viewMenuOpen, setViewMenuOpen] = React.useState(false);
+  const [downloading, setDownloading] = React.useState(false);
+
+  const handleDownloadOriginal = async () => {
+    if (!activeDocument?.id || downloading) return;
+    setDownloading(true);
+    try {
+      const response = await api.get(`/documents/${activeDocument.id}/stream`, { responseType: 'blob' });
+      const blob = new Blob([response.data]);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = activeDocument.file_name || 'document';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download document', err);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const total = numPages || 1;
   const progress = Math.round((Math.min(currentPage, total) / total) * 100);
@@ -284,6 +307,15 @@ export default function PDFToolbar({
             <PanelLeft className="w-3.5 h-3.5" />
           </button>
         )}
+        <button
+          onClick={handleDownloadOriginal}
+          disabled={downloading}
+          className="p-1.5 rounded-xl bg-midnight-panel hover:bg-white/10 text-ivory/70 border border-glass-borderDark transition disabled:opacity-40"
+          title="Download original file"
+          aria-label="Download original file"
+        >
+          <Download className="w-3.5 h-3.5" />
+        </button>
         <button
           onClick={() => { window.print(); }}
           className="p-1.5 rounded-xl bg-midnight-panel hover:bg-white/10 text-ivory/70 border border-glass-borderDark transition"

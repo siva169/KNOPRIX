@@ -482,3 +482,20 @@ of scope.
 2. **Level 1 (Documents view)**: Render list of all documents with file icons, names, and bookmark count badges. Implement search filtering for documents.
 3. **Level 2 (Document bookmarks view)**: Render selected document header, back button, document-specific search, newest-first bookmarks with edit/delete, and jump action.
 4. **Verification**: Verify responsive behavior (390px, 425px, 768px, 1024px), empty states, keyboard/touch access, and run `npm run build` + backend tests.
+
+## Feature Slice: Core CRUD, Media Viewer, AI Wing & Workspace Fixes (2026-10-27)
+
+### Scope and goals
+- Complete repository-internal code diagnosis and implementation for missing CRUD operations and faulty features.
+- Provide Document rename, delete modals, and original file download.
+- Provide Project rename and delete modals with cascading disk/storage cleanup.
+- Add multi-format image viewer (`png`, `jpg`, `jpeg`, `webp`, `svg`) with zoom controls and OCR text fallback.
+- Enhance AI Wing: `AbortController` streaming stop button, auto-expanding `<textarea>` (Shift+Enter newline support), answer copy, answer regenerate, bulk document permissions toggle, quiz retake, and flashcard shuffle.
+- Enhance Recent Chats: message content search, project filter toggle, chronological date grouping (*Today*, *Yesterday*, *Previous 7 Days*, *Older*), and custom in-app delete modal.
+- Add Account and GDPR privacy modal: profile details, GDPR ZIP export (`POST /api/account/export`), and verified account deletion (`DELETE /api/account`).
+
+### Plan & Execution
+1. **Backend routes & cleanups**: Added `PATCH /api/documents/{id}`; updated `DELETE /api/projects/{id}` for physical file unlinking and share revocation; updated `GET /api/chat/conversations` for project scoping and full-text message content search.
+2. **Backend unit tests**: Authored `backend/qa_crud_operations.py` (3 tests passed). All 10 backend tests pass.
+3. **Frontend components**: Updated `Sidebar.jsx`, `DashboardOverview.jsx`, `PDFToolbar.jsx`, `BrowserPDFViewer.jsx`, `AIWingView.jsx`, `RecentChatsDialog.jsx`, `Navbar.jsx`, and created `AccountModal.jsx` and `recentChatsHelper.js`.
+4. **Frontend unit tests & build**: 12 unit tests pass (`recentChatsHelper.test.js`, `bookmarkOrganizer.test.js`, etc.), Vite production build succeeds with 0 errors.

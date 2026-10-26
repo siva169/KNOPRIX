@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Clock3, LoaderCircle, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { Clock3, LoaderCircle, Pencil, Plus, Search, Trash2, X, AlertTriangle, Filter } from 'lucide-react';
 import api from '../api';
 
 const PAGE_SIZE = 20;
@@ -18,9 +18,12 @@ const formatUpdatedAt = (value) => {
   }).format(date);
 };
 
+import { groupConversationsByDate } from '../recentChatsHelper.js';
+
 export default function RecentChatsDialog({
   open,
   activeConversationId,
+  activeProjectId = null,
   onClose,
   onNewChat,
   onSelectConversation,
@@ -28,6 +31,7 @@ export default function RecentChatsDialog({
   onNotify,
 }) {
   const [search, setSearch] = useState('');
+  const [filterProjectOnly, setFilterProjectOnly] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -39,6 +43,8 @@ export default function RecentChatsDialog({
   const [renameTarget, setRenameTarget] = useState(null);
   const [renameTitle, setRenameTitle] = useState('');
   const [savingRename, setSavingRename] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deletingChat, setDeletingChat] = useState(false);
   const searchRef = useRef(null);
   const renameRef = useRef(null);
   const panelRef = useRef(null);
@@ -79,7 +85,12 @@ export default function RecentChatsDialog({
       setLoadError('');
       try {
         const { data } = await api.get('/chat/conversations', {
-          params: { search: search.trim(), limit: PAGE_SIZE, offset: 0 },
+          params: {
+            search: search.trim(),
+            limit: PAGE_SIZE,
+            offset: 0,
+            ...(filterProjectOnly && activeProjectId ? { projectId: activeProjectId } : {}),
+          },
           signal: controller.signal,
         });
         if (!controller.signal.aborted) {
@@ -100,12 +111,13 @@ export default function RecentChatsDialog({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [open, search, retryKey]);
+  }, [open, search, retryKey, filterProjectOnly, activeProjectId]);
 
   const handleKeyDown = (event) => {
     if (event.key === 'Escape') {
       event.preventDefault();
-      if (renameTarget) setRenameTarget(null);
+      if (deleteTarget) setDeleteTarget(null);
+      else if (renameTarget) setRenameTarget(null);
       else onClose();
       return;
     }
@@ -172,23 +184,27 @@ export default function RecentChatsDialog({
     }
   };
 
-  const deleteConversation = async (conversation) => {
-    if (!window.confirm(`Delete “${conversation.title}” and its messages? This cannot be undone.`)) {
-      return;
-    }
-    setBusyId(conversation.id);
+  const deleteConversation = (conversation) => {
+    setDeleteTarget(conversation);
+    setActionError('');
+  };
+
+  const handleConfirmDeleteChat = async () => {
+    if (!deleteTarget) return;
+    setDeletingChat(true);
     setActionError('');
     try {
-      await api.delete(`/chat/conversations/${conversation.id}`);
-      setConversations((current) => current.filter((item) => item.id !== conversation.id));
+      await api.delete(`/chat/conversations/${deleteTarget.id}`);
+      setConversations((current) => current.filter((item) => item.id !== deleteTarget.id));
       setTotal((current) => Math.max(0, current - 1));
       searchRef.current?.focus();
       onNotify?.('Chat deleted', 'success');
-      if (conversation.id === activeConversationId) onConversationDeleted();
+      if (deleteTarget.id === activeConversationId) onConversationDeleted();
+      setDeleteTarget(null);
     } catch (error) {
       setActionError(errorText(error));
     } finally {
-      setBusyId(null);
+      setDeletingChat(false);
     }
   };
 
@@ -201,6 +217,7 @@ export default function RecentChatsDialog({
           search: search.trim(),
           limit: PAGE_SIZE,
           offset: conversations.length,
+          ...(filterProjectOnly && activeProjectId ? { projectId: activeProjectId } : {}),
         },
       });
       setConversations((current) => [...current, ...(data.conversations || [])]);
@@ -238,7 +255,46 @@ export default function RecentChatsDialog({
           }}
         >
           <AnimatePresence mode="wait">
-            {renameTarget ? (
+            {deleteTarget ? (
+              <motion.section
+                key="delete"
+                ref={panelRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="delete-chat-title"
+                onKeyDown={handleKeyDown}
+                className="my-auto w-full max-w-md rounded-2xl border border-rose-500/35 bg-midnight-panel p-5 text-ivory shadow-2xl space-y-3"
+                {...panelMotion}
+              >
+                <div className="flex items-center gap-2 text-rose-400">
+                  <AlertTriangle className="h-5 w-5 shrink-0" />
+                  <h2 id="delete-chat-title" className="text-base font-semibold">Delete Chat</h2>
+                </div>
+                <p className="text-xs text-ivory/70 leading-relaxed">
+                  Delete <span className="font-semibold text-ivory">“{deleteTarget.title || 'Untitled chat'}”</span> and its messages? This action cannot be undone.
+                </p>
+                {actionError && <p className="text-xs text-rose-300" role="alert">{actionError}</p>}
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    disabled={deletingChat}
+                    onClick={() => setDeleteTarget(null)}
+                    className="min-h-10 rounded-xl border border-glass-borderDark px-4 text-xs font-semibold text-ivory/75 hover:bg-white/5"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deletingChat}
+                    onClick={handleConfirmDeleteChat}
+                    className="min-h-10 rounded-xl bg-rose-600 px-4 text-xs font-bold text-white hover:bg-rose-500 flex items-center gap-1.5"
+                  >
+                    {deletingChat && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+                    <span>{deletingChat ? 'Deleting…' : 'Delete Chat'}</span>
+                  </button>
+                </div>
+              </motion.section>
+            ) : renameTarget ? (
               <motion.section
                 key="rename"
                 ref={panelRef}
@@ -331,10 +387,25 @@ export default function RecentChatsDialog({
                       ref={searchRef}
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Search titles"
+                      placeholder="Search titles and messages…"
                       className="min-h-11 w-full rounded-xl border border-glass-borderDark bg-midnight-deep pl-10 pr-3 text-sm text-ivory placeholder:text-ivory/40 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30"
                     />
                   </label>
+                  {activeProjectId && (
+                    <button
+                      type="button"
+                      onClick={() => setFilterProjectOnly((prev) => !prev)}
+                      className={`inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition ${
+                        filterProjectOnly
+                          ? 'border-secondary bg-secondary/15 text-secondary shadow-sm shadow-secondary/10'
+                          : 'border-glass-borderDark bg-white/5 text-ivory/60 hover:text-ivory'
+                      }`}
+                      title={filterProjectOnly ? 'Showing chats for current project only' : 'Showing chats across all projects'}
+                    >
+                      <Filter className="w-3.5 h-3.5" />
+                      <span>{filterProjectOnly ? 'This Project' : 'All Projects'}</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleNewChat}
@@ -394,58 +465,67 @@ export default function RecentChatsDialog({
                       </p>
                     </div>
                   ) : (
-                    <ul className="space-y-2" aria-label="Saved conversations">
-                      {conversations.map((conversation) => (
-                        <li
-                          key={conversation.id}
-                          className={`group flex items-center gap-2 rounded-xl border p-2 transition-colors ${
-                            conversation.id === activeConversationId
-                              ? 'border-accent/35 bg-accent/10'
-                              : 'border-glass-borderDark bg-midnight-deep/55 hover:border-accent/25'
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => openConversation(conversation)}
-                            disabled={busyId !== null}
-                            aria-current={conversation.id === activeConversationId ? 'page' : undefined}
-                            className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-lg px-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary disabled:opacity-60"
-                          >
-                            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-accent/20 bg-accent/10 text-accent">
-                              {busyId === conversation.id
-                                ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
-                                : <Clock3 className="h-4 w-4" aria-hidden="true" />}
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium text-ivory">{conversation.title || 'New chat'}</span>
-                              <time className="mt-1 block text-[11px] text-ivory/45" dateTime={conversation.updatedAt}>
-                                Updated {formatUpdatedAt(conversation.updatedAt)}
-                              </time>
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={`Rename ${conversation.title || 'New chat'}`}
-                            title="Rename chat"
-                            disabled={busyId !== null}
-                            onClick={(event) => startRename(event, conversation)}
-                            className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ivory/50 hover:bg-white/10 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary disabled:opacity-40"
-                          >
-                            <Pencil className="h-4 w-4" aria-hidden="true" />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={`Delete ${conversation.title || 'New chat'}`}
-                            title="Delete chat"
-                            disabled={busyId !== null}
-                            onClick={() => deleteConversation(conversation)}
-                            className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ivory/50 hover:bg-rose-400/10 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary disabled:opacity-40"
-                          >
-                            <Trash2 className="h-4 w-4" aria-hidden="true" />
-                          </button>
-                        </li>
+                    <div className="space-y-4" aria-label="Saved conversations">
+                      {groupConversationsByDate(conversations).map((group) => (
+                        <div key={group.title} className="space-y-1.5">
+                          <p className="text-[10px] uppercase font-mono tracking-wider text-ivory/45 px-1 font-semibold">
+                            {group.title}
+                          </p>
+                          <ul className="space-y-1.5">
+                            {group.items.map((conversation) => (
+                              <li
+                                key={conversation.id}
+                                className={`group flex items-center gap-2 rounded-xl border p-2 transition-colors ${
+                                  conversation.id === activeConversationId
+                                    ? 'border-accent/35 bg-accent/10'
+                                    : 'border-glass-borderDark bg-midnight-deep/55 hover:border-accent/25'
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => openConversation(conversation)}
+                                  disabled={busyId !== null}
+                                  aria-current={conversation.id === activeConversationId ? 'page' : undefined}
+                                  className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-lg px-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary disabled:opacity-60"
+                                >
+                                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-accent/20 bg-accent/10 text-accent">
+                                    {busyId === conversation.id
+                                      ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                      : <Clock3 className="h-4 w-4" aria-hidden="true" />}
+                                  </span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-sm font-medium text-ivory">{conversation.title || 'New chat'}</span>
+                                    <time className="mt-1 block text-[11px] text-ivory/45" dateTime={conversation.updatedAt}>
+                                      Updated {formatUpdatedAt(conversation.updatedAt)}
+                                    </time>
+                                  </span>
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label={`Rename ${conversation.title || 'New chat'}`}
+                                  title="Rename chat"
+                                  disabled={busyId !== null}
+                                  onClick={(event) => startRename(event, conversation)}
+                                  className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ivory/50 hover:bg-white/10 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary disabled:opacity-40"
+                                >
+                                  <Pencil className="h-4 w-4" aria-hidden="true" />
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label={`Delete ${conversation.title || 'New chat'}`}
+                                  title="Delete chat"
+                                  disabled={busyId !== null}
+                                  onClick={() => deleteConversation(conversation)}
+                                  className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ivory/50 hover:bg-rose-400/10 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary disabled:opacity-40"
+                                >
+                                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   )}
 
                   {!loading && !loadError && conversations.length > 0 && conversations.length < total && (
