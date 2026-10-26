@@ -117,6 +117,32 @@ your documents.
   page/text anchor without loading every document's highlights at startup.
 - Any backend behavior change is proposed and approved separately.
 
+### Reading Desk - region selection annotations
+
+- In an owned PDF or PPT/PPTX reader, Region Selection mode captures one
+  page/slide rectangle per mouse or touch drag. It is separate from text
+  selection and is unavailable in read-only shared views.
+- The rectangle is stored as normalized page-local `x`, `y`, `width`, and
+  `height` values in the range 0..1, with positive width/height and
+  `x + width <= 1`, `y + height <= 1`. The API rejects non-finite,
+  incomplete, zero-area, or out-of-page rectangles.
+- The action popup offers Copy, Bookmark, and Highlight. Copy writes a PNG
+  crop to the clipboard and reports unsupported/denied clipboard operations.
+- A region bookmark remains a bookmark-collection item, has optional naming
+  through the existing dialog, and opens the document at its page/slide with
+  the saved rectangle outlined. It is distinct from whole-page and text
+  bookmarks.
+- A region highlight remains independent from bookmarks, persists with one of
+  the existing six highlight colors, renders after reopening, and appears in
+  the existing highlight/annotation management flow.
+- Existing text/page bookmarks and text highlights survive the additive
+  SQLite/PostgreSQL schema migration unchanged. No OCR, cross-page selection,
+  external image service, or new dependency is in scope without further
+  approval.
+- Success requires focused backend migration/API tests, browser verification
+  of selection/copy/save/reopen/removal, a production build, and responsive
+  checks at 390, 425, 768, and 1024px.
+
 ### AI integration — one general, source-aware chat
 
 - Replace the user-selectable Retrieval/Document text modes with one general

@@ -1,5 +1,17 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-27 — Specify region selection annotations (awaiting code approval)
+
+- Recorded the approved PDF/PPTX region-selection scope: image copy, named
+  region bookmarks, persistent colored region highlights, mouse/touch drag,
+  and one page/slide per selection.
+- Drafted acceptance criteria, API/data constraints, file-level implementation
+  plan, test gates, and the package-free slide-copy risk in the PRD, UI-UX
+  inventory, delivery plan, and task list.
+- No application code, database schema, dependency, or remote state changed.
+- UI implementation remains gated on boss review and selection-rectangle style
+  approval.
+
 ## 2026-10-25 — Add Sarvam AI chat provider
 
 - Added Sarvam 105B Conversations to the server-validated provider/model

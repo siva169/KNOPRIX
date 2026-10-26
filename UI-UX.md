@@ -160,11 +160,20 @@ No visual choice is treated as approved until it is selected here.
 ### D2. `DocumentViewer` — rendered PDF or slide content
 - Used for: reading the selected document.
 - Decisions: page background, fit mode, zoom, page transition, text selection.
+- Approved region-selection behavior (2026-10-27): PDF and PPT/PPTX pages
+  support one-page/slide mouse or touch rectangle selection while Region
+  Selection mode is active. The rectangle is page-relative so zoom and viewport
+  changes do not move saved annotations.
+- Pending boss choice before UI implementation: selection rectangle outline
+  and fill treatment (reuse active-selection blue, or another chosen style).
 - Reference URLs: _add here_
 
 ### D3. `ReaderToolbar` — document actions and view controls
 - Used for: page navigation, zoom, fullscreen, download, search.
 - Decisions: icon-only versus labeled controls, grouping, overflow menu.
+- Approved: add a Region Selection toggle beside Text Selection. It is
+  mutually exclusive with text selection and only captures pointer/touch drags
+  when active.
 - Reference URLs:
   - https://m3.material.io/foundations/interaction/states/overview
   - https://developer.apple.com/design/human-interface-guidelines/menus
@@ -183,11 +192,17 @@ No visual choice is treated as approved until it is selected here.
 ### D6. `HighlightLayer` — visual marking of selected document text
 - Used for: highlights and evidence capture.
 - Decisions: highlight colors, selection toolbar, edit/delete behavior.
+- Approved: the region popup's Highlight action saves an independent,
+  page-relative rectangle using the existing six-color palette. Saved region
+  highlights return after reload and use the existing annotation management
+  and removal flow.
 - Reference URLs: _add here_
 
 ### D7. `HighlightList` — saved highlights in reading order
 - Used for: reviewing evidence and jumping back to a page.
 - Decisions: excerpt length, page label, sorting, empty state.
+- Approved: region highlights appear in the existing list with their page/slide
+  location and a region label; opening one returns to and outlines that area.
 - Reference URLs: _add here_
 
 ### D8. `BookmarkCollectionDrawer` — newest-first saved page list
@@ -203,6 +218,10 @@ No visual choice is treated as approved until it is selected here.
 - Approved improvement: opening a text bookmark closes the drawer, opens its
   document/page, scrolls to its stored passage anchor, and briefly emphasizes
   the matched text. Older bookmarks without anchors fall back to their quote.
+- Approved region behavior (2026-10-27): the selection popup offers Copy,
+  Bookmark, and Highlight. Bookmark uses the existing optional-name dialog and
+  saves the normalized page/slide rectangle; opening it returns to that
+  location and outlines the region. Copy targets a PNG image on the clipboard.
 - States: preserve the existing empty state; add loading, no-match, and
   retryable search-error states; keep save errors visible through app notices.
 - Responsive behavior: preserve the current drawer sizing and adapt controls

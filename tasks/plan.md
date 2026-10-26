@@ -359,3 +359,101 @@ recorded in `UI-UX.md` and implemented.
 
 These sources establish native, model-selected search behavior; support for
 each currently allowlisted model still must be checked before enabling it.
+
+## Approved Initiative - Region Selection Annotations
+
+### Objective and approved behavior
+
+Add region selection to the owned PDF and PPT/PPTX reader. A toolbar toggle
+activates one-page/slide mouse or touch dragging. The rectangle is represented
+as normalized page-local `x`, `y`, `width`, and `height` values, so it remains
+aligned across zoom and viewport changes. The popup offers:
+
+- **Copy:** copy the selected area as a PNG image to the clipboard; surface
+  browser permission or support failures.
+- **Bookmark:** create a region bookmark through the existing optional-name
+  dialog. Reopening it navigates to the source page/slide and outlines the
+  rectangle.
+- **Highlight:** persist an independent region highlight using the existing
+  six-color palette and annotation management/removal flow.
+
+Text and whole-page bookmark/highlight behavior remains unchanged. Read-only
+shared views cannot create or modify annotations. Cross-page selection, OCR,
+external image services, and unapproved dependencies are out of scope.
+
+### Architecture and data contract
+
+- Extend the existing startup schema migration additively for bookmark and
+  highlight region type/coordinates; preserve all old SQLite and PostgreSQL
+  rows.
+- Extend the existing `/api/bookmarks` and `/api/highlights` contracts with
+  a complete, validated normalized rectangle. Keep ownership checks at the
+  routes; reject incomplete, non-finite, zero-area, or out-of-bounds geometry.
+- Proposed additive request contract:
+
+  ```json
+  {
+    "projectId": "project-id",
+    "documentId": "document-id",
+    "pageNumber": 2,
+    "bookmarkType": "region",
+    "name": "Optional name",
+    "region": { "x": 0.1, "y": 0.2, "width": 0.3, "height": 0.25 }
+  }
+  ```
+
+  For `/api/highlights`, use `highlightType: "region"`, `color`, and the same
+  `region` object; the existing text-highlight request remains the default
+  `highlightType: "text"`. Both create routes keep their existing `{"id": ...}`
+  response. Region coordinates must satisfy `0 <= x,y < 1`, positive width and
+  height, `x + width <= 1`, and `y + height <= 1`.
+- Reuse `BrowserPDFViewer.jsx` for reader state/actions, `PDFToolbar.jsx` for
+  the mode control, and `SlideViewer.jsx` for slide page hit-testing and
+  rendering. Extend `AppContext.jsx` and `BookmarksDrawer.jsx` to carry region
+  location requests and restore the outline after rendering.
+- Reuse `BookmarkNameDialog.jsx`, the highlight palette in `highlights.js`,
+  existing notification/error patterns, and existing annotation management.
+- Keep the selected rectangle transient until Copy, Bookmark, or Highlight is
+  chosen. Escape/cancel clears an unfinished drag. Coordinate conversion clips
+  to the page boundary and uses the rendered page box, not the viewport.
+
+### Delivery tasks
+
+1. **Backend contract and migration** - add failing tests first, then support
+   region bookmark/highlight records and validate their geometry. Verify
+   legacy-row preservation and both database dialects.
+2. **Reader selection and clipboard copy** - add the mutually-exclusive reader
+   toggle, page-local pointer/touch drag, normalized rectangle overlay, and
+   Copy action for PDF and slides. First prove a package-free PPTX image-copy
+   path; if it is unreliable, stop and request approval before adding a
+   dependency or narrowing supported behavior.
+3. **Region bookmarks** - save through the existing named-bookmark flow and
+   restore the page/slide rectangle when opened from the collection.
+4. **Region highlights** - save a colored rectangle independently from
+   bookmarks; restore, list, and remove it through the existing annotation
+   flow.
+5. **Verification and documentation** - run focused backend tests, browser
+   flows, responsive checks, and production build; update this plan, the PRD,
+   UI/UX inventory, task list, and change logs; review the focused diffs.
+
+### Verification and boundaries
+
+- Backend: `python qa_bookmarks.py`, `python qa_highlights.py`, and focused
+  database migration tests from `backend/`.
+- Frontend: `npm run build` and `node qa-bookmarks.mjs` from `frontend/`, with
+  regression coverage for PDF/PPTX drag geometry, clipboard result, color
+  persistence, bookmark restore, removal, read-only behavior, and 390/425/768/
+  1024px layouts.
+- No application code is authorized until this contract and plan are reviewed.
+- If slide image-copy fidelity needs an uninstalled package, ask before
+  installing it. No external API, deployment, or remote Git operation is
+  planned.
+- Before any local commit, disclose the configured identity. Commit only
+  feature files in the Knoprix checkout and the intended parent pointer/log;
+  leave unrelated parent work untouched.
+
+### Open UI decision
+
+- Boss must choose the rectangle outline/fill appearance before UI code is
+  written. The action placement and mode toggle are approved as recorded in
+  `UI-UX.md`.
