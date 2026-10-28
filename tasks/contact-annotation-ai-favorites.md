@@ -61,7 +61,7 @@ recipient's permission.
 2. [x] Sharing UI controls + read-only annotation rendering + focused backend/build verification. Browser coverage remains in the final responsive matrix.
 3. [x] AI Favorites schema/API/security + backend tests.
 4. [x] AI response save controls + organizer section + browser tests.
-5. [ ] Full verification, checklist review, local commits, and approved push.
+5. [x] Full verification, checklist review, local commits, and approved push.
 
 ## UI contract
 
