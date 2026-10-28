@@ -200,7 +200,7 @@ export default function App() {
               <BrowserPDFViewer
                 focusMode={focusMode}
                 onToggleFocusMode={() => setFocusMode((value) => !value)}
-                onOpenChat={() => setWorkspaceMode('ai-wing')}
+                onOpenChat={() => setIsChatOpen(true)}
               />
             ) : (
               <DashboardOverview

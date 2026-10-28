@@ -81,8 +81,8 @@ async function run() {
         contentType: 'application/json',
         body: JSON.stringify({
           documents: [
-            { id: 'd1', project_id: 'p1', filename: 'quantum_paper.pdf', title: 'Quantum Paper', page_count: 12, ai_granted: true },
-            { id: 'd2', project_id: 'p1', filename: 'lecture_notes.docx', title: 'Lecture Notes', page_count: 5, ai_granted: false }
+            { id: 'd1', project_id: 'p1', file_name: 'quantum_paper.pdf', file_type: 'pdf', filename: 'quantum_paper.pdf', title: 'Quantum Paper', page_count: 12, ai_granted: true },
+            { id: 'd2', project_id: 'p1', file_name: 'lecture_notes.docx', file_type: 'docx', filename: 'lecture_notes.docx', title: 'Lecture Notes', page_count: 5, ai_granted: false }
           ]
         }),
       });
@@ -383,6 +383,21 @@ async function run() {
         throw new Error(`[${bp.name}] Mobile workspace navigation did not close.`);
       }
     }
+
+    // Reading Desk chat stays a compact overlay; it must not switch workspaces.
+    const openDocumentButton = page.getByRole('button', { name: 'Open quantum_paper.pdf' }).first();
+    await openDocumentButton.waitFor({ state: 'visible' });
+    await openDocumentButton.click();
+    const readingDeskChatButton = page.locator('button[title="Chat with your documents"]');
+    await readingDeskChatButton.waitFor({ state: 'visible' });
+    await readingDeskChatButton.click();
+    const compactChat = page.getByRole('dialog', { name: 'Document chat' });
+    await compactChat.waitFor({ state: 'visible' });
+    if (await page.getByText('Document Grants', { exact: true }).isVisible()) {
+      throw new Error(`[${bp.name}] Reading Desk chat redirected to AI Wing.`);
+    }
+    await compactChat.getByRole('button', { name: 'Close chat' }).click();
+    await compactChat.waitFor({ state: 'hidden' });
 
     console.log(`[PASS] ${bp.name} (${bp.width}px): Reading Desk & AI Wing switcher buttons visible`);
 

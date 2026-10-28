@@ -1510,3 +1510,19 @@ record: that service is not a ghost.
   precise persisted text anchors/bookmark jumps and unambiguous blue live-selection feedback.
 - Verified the local application checks before delivery: `node qa-bookmarks.mjs` passed 41/41 checks and `npm run build` completed successfully (only the existing large-chunk warning remained).
 - GitHub delivery target confirmed by boss: `siva169/KNOPRIX`, authenticated as `siva169`; Vercel and Render remain GitHub-push driven, with no hosting configuration changed here.
+
+# 2026-10-29 — Keep Reading Desk chat in the compact window
+
+- Fixed the Reading Desk document-chat action in `frontend/src/App.jsx` so it
+  opens the existing compact `ChatPanel` overlay instead of switching the
+  workspace to AI Wing.
+- Root cause: the AI Wing workspace-switcher commit changed the callback from
+  `setIsChatOpen(true)` to `setWorkspaceMode('ai-wing')` while leaving the
+  compact chat state and renderer in place.
+- Added a focused four-breakpoint Playwright smoke test at
+  `frontend/qa/reading-desk-chat.spec.mjs` and a regression assertion in the
+  existing workspace suite. The focused check passed at 390/425/768/1024px.
+- `npm run build` passed. The broader workspace suite reached the new compact
+  chat assertion successfully at 390px, then hit an unrelated existing
+  `Chat deleted` toast timeout during its later chat-history flow; that issue
+  was not changed in this fix.
