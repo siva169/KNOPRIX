@@ -59,7 +59,7 @@ recipient's permission.
 
 1. [x] Sharing schema/API/security + backend tests.
 2. [x] Sharing UI controls + read-only annotation rendering + focused backend/build verification. Browser coverage remains in the final responsive matrix.
-3. [ ] AI Favorites schema/API/security + backend/frontend tests.
+3. [x] AI Favorites schema/API/security + backend tests.
 4. [ ] AI response save controls + organizer section + browser tests.
 5. [ ] Full verification, checklist review, local commits, and approved push.
 

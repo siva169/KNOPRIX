@@ -733,6 +733,27 @@ def _create_chat_history_schema(conn) -> None:
         conn.execute(statement)
 
 
+def _create_ai_favorites_schema(conn) -> None:
+    for statement in (
+        """CREATE TABLE IF NOT EXISTS ai_favorites (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            project_id TEXT REFERENCES projects(id) ON DELETE SET NULL,
+            question TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            citations_json TEXT NOT NULL DEFAULT '[]',
+            provider_id TEXT NOT NULL DEFAULT '',
+            model_id TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE INDEX IF NOT EXISTS idx_ai_favorites_user_created
+            ON ai_favorites(user_id, created_at, id)""",
+        """CREATE INDEX IF NOT EXISTS idx_ai_favorites_user_project
+            ON ai_favorites(user_id, project_id, created_at, id)""",
+    ):
+        conn.execute(statement)
+
+
 # Migration versions are append-only; never edit a migration after it is released.
 MIGRATIONS = (
     (1, "baseline-schema", _create_base_schema),
@@ -745,6 +766,7 @@ MIGRATIONS = (
     (8, "account-scoped-chat-history", _create_chat_history_schema),
     (9, "region-annotations", _add_region_annotation_columns),
     (10, "document-share-annotation-options", _add_share_annotation_options),
+    (11, "ai-response-favorites", _create_ai_favorites_schema),
 )
 
 

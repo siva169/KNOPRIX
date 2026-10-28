@@ -7,6 +7,12 @@
 - Added Contacts UI controls defaulted off for sharing current document bookmarks and highlights, and read-only document viewers now render included shared highlights with a scope notice.
 - Added social and migration regressions; `qa_social.py` and `qa_database_migrations.py` pass (15 tests), Python compilation passes, and the frontend production build passes with the existing chunk-size advisory.
 
+## 2026-10-29 — Add owner-scoped AI response favorites API
+
+- Added an account-owned `ai_favorites` table and migration with optional project scope, bounded question/answer/citation fields, indexes, and account-deletion cascade behavior.
+- Added `GET/POST/DELETE /api/ai/favorites` with project ownership and favorite ownership enforcement.
+- Added focused persistence, authorization, bounded-input, cascade, and migration tests; the combined favorites/social/migration suite passes (18 tests).
+
 ## 2026-10-29 — Preserve Reading Desk state across AI Wing switches
 
 - Kept the active document viewer mounted and visually hidden while AI Wing or Contacts is open, preserving the rendered PDF, current page, scroll position, and loaded document bytes.

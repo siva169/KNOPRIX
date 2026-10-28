@@ -19,6 +19,7 @@ from .routers import (
     conversations,
     documents,
     dsa,
+    favorites,
     graph,
     highlights,
     projects,
@@ -67,6 +68,7 @@ app.include_router(bookmarks.router)
 app.include_router(highlights.router)
 app.include_router(social.router)
 app.include_router(artifacts.router)
+app.include_router(favorites.router)
 app.include_router(account.router)
 
 
