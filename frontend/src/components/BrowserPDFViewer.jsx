@@ -146,8 +146,11 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   const keyboardRegionRef = useRef(null);
   const regionActionsRef = useRef(null);
   const regionPageFocusRef = useRef(null);
+  const currentPageRef = useRef(currentPage);
+  const userScrollPageRef = useRef(null);
   const containerRef = useRef(null);
   const viewerRootRef = useRef(null);
+  currentPageRef.current = currentPage;
 
   useEffect(() => {
     if (!activeDocument) {
@@ -164,6 +167,7 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       totalPages,
     );
     restoredDocumentRef.current = activeDocument.id;
+    userScrollPageRef.current = null;
     setCurrentPage(page);
   }, [activeDocument, getReadingProgress, setCurrentPage, locationRequest]);
 
@@ -429,9 +433,56 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    if (userScrollPageRef.current === currentPage) {
+      userScrollPageRef.current = null;
+      return;
+    }
     const pageEl = el.querySelector(`[data-page="${currentPage}"]`);
-    if (pageEl) pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!pageEl) return;
+    pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [currentPage, activeDocument]);
+
+  useEffect(() => {
+    if (viewMode !== 'continuous') return undefined;
+    const root = containerRef.current;
+    if (!root) return undefined;
+    const pages = Array.from(root.querySelectorAll('[data-region-page]'));
+    if (!pages.length) return undefined;
+
+    let frame = 0;
+    const updateVisiblePage = () => {
+      frame = 0;
+      const rootRect = root.getBoundingClientRect();
+      const viewportCenter = (rootRect.top + rootRect.bottom) / 2;
+      let best = null;
+
+      pages.forEach((page) => {
+        const rect = page.getBoundingClientRect();
+        const visible = Math.max(0, Math.min(rect.bottom, rootRect.bottom) - Math.max(rect.top, rootRect.top));
+        if (!visible) return;
+        const distance = Math.abs((rect.top + rect.bottom) / 2 - viewportCenter);
+        const pageNumber = Number(page.dataset.regionPage);
+        if (!best || visible > best.visible || (visible === best.visible && distance < best.distance)) {
+          best = { pageNumber, visible, distance };
+        }
+      });
+
+      if (best && best.pageNumber !== currentPageRef.current) {
+        userScrollPageRef.current = best.pageNumber;
+        setCurrentPage(best.pageNumber);
+      }
+    };
+    const scheduleUpdate = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateVisiblePage);
+    };
+
+    root.addEventListener('scroll', scheduleUpdate, { passive: true });
+    scheduleUpdate();
+    return () => {
+      root.removeEventListener('scroll', scheduleUpdate);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [viewMode, pdfDoc, numPages, activeDocument, setCurrentPage]);
 
   useEffect(() => {
     if (

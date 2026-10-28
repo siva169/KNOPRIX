@@ -1,5 +1,13 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-29 — Synchronize toolbar page with continuous scrolling
+
+- Added scroll tracking to the continuous PDF and legacy slide viewers so the shared toolbar page number follows the most visible page or slide.
+- Kept programmatic toolbar/bookmark jumps intact while preventing observer updates from snapping user scrolls back to the same page.
+- Added `frontend/qa/page-sync.spec.mjs`, which verifies PDF and slide synchronization at 390/425/768/1024px.
+- Refreshed the lockfile's transitive `follow-redirects` dependency from the vulnerable `1.16.0` release; `npm audit --omit=dev --audit-level=high` now reports zero vulnerabilities.
+- Verification: page synchronization, bookmark navigation, Reading Desk chat, frontend unit tests, and production build passed. The broader workspace-switcher QA still has the unrelated existing toast-timing failure at `workspace-switcher.spec.mjs:612` (`Chat deleted`).
+
 ## 2026-10-29 — Make bookmark navigation exact and race-safe
 
 - Fixed text bookmark jumps that silently degraded to page-only navigation when

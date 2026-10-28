@@ -393,7 +393,7 @@ export default function SlideViewer({
   highlights = [],
   onMarkClick
 }) {
-  const { currentPage, zoomLevel, locationRequest } = useApp();
+  const { currentPage, setCurrentPage, zoomLevel, locationRequest } = useApp();
   const [state, setState] = useState({
     loading: true,
     error: false,
@@ -404,6 +404,13 @@ export default function SlideViewer({
   });
   const rootRef = useRef(null);
   const appliedLocationRef = useRef(null);
+  const currentPageRef = useRef(currentPage);
+  const userScrollPageRef = useRef(null);
+  currentPageRef.current = currentPage;
+
+  useEffect(() => {
+    userScrollPageRef.current = null;
+  }, [documentId]);
 
   // Scroll the deck so the current slide is visible when the user navigates
   // with the arrows or types a page number (continuous mode renders every
@@ -411,9 +418,56 @@ export default function SlideViewer({
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
+    if (userScrollPageRef.current === currentPage) {
+      userScrollPageRef.current = null;
+      return;
+    }
     const slideEl = el.querySelector(`[data-page="${currentPage}"]`);
-    if (slideEl) slideEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!slideEl) return;
+    slideEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [currentPage, documentId, state.slides]);
+
+  useEffect(() => {
+    if (viewMode !== 'continuous') return undefined;
+    const root = rootRef.current;
+    if (!root) return undefined;
+    const pages = Array.from(root.querySelectorAll('[data-page]'));
+    if (!pages.length) return undefined;
+
+    let frame = 0;
+    const updateVisiblePage = () => {
+      frame = 0;
+      const rootRect = root.getBoundingClientRect();
+      const viewportCenter = (rootRect.top + rootRect.bottom) / 2;
+      let best = null;
+
+      pages.forEach((page) => {
+        const rect = page.getBoundingClientRect();
+        const visible = Math.max(0, Math.min(rect.bottom, rootRect.bottom) - Math.max(rect.top, rootRect.top));
+        if (!visible) return;
+        const distance = Math.abs((rect.top + rect.bottom) / 2 - viewportCenter);
+        const pageNumber = Number(page.dataset.page);
+        if (!best || visible > best.visible || (visible === best.visible && distance < best.distance)) {
+          best = { pageNumber, visible, distance };
+        }
+      });
+
+      if (best && best.pageNumber !== currentPageRef.current) {
+        userScrollPageRef.current = best.pageNumber;
+        setCurrentPage(best.pageNumber);
+      }
+    };
+    const scheduleUpdate = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateVisiblePage);
+    };
+
+    root.addEventListener('scroll', scheduleUpdate, { passive: true });
+    scheduleUpdate();
+    return () => {
+      root.removeEventListener('scroll', scheduleUpdate);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, [viewMode, documentId, state.slides, setCurrentPage]);
 
   useEffect(() => {
     if (
