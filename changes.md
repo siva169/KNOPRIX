@@ -1,5 +1,12 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-29 — Add AI Favorites and annotation-sharing UI coverage
+
+- Added gold-theme Save/Remove controls to assistant responses; each favorite stores the complete answer, question, citations, provider, and model through the owner-scoped API.
+- Extended the existing Bookmark Organizer with Document Bookmarks and AI Favorites sections, including full-response snapshots and removal controls.
+- Added responsive browser QA for AI favorite round-trips and bundled document annotation sharing at 390/425/768/1024px.
+- Verification: 12/12 frontend unit tests, 25 backend favorites/social/migration/bookmark tests, both new browser matrices, and the production build pass. The existing workspace-switcher QA retains its documented toast-timing failure.
+
 ## 2026-10-29 — Add opt-in annotation bundles to document sharing
 
 - Added versioned share metadata for opt-in bookmark/highlight snapshots. One document share request and one recipient acceptance now cover the document plus the selected annotations.

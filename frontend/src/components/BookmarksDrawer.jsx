@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Bookmark, Trash2, Layers, ArrowDownToLine, ArrowUpFromLine, FileText,
   BookmarkCheck, Search, LoaderCircle, RotateCw, Pencil, Check, ScanText,
-  ChevronLeft, ChevronRight, Folder
+  ChevronLeft, ChevronRight, Folder, Sparkles
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import api from '../api';
@@ -28,6 +28,9 @@ export default function BookmarksDrawer({ onClose }) {
   const [editHighlights, setEditHighlights] = useState([]);
   const [loadingEditHighlights, setLoadingEditHighlights] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [section, setSection] = useState('documents');
+  const [favorites, setFavorites] = useState([]);
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
 
   const selectedDocument = documents.find((doc) => doc.id === selectedDocumentId);
 
@@ -51,6 +54,23 @@ export default function BookmarksDrawer({ onClose }) {
   const filteredDocBookmarks = React.useMemo(() => {
     return filterDocumentBookmarks(docBookmarks, search);
   }, [docBookmarks, search]);
+
+  useEffect(() => {
+    if (section !== 'ai') return undefined;
+    let cancelled = false;
+    setFavoritesLoading(true);
+    api.get('/ai/favorites')
+      .then(({ data }) => {
+        if (!cancelled) setFavorites(data.favorites || []);
+      })
+      .catch(() => {
+        if (!cancelled) notify('Could not load AI Favorites', 'error');
+      })
+      .finally(() => {
+        if (!cancelled) setFavoritesLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [section, notify]);
 
   const removeBookmark = async (id, docId, successMessage, errorMessage) => {
     if (popping) return;
@@ -79,6 +99,16 @@ export default function BookmarksDrawer({ onClose }) {
         'Removed the newest bookmark in this document',
         'Could not remove bookmark',
       );
+    }
+  };
+
+  const removeFavorite = async (favorite) => {
+    try {
+      await api.delete(`/ai/favorites/${favorite.id}`);
+      setFavorites((current) => current.filter((item) => item.id !== favorite.id));
+      notify('Removed from AI Favorites', 'info');
+    } catch {
+      notify('Could not remove AI Favorite', 'error');
     }
   };
 
@@ -217,8 +247,34 @@ export default function BookmarksDrawer({ onClose }) {
         </div>
       </div>
 
+      <div className="grid grid-cols-2 gap-1 border-b border-glass-borderDark p-2">
+        <button
+          type="button"
+          aria-pressed={section === 'documents'}
+          onClick={() => {
+            setSection('documents');
+            setSelectedDocumentId(null);
+            setSearch('');
+          }}
+          className={`min-h-10 rounded-lg px-2 text-[10px] font-semibold uppercase tracking-wider transition ${section === 'documents' ? 'bg-primary/20 text-secondary border border-primary/40' : 'text-ivory/55 hover:bg-white/5 hover:text-ivory'}`}
+        >
+          <Bookmark className="mr-1 inline h-3.5 w-3.5" /> Document Bookmarks
+        </button>
+        <button
+          type="button"
+          aria-pressed={section === 'ai'}
+          onClick={() => {
+            setSection('ai');
+            setSelectedDocumentId(null);
+          }}
+          className={`min-h-10 rounded-lg px-2 text-[10px] font-semibold uppercase tracking-wider transition ${section === 'ai' ? 'bg-primary/20 text-secondary border border-primary/40' : 'text-ivory/55 hover:bg-white/5 hover:text-ivory'}`}
+        >
+          <Sparkles className="mr-1 inline h-3.5 w-3.5" /> AI Favorites
+        </button>
+      </div>
+
       {/* Search Header */}
-      <div className="border-b border-glass-borderDark p-3">
+      {section === 'documents' && <div className="border-b border-glass-borderDark p-3">
         {selectedDocumentId ? (
           <div>
             <label htmlFor="doc-bookmark-search" className="sr-only">Search bookmarks in document</label>
@@ -270,11 +326,71 @@ export default function BookmarksDrawer({ onClose }) {
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Main Content Area: AnimatePresence between Level 1 and Level 2 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2 relative">
-        <AnimatePresence mode="wait">
+        {section === 'ai' ? (
+          <motion.div
+            key="ai-favorites-level"
+            initial={{ opacity: 0, x: 16 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="space-y-3"
+          >
+            <div className="flex items-center justify-between px-1 text-[10px] font-mono uppercase tracking-widest text-ivory/40">
+              <span>Saved AI responses</span>
+              <span>{favorites.length} saved</span>
+            </div>
+            {favoritesLoading ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-xs text-ivory/55">
+                <LoaderCircle className="h-4 w-4 animate-spin text-secondary" /> Loading favorites…
+              </div>
+            ) : favorites.length === 0 ? (
+              <div className="py-12 text-center">
+                <Sparkles className="mx-auto mb-3 h-8 w-8 text-ivory/20" />
+                <p className="text-xs text-ivory/60">No AI responses saved yet.</p>
+                <p className="mx-auto mt-1 max-w-[240px] text-[10px] leading-relaxed text-ivory/40">
+                  Use Save on an AI response to keep the full answer, question, and citations here.
+                </p>
+              </div>
+            ) : (
+              <AnimatePresence>
+                {favorites.map((favorite) => (
+                  <motion.article
+                    key={favorite.id}
+                    layout
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    className="relative rounded-xl border border-glass-borderDark bg-midnight-panel/90 p-3"
+                  >
+                    <div className="pr-9">
+                      <p className="text-[10px] font-mono uppercase tracking-wider text-secondary">Question</p>
+                      <p className="mt-1 line-clamp-3 text-xs font-semibold leading-relaxed text-ivory">{favorite.question}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeFavorite(favorite)}
+                      aria-label={`Remove AI Favorite: ${favorite.question}`}
+                      title="Remove AI Favorite"
+                      className="absolute right-2 top-2 grid min-h-11 min-w-11 place-items-center rounded-lg text-ivory/55 transition hover:bg-rose-500/10 hover:text-rose-400"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="mt-3 border-t border-glass-borderDark/70 pt-3">
+                      <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-ivory/75">{favorite.answer}</p>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2 text-[10px] font-mono text-ivory/40">
+                      <Sparkles className="h-3 w-3 text-secondary" />
+                      <span>{favorite.citations?.length || 0} citations</span>
+                      {favorite.modelId && <span className="truncate">· {favorite.modelId}</span>}
+                    </div>
+                  </motion.article>
+                ))}
+              </AnimatePresence>
+            )}
+          </motion.div>
+        ) : <AnimatePresence mode="wait">
           {!selectedDocumentId ? (
             /* LEVEL 1: Documents List */
             <motion.div
@@ -545,12 +661,14 @@ export default function BookmarksDrawer({ onClose }) {
               )}
             </motion.div>
           )}
-        </AnimatePresence>
+        </AnimatePresence>}
       </div>
 
       {/* Footer */}
       <div className="p-3 border-t border-glass-borderDark flex items-center justify-center gap-4 text-[9px] text-ivory/40 font-mono">
-        {selectedDocumentId ? (
+        {section === 'ai' ? (
+          <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-primary-hover" /> full response snapshots</span>
+        ) : selectedDocumentId ? (
           <>
             <span className="flex items-center gap-1"><ArrowDownToLine className="w-3 h-3 text-primary-hover" /> add front</span>
             <span className="flex items-center gap-1"><ArrowUpFromLine className="w-3 h-3 text-primary-hover" /> remove</span>

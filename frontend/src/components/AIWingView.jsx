@@ -4,7 +4,7 @@ import {
   Sparkles, MessageSquare, Layers, Share2, Check, ShieldCheck, ShieldAlert,
   Send, KeyRound, RefreshCw, Trash2, ChevronRight, BookOpen, Clock3, Plus,
   HelpCircle, Lightbulb, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Eye,
-  PanelLeftClose, PanelLeftOpen, Copy, RotateCcw, Shuffle, Square
+  PanelLeftClose, PanelLeftOpen, Copy, RotateCcw, Shuffle, Square, Bookmark, BookmarkCheck
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
 import api, { getAccessToken } from '../api';
@@ -110,6 +110,8 @@ export default function AIWingView({ onNavigateToDocument }) {
   const [streamError, setStreamError] = useState(null);
   const [contextConsentQuestion, setContextConsentQuestion] = useState(null);
   const [copiedMessageId, setCopiedMessageId] = useState(null);
+  const [favorites, setFavorites] = useState([]);
+  const [favoriteBusy, setFavoriteBusy] = useState('');
   const [bulkGranting, setBulkGranting] = useState(false);
   const streamAbortRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -118,6 +120,20 @@ export default function AIWingView({ onNavigateToDocument }) {
   const availableAuthorizedDocs = conversationProjectMatches ? authorizedDocs : [];
   const contextDocuments = includeAuthorizedDocuments ? availableAuthorizedDocs : [];
   const liveSearchAvailable = supportsLiveSearch(providerId, model);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/ai/favorites', {
+      params: activeProject?.id ? { projectId: activeProject.id } : {},
+    })
+      .then(({ data }) => {
+        if (!cancelled) setFavorites(data.favorites || []);
+      })
+      .catch(() => {
+        if (!cancelled) setFavorites([]);
+      });
+    return () => { cancelled = true; };
+  }, [activeProject?.id]);
 
   // Artifacts State
   const [artifactType, setArtifactType] = useState('flashcards'); // 'flashcards' | 'quiz' | 'analogy'
@@ -537,6 +553,40 @@ export default function AIWingView({ onNavigateToDocument }) {
       notify('Copied to clipboard', 'success');
     } catch {
       notify('Could not copy text', 'error');
+    }
+  };
+
+  const favoriteKey = (questionText, answer) => `${questionText}\u0000${answer}`;
+  const findFavorite = (questionText, answer) => favorites.find(
+    (favorite) => favorite.question === questionText && favorite.answer === answer,
+  );
+
+  const toggleFavorite = async (message, questionText) => {
+    if (!questionText || message.isError || favoriteBusy) return;
+    const existing = findFavorite(questionText, message.content);
+    const key = favoriteKey(questionText, message.content);
+    setFavoriteBusy(key);
+    try {
+      if (existing) {
+        await api.delete(`/ai/favorites/${existing.id}`);
+        setFavorites((current) => current.filter((favorite) => favorite.id !== existing.id));
+        notify('Removed from AI Favorites', 'info');
+      } else {
+        const { data } = await api.post('/ai/favorites', {
+          projectId: activeProject?.id || null,
+          question: questionText,
+          answer: message.content,
+          citations: message.citations || [],
+          providerId: message.providerId || providerId,
+          modelId: message.modelId || model,
+        });
+        setFavorites((current) => [data.favorite, ...current]);
+        notify('Saved to AI Favorites', 'success');
+      }
+    } catch (error) {
+      notify(error.response?.data?.detail || 'Could not update AI Favorites', 'error');
+    } finally {
+      setFavoriteBusy('');
     }
   };
 
@@ -1000,11 +1050,17 @@ export default function AIWingView({ onNavigateToDocument }) {
                   This chat is empty. Ask anything to start the conversation.
                 </p>
               )}
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
-                >
+              {messages.map((msg, index) => {
+                const questionForMessage = messages[index - 1]?.role === 'user'
+                  ? messages[index - 1].content
+                  : '';
+                const favorite = findFavorite(questionForMessage, msg.content);
+                const messageFavoriteKey = favoriteKey(questionForMessage, msg.content);
+                return (
+                  <div
+                    key={msg.id}
+                    className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+                  >
                   <div
                     className={`max-w-3xl rounded-2xl p-4 text-sm leading-relaxed border ${
                       msg.role === 'user'
@@ -1048,6 +1104,17 @@ export default function AIWingView({ onNavigateToDocument }) {
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
+                            onClick={() => toggleFavorite(msg, questionForMessage)}
+                            disabled={!questionForMessage || msg.isError || favoriteBusy === messageFavoriteKey}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-white/10 hover:text-secondary transition text-[10px] disabled:opacity-40"
+                            title={favorite ? 'Remove from AI Favorites' : 'Save to AI Favorites'}
+                            aria-label={favorite ? 'Remove response from AI Favorites' : 'Save response to AI Favorites'}
+                          >
+                            {favorite ? <BookmarkCheck className="w-3 h-3 text-secondary" /> : <Bookmark className="w-3 h-3" />}
+                            <span>{favorite ? 'Saved' : 'Save'}</span>
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => copyMessageContent(msg.id, msg.content)}
                             className="flex items-center gap-1 px-2 py-0.5 rounded-lg hover:bg-white/10 hover:text-ivory transition text-[10px]"
                             title="Copy response to clipboard"
@@ -1078,8 +1145,9 @@ export default function AIWingView({ onNavigateToDocument }) {
                       </div>
                     )}
                   </div>
-                </div>
-              ))}
+                  </div>
+                );
+              })}
 
               {/* Live Streaming Message Display */}
               {streaming && (
