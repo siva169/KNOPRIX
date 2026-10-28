@@ -180,6 +180,21 @@ export default function App() {
               </div>
             }
           >
+            {/* Keep the document viewer mounted across workspace changes. Hiding
+                it preserves the PDF renderer, scroll position, and loaded bytes
+                while the AI Wing is open. */}
+            {activeDocument && (
+              <div
+                className={isContactsOpen || workspaceMode !== 'reading-desk' ? 'hidden' : 'flex flex-1 min-h-0'}
+                aria-hidden={isContactsOpen || workspaceMode !== 'reading-desk'}
+              >
+                <BrowserPDFViewer
+                  focusMode={focusMode}
+                  onToggleFocusMode={() => setFocusMode((value) => !value)}
+                  onOpenChat={() => setIsChatOpen(true)}
+                />
+              </div>
+            )}
             {isContactsOpen ? (
               <ContactsPage
                 onClose={() => setIsContactsOpen(false)}
@@ -196,13 +211,7 @@ export default function App() {
                   setWorkspaceMode('reading-desk');
                 }}
               />
-            ) : activeDocument ? (
-              <BrowserPDFViewer
-                focusMode={focusMode}
-                onToggleFocusMode={() => setFocusMode((value) => !value)}
-                onOpenChat={() => setIsChatOpen(true)}
-              />
-            ) : (
+            ) : activeDocument ? null : (
               <DashboardOverview
                 loading={projectsLoading || documentsLoading}
                 onUpload={() => setIsUploadOpen(true)}

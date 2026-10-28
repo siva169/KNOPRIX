@@ -1,5 +1,11 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-29 — Preserve Reading Desk state across AI Wing switches
+
+- Kept the active document viewer mounted and visually hidden while AI Wing or Contacts is open, preserving the rendered PDF, current page, scroll position, and loaded document bytes.
+- Added `frontend/qa/workspace-document-state.spec.mjs`, which verifies at 390/425/768/1024px that switching Reading Desk → AI Wing → Reading Desk keeps the visible page and does not reload the document stream.
+- Verification: the new workspace-state regression passed at all four breakpoints; the pre-fix version failed because the Reading Desk viewer was unmounted while AI Wing was open.
+
 ## 2026-10-29 — Synchronize toolbar page with continuous scrolling
 
 - Added scroll tracking to the continuous PDF and legacy slide viewers so the shared toolbar page number follows the most visible page or slide.
