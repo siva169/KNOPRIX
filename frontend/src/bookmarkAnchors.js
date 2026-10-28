@@ -1,3 +1,44 @@
+function normalizeBookmarkText(value) {
+  return String(value || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLocaleLowerCase();
+}
+
+function buildNormalizedText(rawText) {
+  let normalized = '';
+  const rawOffsets = [];
+
+  for (let index = 0; index < rawText.length; index += 1) {
+    const char = rawText[index];
+    if (/\s/.test(char)) {
+      if (normalized && !normalized.endsWith(' ')) {
+        normalized += ' ';
+        rawOffsets.push(index);
+      }
+      continue;
+    }
+    normalized += char;
+    rawOffsets.push(index);
+  }
+
+  if (normalized.endsWith(' ')) {
+    normalized = normalized.slice(0, -1);
+    rawOffsets.pop();
+  }
+
+  return { normalized, rawOffsets };
+}
+
+function getTextContent(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let text = '';
+  let node;
+  while ((node = walker.nextNode())) text += node.textContent;
+  return text;
+}
+
 export function getSelectionOffsets(root, range) {
   if (
     !root ||
@@ -26,7 +67,10 @@ function rangeAtTextOffsets(root, start, end) {
 
   while ((node = walker.nextNode())) {
     const nextOffset = offset + node.textContent.length;
-    if (!startNode && start <= nextOffset) {
+    // At a text-node boundary, start from the next node. Starting at the end
+    // of the previous block makes Range.toString() include that block's
+    // rendered separator in the selection.
+    if (!startNode && start < nextOffset) {
       startNode = node;
       startOffset = start - offset;
     }
@@ -55,7 +99,9 @@ export function rangeAtOffsets(root, start, end) {
   const pointAt = (offset) => {
     let lineStart = 0;
     for (const paragraph of paragraphs) {
-      const lineLength = Number(paragraph.dataset.lineLength);
+      const lineLength = Number.isFinite(Number(paragraph.dataset.lineLength))
+        ? Number(paragraph.dataset.lineLength)
+        : paragraph.textContent.length;
       if (offset >= lineStart && offset <= lineStart + lineLength) {
         const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
         let node;
@@ -84,47 +130,19 @@ export function rangeAtOffsets(root, start, end) {
 }
 
 export function findBookmarkRange(root, start, end, quote) {
-  const savedQuote = (quote || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+  const savedQuote = normalizeBookmarkText(quote);
   const anchoredRange = rangeAtOffsets(root, start, end);
   if (
     anchoredRange &&
     savedQuote &&
-    anchoredRange.toString().replace(/\s+/g, ' ').trim().toLocaleLowerCase() === savedQuote
+    normalizeBookmarkText(anchoredRange.toString()) === savedQuote
   ) {
     return anchoredRange;
   }
   if (!root || !savedQuote) return null;
 
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let fullText = '';
-  let node;
-  while ((node = walker.nextNode())) {
-    fullText += node.textContent;
-  }
-
-  const exactIndex = fullText.toLocaleLowerCase().indexOf((quote || '').toLocaleLowerCase());
-  if (exactIndex !== -1) {
-    return rangeAtTextOffsets(root, exactIndex, exactIndex + quote.length);
-  }
-
-  let normalized = '';
-  const rawOffsets = [];
-  for (let i = 0; i < fullText.length; i += 1) {
-    const char = fullText[i];
-    if (/\s/.test(char)) {
-      if (normalized && !normalized.endsWith(' ')) {
-        normalized += ' ';
-        rawOffsets.push(i);
-      }
-    } else {
-      normalized += char;
-      rawOffsets.push(i);
-    }
-  }
-  if (normalized.endsWith(' ')) {
-    normalized = normalized.slice(0, -1);
-    rawOffsets.pop();
-  }
+  const fullText = getTextContent(root);
+  const { normalized, rawOffsets } = buildNormalizedText(fullText);
 
   const normalizedIndex = normalized.toLocaleLowerCase().indexOf(savedQuote);
   if (normalizedIndex === -1) return null;

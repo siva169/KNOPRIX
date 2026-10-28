@@ -7,6 +7,8 @@ import { colorById, matchSegments } from '../highlights';
 import { emphasizeBookmarkRange, findBookmarkRange } from '../bookmarkAnchors';
 
 const DEFAULT_TEXT = '#262626';
+const LOCATION_RETRY_LIMIT = 120;
+const LOCATION_RETRY_DELAY_MS = 50;
 
 // PowerPoint colors text against the slide — pick black/white by background
 // luminance so theme-colored (inherited) text stays readable on any slide.
@@ -422,20 +424,57 @@ export default function SlideViewer({
       appliedLocationRef.current === locationRequest.id
     ) return undefined;
 
-    const slide = rootRef.current?.querySelector(
-      `[data-page="${locationRequest.pageNumber}"]`,
-    );
-    if (!slide) return undefined;
+    let cancelled = false;
+    let timeout;
+    let attempts = 0;
+    let clearEmphasis = () => {};
 
-    const range = findBookmarkRange(
-      slide,
-      locationRequest.anchorStart,
-      locationRequest.anchorEnd,
-      locationRequest.snippet,
-    );
-    const clearEmphasis = range ? emphasizeBookmarkRange(range) : () => {};
-    appliedLocationRef.current = locationRequest.id;
-    return clearEmphasis;
+    const locate = () => {
+      if (cancelled) return;
+      const slide = rootRef.current?.querySelector(
+        `[data-page="${locationRequest.pageNumber}"]`,
+      );
+      if (!slide) {
+        attempts += 1;
+        if (attempts < LOCATION_RETRY_LIMIT) {
+          timeout = setTimeout(locate, LOCATION_RETRY_DELAY_MS);
+        } else {
+          appliedLocationRef.current = locationRequest.id;
+        }
+        return;
+      }
+
+      if (!locationRequest.snippet) {
+        appliedLocationRef.current = locationRequest.id;
+        return;
+      }
+
+      const range = findBookmarkRange(
+        slide,
+        locationRequest.anchorStart,
+        locationRequest.anchorEnd,
+        locationRequest.snippet,
+      );
+      if (!range) {
+        attempts += 1;
+        if (attempts < LOCATION_RETRY_LIMIT) {
+          timeout = setTimeout(locate, LOCATION_RETRY_DELAY_MS);
+        } else {
+          appliedLocationRef.current = locationRequest.id;
+        }
+        return;
+      }
+
+      clearEmphasis = emphasizeBookmarkRange(range);
+      appliedLocationRef.current = locationRequest.id;
+    };
+
+    timeout = setTimeout(locate, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+      clearEmphasis();
+    };
   }, [documentId, locationRequest, state.loading, state.slides]);
 
   useEffect(() => {

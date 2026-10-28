@@ -20,6 +20,8 @@ import { regionCropBounds, regionFromDrag } from '../regionGeometry.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 const HIGHLIGHT_ALL_KEY = 'knoprix_highlight_all_matches';
+const LOCATION_RETRY_LIMIT = 120;
+const LOCATION_RETRY_DELAY_MS = 50;
 
 function ThumbnailRail({ pdfDoc, numPages, currentPage, onSelectPage }) {
   const canvasRefs = useRef({});
@@ -450,17 +452,51 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
     let attempts = 0;
     let clearEmphasis = () => {};
 
+    const retry = () => {
+      attempts += 1;
+      if (attempts < LOCATION_RETRY_LIMIT) {
+        timeout = setTimeout(locate, LOCATION_RETRY_DELAY_MS);
+      } else {
+        // The page is still a useful destination for legacy or damaged
+        // annotations, but do not retry forever once the renderer has settled.
+        appliedLocationRef.current = locationRequest.id;
+      }
+    };
+
     const locate = () => {
       if (cancelled) return;
+      const page = containerRef.current?.querySelector(
+        `[data-page="${locationRequest.pageNumber}"]`,
+      );
       const root = usesPdfRenderer
         ? pageTextLayerRefs.current[locationRequest.pageNumber]
-        : containerRef.current?.querySelector(`[data-page="${locationRequest.pageNumber}"]`)
-          || containerRef.current;
+        : page || containerRef.current;
 
-      if (!root || (usesPdfRenderer && !root.textContent)) {
-        attempts += 1;
-        if (attempts < 100) timeout = setTimeout(locate, 50);
-        else appliedLocationRef.current = locationRequest.id;
+      if (!root) {
+        retry();
+        return;
+      }
+
+      if (locationRequest.region) {
+        const regionMarker = page?.querySelector('[data-region-bookmark="true"]');
+        if (!regionMarker) {
+          retry();
+          return;
+        }
+        regionMarker.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        appliedLocationRef.current = locationRequest.id;
+        return;
+      }
+
+      if (usesPdfRenderer && !root.textContent) {
+        retry();
+        return;
+      }
+
+      // Whole-page bookmarks intentionally have no text target. The page
+      // scroll above is their complete navigation contract.
+      if (!locationRequest.snippet) {
+        appliedLocationRef.current = locationRequest.id;
         return;
       }
 
@@ -470,7 +506,13 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
         locationRequest.anchorEnd,
         locationRequest.snippet,
       );
-      if (range) clearEmphasis = emphasizeBookmarkRange(range);
+      if (!range) {
+        // PDF.js and saved-highlight wrapping can finish in separate turns.
+        // A failed lookup is not success; retry until the text layer settles.
+        retry();
+        return;
+      }
+      clearEmphasis = emphasizeBookmarkRange(range);
       appliedLocationRef.current = locationRequest.id;
     };
 

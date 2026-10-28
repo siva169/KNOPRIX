@@ -1,5 +1,26 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-29 — Make bookmark navigation exact and race-safe
+
+- Fixed text bookmark jumps that silently degraded to page-only navigation when
+  PDF.js or slide text layers were still settling. Exact matching now retries
+  only until the renderer settles, and a failed range is no longer marked as
+  successfully applied immediately.
+- Improved anchor/quote recovery for legacy bookmarks without stored offsets,
+  whitespace differences, nested highlight marks, and text-node boundaries;
+  prevented paragraph-boundary selections from including an extra line break.
+- Region bookmarks now wait for and scroll to their actual page region, including
+  scanned PDFs whose text layer is empty. Whole-page bookmarks retain explicit
+  page-only behavior.
+- Added `frontend/qa/bookmark-navigation.spec.mjs`, covering Bookmark Organizer
+  and desktop sidebar jumps at 390/425/768/1024px with a legacy anchorless text
+  bookmark.
+- Verification: frontend build passed, 12/12 frontend unit tests passed, the
+  new bookmark navigation matrix passed at all four breakpoints, and the prior
+  Reading Desk chat matrix passed. The broader workspace-switcher QA still has
+  an unrelated existing toast-timing failure at `workspace-switcher.spec.mjs:612`
+  (`Chat deleted`).
+
 ## 2026-10-27 — Core CRUD, Media Viewer, AI Wing & Workspace System Upgrade
 
 - Diagnosed and resolved missing CRUD operations, media viewer flaws, AI Wing deficiencies, and workspace controls (100% repository-internal code):
