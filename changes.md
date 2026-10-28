@@ -1526,3 +1526,12 @@ record: that service is not a ghost.
   chat assertion successfully at 390px, then hit an unrelated existing
   `Chat deleted` toast timeout during its later chat-history flow; that issue
   was not changed in this fix.
+
+# 2026-10-29 — Publish Reading Desk chat fix
+
+- Published commit `4ca9fd0` to `siva169/KNOPRIX` on `origin/master` using the
+  approved GitHub account `siva169`.
+- The first push attempt was rejected because GitHub CLI was active as
+  `panthor984-box`; switched the active local account to `siva169` and
+  retried successfully.
+- Verified local and remote `master` both resolve to `4ca9fd0`.
