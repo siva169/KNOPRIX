@@ -426,6 +426,10 @@ def _create_contacts_sharing_schema(conn) -> None:
             expires_at TEXT,
             accepted_at TEXT,
             updated_at TEXT NOT NULL,
+            include_bookmarks INTEGER NOT NULL DEFAULT 0,
+            include_highlights INTEGER NOT NULL DEFAULT 0,
+            bookmark_ids_json TEXT NOT NULL DEFAULT '[]',
+            highlight_ids_json TEXT NOT NULL DEFAULT '[]',
             CHECK (sender_id <> recipient_id)
         )""",
         """CREATE UNIQUE INDEX IF NOT EXISTS idx_shares_active_resource_recipient
@@ -650,6 +654,19 @@ def _add_region_annotation_columns(conn) -> None:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
+def _add_share_annotation_options(conn) -> None:
+    """Add opt-in document annotation snapshots without changing old shares."""
+    columns = _table_columns(conn, "shares")
+    for column, definition in (
+        ("include_bookmarks", "INTEGER NOT NULL DEFAULT 0"),
+        ("include_highlights", "INTEGER NOT NULL DEFAULT 0"),
+        ("bookmark_ids_json", "TEXT NOT NULL DEFAULT '[]'"),
+        ("highlight_ids_json", "TEXT NOT NULL DEFAULT '[]'"),
+    ):
+        if column not in columns:
+            conn.execute(f"ALTER TABLE shares ADD COLUMN {column} {definition}")
+
+
 def _create_provider_document_files_schema(conn) -> None:
     for statement in (
         """CREATE TABLE IF NOT EXISTS provider_document_files (
@@ -727,6 +744,7 @@ MIGRATIONS = (
     (7, "provider-specific-document-files", _create_provider_document_files_schema),
     (8, "account-scoped-chat-history", _create_chat_history_schema),
     (9, "region-annotations", _add_region_annotation_columns),
+    (10, "document-share-annotation-options", _add_share_annotation_options),
 )
 
 

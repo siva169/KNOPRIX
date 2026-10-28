@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Copy, Link2, LoaderCircle, LockKeyhole, Share2, ShieldBan, UserPlus, Users, X } from 'lucide-react';
+import { Bookmark, Check, Copy, Highlighter, Link2, LoaderCircle, LockKeyhole, Share2, ShieldBan, UserPlus, Users, X } from 'lucide-react';
 import api from '../api';
 
 const resourceLabel = (type) => ({
@@ -36,6 +36,8 @@ export default function ContactsPage({
   const [lookupResult, setLookupResult] = useState('');
   const [resourceType, setResourceType] = useState('document');
   const [resourceId, setResourceId] = useState('');
+  const [includeBookmarks, setIncludeBookmarks] = useState(false);
+  const [includeHighlights, setIncludeHighlights] = useState(false);
   const [selectedRecipients, setSelectedRecipients] = useState([]);
   const [shareResults, setShareResults] = useState([]);
   const [shareDetail, setShareDetail] = useState(null);
@@ -164,6 +166,13 @@ export default function ContactsPage({
     setResourceId(resourceOptions[0]?.id || '');
   }, [resourceOptions]);
 
+  useEffect(() => {
+    if (resourceType !== 'document') {
+      setIncludeBookmarks(false);
+      setIncludeHighlights(false);
+    }
+  }, [resourceType]);
+
   const reportError = (requestError, fallback) => {
     const message = requestError.response?.data?.detail || fallback;
     setError(message);
@@ -277,7 +286,14 @@ export default function ContactsPage({
       const { data } = await api.get(`/v1/shared-resources/${shareId}`);
       if (data.resourceType === 'document') {
         const { data: documentData } = await api.get(`/documents/${data.resource.id}`);
-        openDocument({ ...documentData.document, readOnly: true });
+        openDocument({
+          ...documentData.document,
+          readOnly: true,
+          sharedAnnotations: {
+            bookmarks: data.resource.sharedBookmarks || [],
+            highlights: data.resource.sharedHighlights || [],
+          },
+        });
         onClose();
       } else {
         const resource = data.resource;
@@ -333,6 +349,7 @@ export default function ContactsPage({
         recipientKnoprixIds: selectedRecipients,
         resourceType,
         resourceId,
+        ...(resourceType === 'document' ? { includeBookmarks, includeHighlights } : {}),
       });
       const createdShares = data.shares
         .filter((item) => item.status === 'pending' && item.shareId)
@@ -609,6 +626,24 @@ export default function ContactsPage({
                     </select>
                   </label>
                 </div>
+                {resourceType === 'document' && (
+                  <fieldset className="rounded-xl border border-secondary/20 bg-secondary/5 p-3">
+                    <legend className="px-1 text-xs font-medium text-ivory/80">Optional saved annotations</legend>
+                    <p className="mt-1 text-[11px] leading-relaxed text-ivory/50">These are snapshots of this document’s current saved items. The recipient accepts the document and selected annotations together.</p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-glass-borderDark px-3 text-xs text-ivory/80">
+                        <input type="checkbox" checked={includeBookmarks} onChange={(event) => setIncludeBookmarks(event.target.checked)} disabled={!bookmarks.length} className="accent-amber-400" />
+                        <Bookmark className="size-3.5 text-secondary" aria-hidden="true" />
+                        <span>Include bookmarks ({bookmarks.length})</span>
+                      </label>
+                      <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-glass-borderDark px-3 text-xs text-ivory/80">
+                        <input type="checkbox" checked={includeHighlights} onChange={(event) => setIncludeHighlights(event.target.checked)} disabled={!highlights.length} className="accent-amber-400" />
+                        <Highlighter className="size-3.5 text-secondary" aria-hidden="true" />
+                        <span>Include highlights ({highlights.length})</span>
+                      </label>
+                    </div>
+                  </fieldset>
+                )}
                 {contacts.length === 0 ? <p className="text-sm text-ivory/50">Add a contact before sharing.</p> : (
                   <fieldset>
                     <legend className="text-xs font-medium text-ivory/70">Recipients</legend>

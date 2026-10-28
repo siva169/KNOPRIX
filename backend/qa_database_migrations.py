@@ -53,6 +53,7 @@ class DatabaseMigrationTests(unittest.TestCase):
                 (7, "provider-specific-document-files"),
                 (8, "account-scoped-chat-history"),
                 (9, "region-annotations"),
+                (10, "document-share-annotation-options"),
             ],
         )
         self.assertTrue({
@@ -117,6 +118,14 @@ class DatabaseMigrationTests(unittest.TestCase):
                     "citations_json",
                     "created_at",
                 }.issubset(database._table_columns(conn, "messages"))
+            )
+            self.assertTrue(
+                {
+                    "include_bookmarks",
+                    "include_highlights",
+                    "bookmark_ids_json",
+                    "highlight_ids_json",
+                }.issubset(database._table_columns(conn, "shares"))
             )
         with closing(self.connect()) as conn:
             self.assertTrue(

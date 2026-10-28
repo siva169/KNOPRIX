@@ -360,6 +360,66 @@ class SocialFeatureTests(unittest.TestCase):
         )
         self.assertFalse(detail["document"]["ai_granted"])
 
+    def test_document_share_can_include_opt_in_annotation_snapshots_in_one_request(self):
+        self.accept_contact(
+            "user-b",
+            self.request_contact("user-a", "user-b"),
+        )
+        self.db.execute(
+            """INSERT INTO bookmarks
+               (id, user_id, project_id, document_id, page_number, name,
+                highlighted_text, notes)
+               VALUES ('bundle-bookmark', 'user-a', 'project-a', 'document-a', 1,
+                       'Key point', 'Saved passage', 'Review this')"""
+        )
+        self.db.execute(
+            """INSERT INTO highlights
+               (id, user_id, project_id, document_id, page_number, text, color)
+               VALUES ('bundle-highlight', 'user-a', 'project-a', 'document-a', 1,
+                       'Highlighted passage', 'yellow')"""
+        )
+
+        created = social.create_shares(
+            social.ShareBody(
+                recipientKnoprixIds=["KP-BBBBBBBBBB"],
+                resourceType="document",
+                resourceId="document-a",
+                includeBookmarks=True,
+                includeHighlights=True,
+            ),
+            self.users["user-a"],
+            self.db,
+        )["shares"]
+        self.assertEqual(len(created), 1)
+        self.assertEqual(created[0]["bookmarkCount"], 1)
+        self.assertEqual(created[0]["highlightCount"], 1)
+
+        social.accept_share(created[0]["shareId"], self.users["user-b"], self.db)
+        shared = social.get_shared_resource(
+            created[0]["shareId"], self.users["user-b"], self.db
+        )
+        self.assertEqual(shared["resource"]["sharedBookmarks"][0]["id"], "bundle-bookmark")
+        self.assertEqual(shared["resource"]["sharedHighlights"][0]["id"], "bundle-highlight")
+        for annotation in (
+            shared["resource"]["sharedBookmarks"][0],
+            shared["resource"]["sharedHighlights"][0],
+        ):
+            self.assertNotIn("user_id", annotation)
+            self.assertNotIn("project_id", annotation)
+
+        with self.assertRaises(HTTPException) as invalid_options:
+            social.create_shares(
+                social.ShareBody(
+                    recipientKnoprixIds=["KP-BBBBBBBBBB"],
+                    resourceType="bookmark",
+                    resourceId="bundle-bookmark",
+                    includeHighlights=True,
+                ),
+                self.users["user-a"],
+                self.db,
+            )
+        self.assertEqual(invalid_options.exception.status_code, 422)
+
     def test_annotation_share_omits_internal_owner_and_project_ids(self):
         self.accept_contact(
             "user-b",

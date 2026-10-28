@@ -1,4 +1,5 @@
 """Knoprix-ID contacts and consent-based, per-resource sharing."""
+import json
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -95,6 +96,8 @@ class ShareBody(BaseModel):
     recipientKnoprixIds: list[str] = Field(min_length=1, max_length=20)
     resourceType: str = Field(pattern="^(document|bookmark|highlight)$")
     resourceId: str = Field(min_length=1, max_length=128)
+    includeBookmarks: bool = False
+    includeHighlights: bool = False
 
 
 class LinkHighlightBody(BaseModel):
@@ -548,10 +551,52 @@ def _shared_resource_fields(resource_type: str) -> tuple[str, ...]:
     }[resource_type]
 
 
+def _document_annotation_ids(db, user_id: str, document_id: str, resource_type: str) -> list[str]:
+    table = "bookmarks" if resource_type == "bookmark" else "highlights"
+    rows = db.execute(
+        f"SELECT id FROM {table} WHERE user_id = ? AND document_id = ? ORDER BY created_at ASC, id ASC",
+        (user_id, document_id),
+    ).fetchall()
+    return [row["id"] for row in rows]
+
+
+def _json_ids(value) -> list[str]:
+    try:
+        parsed = json.loads(value or "[]")
+    except (TypeError, ValueError):
+        return []
+    return [item for item in parsed if isinstance(item, str)][:200]
+
+
+def _shared_annotation_rows(db, sender_id: str, document_id: str, resource_type: str, ids: list[str]) -> list[dict]:
+    if not ids:
+        return []
+    table = "bookmarks" if resource_type == "bookmark" else "highlights"
+    fields = ("id",) + _shared_resource_fields(resource_type)
+    placeholders = ", ".join("?" for _ in ids)
+    rows = db.execute(
+        f"SELECT {', '.join(fields)} FROM {table} "
+        f"WHERE user_id = ? AND document_id = ? AND id IN ({placeholders})",
+        (sender_id, document_id, *ids),
+    ).fetchall()
+    by_id = {row["id"]: dict(row) for row in rows}
+    return [by_id[item_id] for item_id in ids if item_id in by_id]
+
+
 @router.post("/shares", status_code=status.HTTP_201_CREATED)
 def create_shares(body: ShareBody, user=Depends(get_current_user), db=Depends(get_db)):
     _expire_pending_requests(db)
     _owned_shareable_resource(db, user["id"], body.resourceType, body.resourceId)
+    if body.resourceType != "document" and (body.includeBookmarks or body.includeHighlights):
+        raise HTTPException(422, "Annotation options are available only when sharing a document")
+    bookmark_ids = (
+        _document_annotation_ids(db, user["id"], body.resourceId, "bookmark")
+        if body.resourceType == "document" and body.includeBookmarks else []
+    )
+    highlight_ids = (
+        _document_annotation_ids(db, user["id"], body.resourceId, "highlight")
+        if body.resourceType == "document" and body.includeHighlights else []
+    )
     ids = [value.upper() for value in body.recipientKnoprixIds]
     if len(set(ids)) != len(ids) or any(not KNOPRIX_ID_RE.fullmatch(value) for value in ids):
         raise HTTPException(422, "Recipient Knoprix IDs must be valid and unique")
@@ -607,8 +652,9 @@ def create_shares(body: ShareBody, user=Depends(get_current_user), db=Depends(ge
         result = db.execute(
             """INSERT INTO shares
                (id, sender_id, recipient_id, resource_type, resource_id, status,
-                created_at, expires_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+                created_at, expires_at, updated_at, include_bookmarks,
+                include_highlights, bookmark_ids_json, highlight_ids_json)
+               VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(sender_id, recipient_id, resource_type, resource_id)
                  WHERE status IN ('pending', 'accepted') DO NOTHING""",
             (
@@ -620,6 +666,10 @@ def create_shares(body: ShareBody, user=Depends(get_current_user), db=Depends(ge
                 now,
                 _expires_in(),
                 now,
+                int(bool(bookmark_ids)),
+                int(bool(highlight_ids)),
+                json.dumps(bookmark_ids),
+                json.dumps(highlight_ids),
             ),
         )
         if result.rowcount != 1:
@@ -634,7 +684,11 @@ def create_shares(body: ShareBody, user=Depends(get_current_user), db=Depends(ge
             body.resourceType,
             body.resourceId,
         )
-        shares.append({"knoprixId": public_id, "shareId": share_id, "status": "pending"})
+        result_item = {"knoprixId": public_id, "shareId": share_id, "status": "pending"}
+        if body.resourceType == "document":
+            result_item["bookmarkCount"] = len(bookmark_ids)
+            result_item["highlightCount"] = len(highlight_ids)
+        shares.append(result_item)
     return {"shares": shares}
 
 
@@ -737,7 +791,8 @@ def list_sent_shares(user=Depends(get_current_user), db=Depends(get_db)):
     _expire_pending_requests(db)
     rows = db.execute(
         """SELECT s.id, s.resource_type, s.resource_id, s.status, s.created_at,
-                  u.knoprix_id
+                  u.knoprix_id, s.include_bookmarks, s.include_highlights,
+                  s.bookmark_ids_json, s.highlight_ids_json
            FROM shares s JOIN users u ON u.id = s.recipient_id
            WHERE s.sender_id = ? ORDER BY s.created_at DESC""",
         (user["id"],),
@@ -751,6 +806,10 @@ def list_sent_shares(user=Depends(get_current_user), db=Depends(get_db)):
                 "status": row["status"],
                 "createdAt": row["created_at"],
                 "recipientKnoprixId": row["knoprix_id"],
+                "includeBookmarks": bool(row["include_bookmarks"]),
+                "includeHighlights": bool(row["include_highlights"]),
+                "bookmarkCount": len(_json_ids(row["bookmark_ids_json"])),
+                "highlightCount": len(_json_ids(row["highlight_ids_json"])),
             }
             for row in rows
         ]
@@ -762,7 +821,8 @@ def list_received_shares(user=Depends(get_current_user), db=Depends(get_db)):
     _expire_pending_requests(db)
     rows = db.execute(
         """SELECT s.id, s.resource_type, s.status, s.created_at, s.updated_at,
-                  u.knoprix_id
+                  u.knoprix_id, s.include_bookmarks, s.include_highlights,
+                  s.bookmark_ids_json, s.highlight_ids_json
            FROM shares s JOIN users u ON u.id = s.sender_id
            WHERE s.recipient_id = ? ORDER BY s.created_at DESC""",
         (user["id"],),
@@ -776,6 +836,10 @@ def list_received_shares(user=Depends(get_current_user), db=Depends(get_db)):
                 "createdAt": row["created_at"],
                 "updatedAt": row["updated_at"],
                 "fromKnoprixId": row["knoprix_id"],
+                "includeBookmarks": bool(row["include_bookmarks"]),
+                "includeHighlights": bool(row["include_highlights"]),
+                "bookmarkCount": len(_json_ids(row["bookmark_ids_json"])),
+                "highlightCount": len(_json_ids(row["highlight_ids_json"])),
             }
             for row in rows
         ]
@@ -787,7 +851,9 @@ def get_shared_resource(
     share_id: str, user=Depends(get_current_user), db=Depends(get_db)
 ):
     share = db.execute(
-        """SELECT sender_id, resource_type, resource_id FROM shares
+        """SELECT sender_id, resource_type, resource_id, include_bookmarks,
+                  include_highlights, bookmark_ids_json, highlight_ids_json
+           FROM shares
            WHERE id = ? AND recipient_id = ? AND status = 'accepted'""",
         (share_id, user["id"]),
     ).fetchone()
@@ -805,6 +871,23 @@ def get_shared_resource(
         field: resource[field]
         for field in _shared_resource_fields(share["resource_type"])
     }
+    if share["resource_type"] == "document":
+        if share["include_bookmarks"]:
+            resource["sharedBookmarks"] = _shared_annotation_rows(
+                db,
+                share["sender_id"],
+                share["resource_id"],
+                "bookmark",
+                _json_ids(share["bookmark_ids_json"]),
+            )
+        if share["include_highlights"]:
+            resource["sharedHighlights"] = _shared_annotation_rows(
+                db,
+                share["sender_id"],
+                share["resource_id"],
+                "highlight",
+                _json_ids(share["highlight_ids_json"]),
+            )
     return {
         "shareId": share_id,
         "resourceType": share["resource_type"],

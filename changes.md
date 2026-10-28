@@ -1,5 +1,12 @@
 # Knoprix Final Project — Changes
 
+## 2026-10-29 — Add opt-in annotation bundles to document sharing
+
+- Added versioned share metadata for opt-in bookmark/highlight snapshots. One document share request and one recipient acceptance now cover the document plus the selected annotations.
+- Kept server-side ownership, contact, block, revocation, and read-only checks; shared responses expose safe annotation fields without owner/project internals.
+- Added Contacts UI controls defaulted off for sharing current document bookmarks and highlights, and read-only document viewers now render included shared highlights with a scope notice.
+- Added social and migration regressions; `qa_social.py` and `qa_database_migrations.py` pass (15 tests), Python compilation passes, and the frontend production build passes with the existing chunk-size advisory.
+
 ## 2026-10-29 — Preserve Reading Desk state across AI Wing switches
 
 - Kept the active document viewer mounted and visually hidden while AI Wing or Contacts is open, preserving the rendered PDF, current page, scroll position, and loaded document bytes.

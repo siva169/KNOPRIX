@@ -185,7 +185,9 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
   const refreshSavedPages = useCallback(async () => {
     if (!activeProject || !activeDocument) return;
     if (activeDocument.readOnly) {
-      setSavedPages(new Set());
+      setSavedPages(new Set(
+        (activeDocument.sharedAnnotations?.bookmarks || []).map((bookmark) => bookmark.page_number),
+      ));
       return;
     }
     try {
@@ -213,7 +215,24 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       return;
     }
     if (activeDocument.readOnly) {
-      setHighlights([]);
+      setHighlights(
+        (activeDocument.sharedAnnotations?.highlights || []).map((highlight) => ({
+          id: highlight.id,
+          pageNumber: highlight.page_number,
+          text: highlight.text || '',
+          color: highlight.color,
+          highlightType: highlight.highlight_type || 'text',
+          region: highlight.highlight_type === 'region' ? {
+            x: highlight.region_x,
+            y: highlight.region_y,
+            width: highlight.region_width,
+            height: highlight.region_height,
+          } : null,
+          matchAll: !!highlight.match_all,
+          anchorStart: highlight.anchor_start,
+          anchorEnd: highlight.anchor_end,
+        })),
+      );
       setHighlightsDocumentId(activeDocument.id);
       return;
     }
@@ -1866,6 +1885,11 @@ export default function BrowserPDFViewer({ onOpenChat, focusMode = false, onTogg
       {readOnly && (
         <div role="status" className="border-b border-secondary/20 bg-secondary/5 px-3 py-2 text-center text-xs text-secondary">
           Read-only shared resource — changes to the owner’s original are disabled.
+          {(activeDocument.sharedAnnotations?.bookmarks?.length || activeDocument.sharedAnnotations?.highlights?.length) > 0 && (
+            <span className="ml-1 text-ivory/60">
+              Shared with {activeDocument.sharedAnnotations.bookmarks?.length || 0} bookmark{activeDocument.sharedAnnotations.bookmarks?.length === 1 ? '' : 's'} and {activeDocument.sharedAnnotations.highlights?.length || 0} highlight{activeDocument.sharedAnnotations.highlights?.length === 1 ? '' : 's'}.
+            </span>
+          )}
         </div>
       )}
       {usesPdfRenderer ? renderPDFViewer() : isSlideshow ? renderSlidesViewer() : isImageFile ? renderImageViewer() : renderTextViewer()}
