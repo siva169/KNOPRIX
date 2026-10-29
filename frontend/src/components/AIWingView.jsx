@@ -15,6 +15,7 @@ import ChatContextConsentDialog from './ChatContextConsentDialog.jsx';
 import RecentChatsDialog from './RecentChatsDialog.jsx';
 import useProviderDocumentFiles from '../hooks/useProviderDocumentFiles.js';
 import { isProviderAvailable } from '../services/providerAvailability.js';
+import { streamSourceAwareChat } from '../services/sourceAwareChat.js';
 
 const KEYS_KEY = 'knoprix_mr_provider_keys';
 const SIDEBAR_COLLAPSED_KEY = 'knoprix_aiwing_sidebar_collapsed';
@@ -350,118 +351,30 @@ export default function AIWingView({ onNavigateToDocument }) {
       ]);
       setQuestion('');
 
-      // The bearer token must come from the shared auth helper. Reading
-      // localStorage directly sent no Authorization header at all, so every
-      // streamed request was rejected with 401.
       const token = await getAccessToken();
       const base = api.defaults.baseURL || '/api';
       const controller = new AbortController();
       streamAbortRef.current = controller;
-
-      const response = await fetch(`${base}/chat/stream`, {
-        method: 'POST',
+      const streamResult = await streamSourceAwareChat({
+        apiBase: base,
+        token,
+        providerKey: customKey,
+        providerId,
+        model,
+        conversationId: conversation.id,
+        projectId: contextDocuments.length > 0 ? activeProject?.id : null,
+        documentIds: contextDocuments.map((document) => document.id),
+        question: q,
+        confirmed: contextDocuments.length > 0,
         signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(customKey && providerId !== 'nvidia-nim' ? { 'X-Provider-Key': customKey } : {}),
+        initialSearchAvailable: liveSearchAvailable,
+        onEvent: (eventType, payload, progress) => {
+          if (eventType === 'thought') setStreamingThought(progress.thought);
+          if (eventType === 'progress') setStreamingProgress(payload);
+          if (eventType === 'token') setStreamingContent(progress.content);
         },
-        body: JSON.stringify({
-          conversationId: conversation.id,
-          ...(contextDocuments.length > 0 && activeProject?.id
-            ? { projectId: activeProject.id }
-            : {}),
-          documentIds: contextDocuments.map((document) => document.id),
-          question: q,
-          providerId,
-          model,
-          ...(contextDocuments.length > 0 ? { confirmed: true } : {}),
-        }),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        let detail = errorText || `HTTP ${response.status}`;
-        try {
-          const parsedError = JSON.parse(errorText);
-          detail = parsedError.detail || detail;
-        } catch {
-          /* keep raw text */
-        }
-        throw new Error(
-          response.status === 401
-            ? 'Your session expired. Please sign in again.'
-            : detail
-        );
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let buffer = '';
-      let accumulatedContent = '';
-      let accumulatedThought = '';
-      let finalCitations = [];
-      let searchAvailable = liveSearchAvailable;
-      let searchUsed = false;
-      let includedChatMessages = 0;
-      let streamFailure = null;
-
-      // SSE frames look like:
-      //   event: token
-      //   data: {"text": "..."}
-      // A frame with no event name defaults to "message", per the SSE spec.
-      const handleFrame = (block) => {
-        const lines = block.split('\n');
-        let eventType = 'message';
-        const dataLines = [];
-        for (const line of lines) {
-          if (line.startsWith('event:')) eventType = line.slice(6).trim();
-          else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
-        }
-        if (!dataLines.length) return;
-        let payload;
-        try {
-          payload = JSON.parse(dataLines.join('\n'));
-        } catch {
-          return;
-        }
-        if (eventType === 'meta') {
-          searchAvailable = Boolean(payload.searchAvailable);
-          return;
-        }
-        if (eventType === 'thought') {
-          accumulatedThought += payload.text || '';
-          setStreamingThought(accumulatedThought);
-        } else if (eventType === 'progress') {
-          setStreamingProgress(payload);
-        } else if (eventType === 'token') {
-          accumulatedContent += payload.text ?? payload.token ?? '';
-          setStreamingContent(accumulatedContent);
-        } else if (eventType === 'citation') {
-          finalCitations.push(payload);
-        } else if (eventType === 'error') {
-          streamFailure = payload.detail || 'Streaming failed';
-        } else if (eventType === 'done') {
-          if (Array.isArray(payload.citations) && !finalCitations.length) {
-            finalCitations = payload.citations;
-          }
-          searchAvailable = Boolean(payload.searchAvailable ?? searchAvailable);
-          searchUsed = Boolean(payload.searchUsed);
-          includedChatMessages = Number(payload.includedChatMessages) || 0;
-        }
-      };
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const frames = buffer.split('\n\n');
-        buffer = frames.pop() || '';
-        frames.forEach(handleFrame);
-      }
-      if (buffer.trim()) handleFrame(buffer);
-
-      if (streamFailure) throw new Error(streamFailure);
       if (contextDocuments.length > 0 && !conversation.projectId && activeProject?.id) {
         setActiveConversation((current) => (
           current ? { ...current, projectId: activeProject.id } : current
@@ -471,12 +384,12 @@ export default function AIWingView({ onNavigateToDocument }) {
       const assistantMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: accumulatedContent,
-        thought: accumulatedThought || null,
-        citations: finalCitations,
-        searchAvailable,
-        searchUsed,
-        includedChatMessages,
+        content: streamResult.content,
+        thought: streamResult.thought || null,
+        citations: streamResult.citations,
+        searchAvailable: streamResult.searchAvailable,
+        searchUsed: streamResult.searchUsed,
+        includedChatMessages: streamResult.includedChatMessages,
       };
       if (!assistantMessage.content) {
         assistantMessage.content = 'The provider returned no text for this question.';

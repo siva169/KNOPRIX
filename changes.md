@@ -1590,3 +1590,22 @@ record: that service is not a ghost.
   `panthor984-box`; switched the active local account to `siva169` and
   retried successfully.
 - Verified local and remote `master` both resolve to `4ca9fd0`.
+
+# 2026-10-29 — Unify compact chat with AI Wing conversations
+
+- Replaced the compact Reading Desk chat's legacy `/chat/ask` and browser-direct
+  provider calls with the same source-aware `/chat/conversations` + `/chat/stream`
+  flow used by AI Wing.
+- Extracted the shared authenticated SSE client into
+  `frontend/src/services/sourceAwareChat.js`; both chat surfaces now share the
+  same provider headers, authorized-document contract, saved-chat context, and
+  stream parsing.
+- Compact chat now persists into the normal conversation history, remains free
+  of Recent Chats/New Chat browsing controls, and is visible through AI Wing's
+  existing Recent Chats dialog.
+- Added `frontend/qa/compact-ai-chat-sync.spec.mjs`, passing at 390/425/768/1024px.
+- Verification: `npm run build` passed; frontend unit tests passed 12/12;
+  existing Reading Desk compact-chat checks passed at all four breakpoints.
+- The AI Favorites suite still has its pre-existing strict-selector failure in a
+  later case because identical answer text appears in both the chat and Bookmark
+  Organizer; no AI Favorites code was changed here.

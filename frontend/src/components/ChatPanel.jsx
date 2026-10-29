@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Send, Maximize2, Minimize2, KeyRound, Trash2, FileText, ChevronRight, Cpu, Copy, Check } from 'lucide-react';
 import { useApp } from '../context/AppContext.jsx';
-import api from '../api';
+import api, { getAccessToken } from '../api';
+import ChatContextConsentDialog from './ChatContextConsentDialog.jsx';
 import { isProviderAvailable } from '../services/providerAvailability.js';
+import { streamSourceAwareChat } from '../services/sourceAwareChat.js';
 
 // Browser BYOK keys stay in local storage. NVIDIA uses a separate shared key
 // configured only in the Knoprix backend.
@@ -14,8 +16,18 @@ const loadKeys = () => {
   try { return JSON.parse(localStorage.getItem(KEYS_KEY) || '{}'); } catch { return {}; }
 };
 
+const supportsLiveSearch = (selectedProviderId, selectedModelId) =>
+  selectedProviderId === 'gemini-free'
+  && selectedModelId === 'gemini-3.8-flash';
+
+const titleFromQuestion = (value) => {
+  const compact = value.replace(/\s+/g, ' ').trim();
+  const characters = Array.from(compact);
+  return characters.length > 120 ? `${characters.slice(0, 119).join('').trimEnd()}…` : compact;
+};
+
 export default function ChatPanel({ onClose }) {
-  const { documents, activeDocument, navigateToLocation, notify } = useApp();
+  const { activeProject, documents, activeDocument, navigateToLocation, notify } = useApp();
   const [mode, setMode] = useState('side'); // 'side' | 'full' (boss: both)
   const [providers, setProviders] = useState([]);
   const [providerId, setProviderId] = useState('zai-glm-free');
@@ -23,7 +35,9 @@ export default function ChatPanel({ onClose }) {
   const [keys, setKeys] = useState(loadKeys);
   const [keyDraft, setKeyDraft] = useState('');
   const [noticeSeen, setNoticeSeen] = useState(() => localStorage.getItem(NOTICE_KEY) === '1');
-  const [selected, setSelected] = useState(() => (activeDocument ? [activeDocument.id] : []));
+  const [selected, setSelected] = useState(() => (
+    activeDocument?.ai_granted ? [activeDocument.id] : []
+  ));
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(false);
   const [answer, setAnswer] = useState(null);
@@ -32,17 +46,25 @@ export default function ChatPanel({ onClose }) {
   const [liveNote, setLiveNote] = useState('');
   const [summary, setSummary] = useState(null);
   const [summarizing, setSummarizing] = useState(false);
-
-  // Browser-direct live paths (OpenAI-compatible; baseUrl already holds the
-  // version prefix, so only '/chat/completions' is appended). Gemini uses a
-  // different protocol — stays mocked until its own wiring lands.
-  const LIVE_PATHS = {
-    'groq-free': '/chat/completions',
-    'openrouter-free': '/chat/completions',
-    'zai-glm-free': '/chat/completions',
-  };
+  const [activeConversation, setActiveConversation] = useState(null);
+  const [contextConsentQuestion, setContextConsentQuestion] = useState(null);
+  const streamAbortRef = useRef(null);
 
   const provider = providers.find((p) => p.id === providerId) || null;
+  const hasProviderKey = providerId === 'ollama'
+    || (providerId === 'nvidia-nim'
+      ? Boolean(provider?.hasServerKey)
+      : Boolean(keys[providerId] || provider?.hasServerKey));
+  const providerKeyNotice = providerId === 'nvidia-nim'
+    ? 'Knoprix uses its server-managed NVIDIA key; it is not returned to this browser.'
+    : keys[providerId]
+      ? 'Your BYOK key stays in this browser and is sent to Knoprix in a request header for this provider operation.'
+      : providerId === 'ollama'
+        ? 'Knoprix sends your question and any confirmed document passages to the selected Ollama model service; original files are not sent.'
+        : 'Knoprix uses its server-managed provider key. The key is not returned to this browser.';
+  const authorizedDocuments = documents.filter((document) => document.ai_granted);
+  const contextDocuments = authorizedDocuments.filter((document) => selected.includes(document.id));
+  const liveSearchAvailable = supportsLiveSearch(providerId, model);
 
   useEffect(() => {
     api.get('/providers/allowlist')
@@ -99,73 +121,87 @@ export default function ChatPanel({ onClose }) {
     }
   };
 
-  const ask = async () => {
-    if (!question.trim() || !selected.length || loading) return;
+  const ask = () => {
+    const q = question.trim();
+    if (!q || loading) return;
     if (!isProviderAvailable(provider)) {
       setError(provider?.availabilityNote || 'Select an available AI provider.');
       return;
     }
+    if (!hasProviderKey) {
+      setError('Add a provider key before sending this question.');
+      return;
+    }
+    if (contextDocuments.length > 10) {
+      setError('Select no more than 10 authorized documents, or turn off document context.');
+      return;
+    }
+    setContextConsentQuestion(q);
+  };
+
+  const streamChat = async (q) => {
+    if (!q || loading) return;
     setLoading(true);
     setError('');
     setAnswer(null);
     setLiveNote('');
+    setQuestion('');
+
     try {
-      const savedKey = keys[providerId];
-      // Step 1 — backend: allowlist/model validation + citations from OWN index.
-      const { data } = await api.post('/chat/ask', {
-        providerId, model, documentIds: selected, question: question.trim(),
-      }, providerId === 'sarvam' && savedKey
-        ? { headers: { 'X-Provider-Key': savedKey } }
-        : undefined);
-      // NVIDIA and Sarvam use the backend; other BYOK providers use their
-      // browser-stored key only in their direct provider request.
-      const livePath = LIVE_PATHS[providerId];
-      if (providerId === 'nvidia-nim') {
-        setAnswer({ ...data, live: !data.mocked });
-      } else if (providerId === 'sarvam') {
-        setAnswer({ ...data, live: !data.mocked });
-      } else if (livePath && savedKey && provider?.baseUrl && providerId !== 'nvidia-nim') {
-        try {
-          const context = (data.citations || [])
-            .map((c) => `[${c.fileName} p.${c.pageNumber}] ${c.excerpt}`)
-            .join('\n').slice(0, 3000);
-          const res = await fetch(`${provider.baseUrl}${livePath}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${savedKey}`,
-            },
-            body: JSON.stringify({
-              model,
-              temperature: 0.2,
-              max_tokens: 500,
-              messages: [
-                { role: 'system', content: 'Answer ONLY from the passages below. Say when unsure.' },
-                { role: 'user', content: `Passages:\n${context || '(no matching passages)'}\n\nQuestion: ${question.trim()}` },
-              ],
-            }),
-          });
-          if (!res.ok) throw new Error(`provider HTTP ${res.status}`);
-          const live = await res.json();
-          const text = live.choices?.[0]?.message?.content?.trim();
-          if (!text) throw new Error('empty provider reply');
-          setAnswer({ ...data, answer: text, live: true });
-        } catch (liveErr) {
-          // Fail open to mock — user still gets cited passages, never a blank.
-          setAnswer(data);
-          setLiveNote(`Live call failed (${liveErr.message}); showing mock instead.`);
-        }
-      } else {
-        setAnswer(data);
-        if (savedKey && !livePath) {
-          setLiveNote('This provider needs its own wiring; showing mock.');
-        }
+      let conversation = activeConversation;
+      if (!conversation) {
+        const { data } = await api.post('/chat/conversations', {
+          projectId: activeProject?.id || null,
+          title: titleFromQuestion(q),
+        });
+        conversation = data?.conversation;
+        if (!conversation?.id) throw new Error('Could not create a saved conversation.');
+        setActiveConversation(conversation);
       }
+
+      const token = await getAccessToken();
+      const controller = new AbortController();
+      streamAbortRef.current = controller;
+      const result = await streamSourceAwareChat({
+        apiBase: api.defaults.baseURL || '/api',
+        token,
+        providerKey: keys[providerId] || '',
+        providerId,
+        model,
+        conversationId: conversation.id,
+        projectId: contextDocuments.length > 0 ? activeProject?.id : null,
+        documentIds: contextDocuments.map((document) => document.id),
+        question: q,
+        confirmed: contextDocuments.length > 0,
+        signal: controller.signal,
+        initialSearchAvailable: liveSearchAvailable,
+      });
+
+      setAnswer({
+        answer: result.content || 'The provider returned no text for this question.',
+        citations: result.citations,
+        provider: { id: providerId, name: provider?.name || providerId },
+        model,
+        live: true,
+      });
     } catch (e) {
+      if (e.name === 'AbortError') return;
       setError(e.response?.data?.detail || e.message || 'Chat failed. Try again.');
     } finally {
+      streamAbortRef.current = null;
       setLoading(false);
     }
+  };
+
+  const handleConfirmChatContext = async () => {
+    if (!contextConsentQuestion || loading) return;
+    const q = contextConsentQuestion;
+    setContextConsentQuestion(null);
+    await streamChat(q);
+  };
+
+  const handleCloseChatContext = () => {
+    if (!loading) setContextConsentQuestion(null);
   };
 
   // Mobile-first base = bottom sheet (Rule 018). sm+ upgrades to side/full.
@@ -313,15 +349,16 @@ export default function ChatPanel({ onClose }) {
 
         {/* Document picker */}
         <div className="flex flex-col gap-1.5">
-          <p className="text-xs font-bold text-ivory/70">Ask across ({selected.length} selected)</p>
+          <p className="text-xs font-bold text-ivory/70">Ask with ({contextDocuments.length} authorized selected)</p>
           {documents.length === 0 && (
             <p className="text-xs text-ivory/50 rounded-xl border border-dashed border-glass-borderDark p-3">No documents yet — upload files first, then chat.</p>
           )}
           {documents.map((d) => (
-            <label key={d.id} className="flex items-center gap-2 text-xs text-ivory/90 rounded-lg px-2 py-1.5 hover:bg-white/5 cursor-pointer">
-              <input type="checkbox" checked={selected.includes(d.id)} onChange={() => toggleDoc(d.id)} className="accent-[#7c5cff] w-4 h-4" />
+            <label key={d.id} className={`flex items-center gap-2 text-xs text-ivory/90 rounded-lg px-2 py-1.5 hover:bg-white/5 ${d.ai_granted ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
+              <input type="checkbox" checked={selected.includes(d.id)} onChange={() => toggleDoc(d.id)} disabled={!d.ai_granted} className="accent-[#7c5cff] w-4 h-4" />
               <FileText className="w-3.5 h-3.5 text-ivory/50 shrink-0" />
               <span className="truncate">{d.file_name}</span>
+              {!d.ai_granted && <span className="ml-auto shrink-0 text-[10px] text-ivory/40">AI access required</span>}
             </label>
           ))}
         </div>
@@ -374,20 +411,33 @@ export default function ChatPanel({ onClose }) {
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') ask(); }}
-          placeholder={selected.length ? 'Ask about selected docs…' : 'Tick documents first…'}
-          disabled={!selected.length}
+          placeholder="Ask AI anything…"
+          disabled={loading}
           aria-label="Chat question"
           className="flex-1 min-w-0 rounded-xl bg-midnight/60 border border-glass-borderDark text-ivory text-sm px-3 py-2.5 focus:outline-none focus:border-primary disabled:opacity-40"
         />
         <button
           onClick={ask}
-          disabled={!question.trim() || !selected.length || loading}
+          disabled={!question.trim() || loading}
           title="Ask"
           className="p-2.5 rounded-xl bg-primary text-white disabled:opacity-40 transition shrink-0"
         >
           <Send className="w-4 h-4" />
         </button>
       </div>
+      <ChatContextConsentDialog
+        open={contextConsentQuestion !== null}
+        providerName={provider?.name || providerId}
+        modelName={provider?.models?.find((item) => item.id === model)?.name || model}
+        documents={contextDocuments}
+        question={contextConsentQuestion || ''}
+        savedChatContext
+        searchAvailable={liveSearchAvailable}
+        keyHandlingNotice={providerKeyNotice}
+        busy={loading}
+        onConfirm={handleConfirmChatContext}
+        onClose={handleCloseChatContext}
+      />
     </motion.aside>
   );
 }
