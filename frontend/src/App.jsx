@@ -25,7 +25,7 @@ export default function App() {
   const {
     toast, notify,
     fetchProjects, selectProject, resetWorkspace,
-    projects, activeProject, activeDocument,
+    projects, documents, activeProject, activeDocument,
     openDocument, navigateToLocation,
   } = useApp();
   const [authMode, setAuthMode] = useState('login');
@@ -198,6 +198,7 @@ export default function App() {
             {isContactsOpen ? (
               <ContactsPage
                 onClose={() => setIsContactsOpen(false)}
+                documents={documents}
                 activeDocument={activeDocument}
                 activeProject={activeProject}
                 openDocument={openDocument}

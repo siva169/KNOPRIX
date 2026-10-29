@@ -16,7 +16,7 @@ const shareStatusLabel = (status) => ({
 }[status] || 'No request created');
 
 export default function ContactsPage({
-  onClose, activeDocument, activeProject, openDocument, navigateToLocation, notify,
+  onClose, documents = [], activeDocument, activeProject, openDocument, navigateToLocation, notify,
 }) {
   const [profile, setProfile] = useState(null);
   const [contacts, setContacts] = useState([]);
@@ -125,30 +125,43 @@ export default function ContactsPage({
   useEffect(() => {
     let cancelled = false;
     const loadResources = async () => {
-      const [bookmarkResult, highlightResult] = await Promise.allSettled([
-        activeProject && !activeDocument?.readOnly
+      const ownedDocuments = documents.filter((document) => !document.readOnly);
+      const resourceRequests = [
+        activeProject
           ? api.get(`/projects/${activeProject.id}/bookmarks`)
           : Promise.resolve({ data: { bookmarks: [] } }),
-        activeDocument && !activeDocument.readOnly
-          ? api.get(`/documents/${activeDocument.id}/highlights`)
-          : Promise.resolve({ data: { highlights: [] } }),
-      ]);
+        ...ownedDocuments.map((document) => api.get(`/documents/${document.id}/highlights`)),
+      ];
+      const [bookmarkResult, ...highlightResults] = await Promise.allSettled(resourceRequests);
       if (cancelled) return;
       setBookmarks(bookmarkResult.status === 'fulfilled' ? bookmarkResult.value.data.bookmarks || [] : []);
-      setHighlights(highlightResult.status === 'fulfilled' ? highlightResult.value.data.highlights || [] : []);
-      if (bookmarkResult.status === 'rejected' || highlightResult.status === 'rejected') {
+      setHighlights(highlightResults.flatMap((result) => (
+        result.status === 'fulfilled' ? result.value.data.highlights || [] : []
+      )));
+      if (bookmarkResult.status === 'rejected' || highlightResults.some((result) => result.status === 'rejected')) {
         setError('Some of your bookmarks or highlights could not be loaded for sharing.');
       }
     };
     void loadResources();
     return () => { cancelled = true; };
-  }, [activeDocument, activeProject]);
+  }, [activeProject, documents]);
+
+  const ownedDocuments = useMemo(
+    () => documents.filter((document) => !document.readOnly),
+    [documents],
+  );
+  const selectedDocumentBookmarks = useMemo(
+    () => bookmarks.filter((bookmark) => bookmark.document_id === resourceId),
+    [bookmarks, resourceId],
+  );
+  const selectedDocumentHighlights = useMemo(
+    () => highlights.filter((highlight) => highlight.document_id === resourceId),
+    [highlights, resourceId],
+  );
 
   const resourceOptions = useMemo(() => {
     if (resourceType === 'document') {
-      return activeDocument && !activeDocument.readOnly
-        ? [{ id: activeDocument.id, label: activeDocument.file_name }]
-        : [];
+      return ownedDocuments.map((document) => ({ id: document.id, label: document.file_name }));
     }
     if (resourceType === 'bookmark') {
       return bookmarks.map((item) => ({
@@ -160,7 +173,7 @@ export default function ContactsPage({
       id: item.id,
       label: `${item.text.slice(0, 70)} · page ${item.page_number}`,
     }));
-  }, [activeDocument, bookmarks, highlights, resourceType]);
+  }, [bookmarks, highlights, ownedDocuments, resourceType]);
 
   useEffect(() => {
     setResourceId(resourceOptions[0]?.id || '');
@@ -632,14 +645,14 @@ export default function ContactsPage({
                     <p className="mt-1 text-[11px] leading-relaxed text-ivory/50">These are snapshots of this document’s current saved items. The recipient accepts the document and selected annotations together.</p>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-glass-borderDark px-3 text-xs text-ivory/80">
-                        <input type="checkbox" checked={includeBookmarks} onChange={(event) => setIncludeBookmarks(event.target.checked)} disabled={!bookmarks.length} className="accent-amber-400" />
+                        <input type="checkbox" checked={includeBookmarks} onChange={(event) => setIncludeBookmarks(event.target.checked)} disabled={!selectedDocumentBookmarks.length} className="accent-amber-400" />
                         <Bookmark className="size-3.5 text-secondary" aria-hidden="true" />
-                        <span>Include bookmarks ({bookmarks.length})</span>
+                        <span>Include bookmarks ({selectedDocumentBookmarks.length})</span>
                       </label>
                       <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-glass-borderDark px-3 text-xs text-ivory/80">
-                        <input type="checkbox" checked={includeHighlights} onChange={(event) => setIncludeHighlights(event.target.checked)} disabled={!highlights.length} className="accent-amber-400" />
+                        <input type="checkbox" checked={includeHighlights} onChange={(event) => setIncludeHighlights(event.target.checked)} disabled={!selectedDocumentHighlights.length} className="accent-amber-400" />
                         <Highlighter className="size-3.5 text-secondary" aria-hidden="true" />
-                        <span>Include highlights ({highlights.length})</span>
+                        <span>Include highlights ({selectedDocumentHighlights.length})</span>
                       </label>
                     </div>
                   </fieldset>

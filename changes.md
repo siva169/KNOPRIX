@@ -1609,3 +1609,16 @@ record: that service is not a ghost.
 - The AI Favorites suite still has its pre-existing strict-selector failure in a
   later case because identical answer text appears in both the chat and Bookmark
   Organizer; no AI Favorites code was changed here.
+
+# 2026-10-29 — Fix Contacts & Sharing document and highlight selection
+
+- Fixed Contacts & Sharing to use the active project’s owned document list
+  instead of requiring a document to be open in the Reading Desk.
+- Loaded saved highlights for all owned project documents and scoped the
+  bookmark/highlight checkbox counts and enabled state to the selected document.
+- Added a regression test for opening Contacts & Sharing from the dashboard,
+  switching between a document with annotations and one without them, and
+  submitting both annotation options.
+- Verification passed: the new dashboard-entry Playwright check, the existing
+  four-breakpoint contact-sharing check, backend social sharing tests (12/12),
+  `npm run build`, and `git diff --check`.
